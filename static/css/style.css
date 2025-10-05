@@ -1117,6 +1117,20 @@ tr:hover {
     text-decoration: underline;
 }
 
+.news-link-icon {
+    font-size: 1.1em;
+    margin-left: 8px;
+    display: inline-block;
+    text-decoration: none !important;
+    opacity: 0.7;
+    transition: opacity 0.3s, transform 0.2s;
+}
+
+.news-link-icon:hover {
+    opacity: 1;
+    transform: scale(1.2);
+}
+
 @media (max-width: 768px) {
     .container {
         padding: 15px;

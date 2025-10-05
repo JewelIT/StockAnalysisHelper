@@ -770,8 +770,9 @@ function renderStockDetails(ticker, resultIndex) {
                         return `
                         <div class="news-item sentiment-${sent.label}">
                             <div class="news-title">
-                                ${sent.link ? `<a href="${sent.link}" target="_blank" rel="noopener">${sent.title}</a>` : sent.title}
+                                ${sent.title}
                                 ${sent.publisher ? `<span class="news-publisher">- ${sent.publisher}</span>` : ''}
+                                ${sent.link ? `<a href="${sent.link}" target="_blank" rel="noopener" class="news-link-icon" title="Read full article">🔗</a>` : ''}
                             </div>
                             <div class="news-sentiment">
                                 ${emoji} <strong>${sent.label.toUpperCase()}</strong> | 
@@ -788,10 +789,12 @@ function renderStockDetails(ticker, resultIndex) {
                         const posPercent = (sent.positive * 100).toFixed(1);
                         const neuPercent = (sent.neutral * 100).toFixed(1);
                         const negPercent = (sent.negative * 100).toFixed(1);
+                        const textPreview = sent.text.length > 200 ? sent.text.substring(0, 200) + '...' : sent.text;
                         return `
                         <div class="news-item sentiment-${sent.label}">
                             <div class="news-title">
-                                <strong>${sent.source || 'Social Media'}</strong>: ${sent.text}
+                                <strong>${sent.source || 'Social Media'}</strong>: ${textPreview}
+                                ${sent.link ? `<a href="${sent.link}" target="_blank" rel="noopener" class="news-link-icon" title="View post">🔗</a>` : ''}
                             </div>
                             <div class="news-sentiment">
                                 ${emoji} <strong>${sent.label.toUpperCase()}</strong> | 
