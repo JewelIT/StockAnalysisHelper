@@ -5,6 +5,33 @@
 ![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
 ![Flask](https://img.shields.io/badge/Flask-3.1.2-green.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)
+
+---
+
+## 🚀 Quick Start for Non-Technical Users
+
+**Choose your preferred installation method:**
+
+### 🐳 Docker (Recommended - Works Everywhere)
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop)
+2. Run:
+   ```bash
+   ./start-docker.sh
+   ```
+3. Open http://localhost:5000 in your browser
+
+### 💻 One-Click Installers
+- **Windows**: Run `install-windows.bat`
+- **Linux/Mac**: Run `./start-docker.sh`
+
+### 📦 For Developers
+```bash
+pip install -r requirements.txt
+python3 app.py
+```
+
+**See [DISTRIBUTION.md](DISTRIBUTION.md) for packaging and deployment options.**
 
 ---
 
