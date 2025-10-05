@@ -159,14 +159,45 @@ def chat():
             'needs_analysis': True
         })
     
+    # If no ticker provided, try to infer from question or provide general guidance
     if not ticker:
-        return jsonify({
-            'question': question,
-            'answer': '💡 Please select a stock from the dropdown or analyze some stocks first. I can answer questions about:\n\n• Current price and performance\n• Technical indicators (RSI, MACD, etc.)\n• Sentiment analysis from news\n• Buy/sell recommendations\n• Price trends and patterns',
-            'ticker': '',
-            'success': False,
-            'needs_analysis': True
-        })
+        # Try to extract ticker from question
+        import re
+        ticker_pattern = r'\b([A-Z]{2,5}(?:[-\.][A-Z]{2,4})?)\b'
+        potential_tickers = re.findall(ticker_pattern, question)
+        
+        # Check if any extracted ticker is in our analysis cache
+        for potential_ticker in potential_tickers:
+            if potential_ticker in analysis_cache:
+                ticker = potential_ticker
+                break
+        
+        # If still no ticker found, provide general market guidance
+        if not ticker:
+            # Provide general financial advice without specific stock
+            general_responses = {
+                'market': '📊 For general market questions, I can help once you analyze some stocks. Common analysis includes:\n\n• **Sentiment Analysis** - How news affects stock prices\n• **Technical Indicators** - RSI, MACD, Moving Averages\n• **Buy/Sell Signals** - Based on combined sentiment + technical analysis\n\nTry analyzing stocks like AAPL, MSFT, or TSLA to get started!',
+                'how': '🤔 I analyze stocks using:\n\n1. **AI Sentiment Analysis** - FinBERT analyzes news sentiment\n2. **Technical Analysis** - RSI, MACD, Bollinger Bands\n3. **Combined Score** - 40% sentiment + 60% technical indicators\n\nAdd some tickers and click "Analyze" to see it in action!',
+                'recommend': '💡 To get stock recommendations:\n\n1. Add tickers (e.g., AAPL, MSFT)\n2. Click "Analyze Portfolio"\n3. I\'ll provide BUY/SELL/HOLD recommendations\n4. Then ask me questions about specific stocks!',
+            }
+            
+            question_lower = question.lower()
+            if any(word in question_lower for word in ['market', 'markets', 'generally', 'overall']):
+                answer = general_responses['market']
+            elif any(word in question_lower for word in ['how', 'what', 'explain', 'work']):
+                answer = general_responses['how']
+            elif any(word in question_lower for word in ['recommend', 'suggestion', 'advice', 'should i']):
+                answer = general_responses['recommend']
+            else:
+                answer = '💡 I can answer questions about analyzed stocks!\n\n**To get started:**\n1. Add tickers to analyze\n2. Click "Analyze Portfolio"\n3. Ask me questions!\n\n**Or mention a ticker** in your question (e.g., "What about AAPL?")\n\n**Available stocks:** ' + (', '.join(analysis_cache.keys()) if analysis_cache else 'None yet')
+            
+            return jsonify({
+                'question': question,
+                'answer': answer,
+                'ticker': '',
+                'success': True,
+                'general_response': True
+            })
     
     # Get context from analysis cache
     cached_result = analysis_cache[ticker]['result']
