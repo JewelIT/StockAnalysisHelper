@@ -12,6 +12,38 @@ let appConfig = {              // App configuration
     displayMode: 'accordion'   // accordion or tabs (for future)
 };
 
+// Exchange rates (updated periodically, fallback values)
+let exchangeRates = {
+    EUR: 0.92,  // 1 USD = 0.92 EUR
+    GBP: 0.79,  // 1 USD = 0.79 GBP
+    USD: 1.0
+};
+
+// ===== CURRENCY FORMATTING =====
+
+function formatPrice(priceUSD, ticker = null) {
+    const currency = appConfig.currency;
+    
+    // If native currency requested, show in ticker's currency (for now, we only have USD)
+    // TODO: Fetch actual ticker currency from API
+    if (currency === 'native') {
+        return `$${priceUSD.toFixed(2)} USD`;
+    }
+    
+    // Convert to selected currency
+    const rate = exchangeRates[currency] || 1.0;
+    const convertedPrice = priceUSD * rate;
+    
+    const symbols = {
+        USD: '$',
+        EUR: '€',
+        GBP: '£'
+    };
+    
+    const symbol = symbols[currency] || '$';
+    return `${symbol}${convertedPrice.toFixed(2)} ${currency}`;
+}
+
 // ===== TOAST NOTIFICATION SYSTEM =====
 
 function showToast(message, type = 'info', title = null) {
@@ -205,10 +237,18 @@ function loadConfigToUI() {
 
 // Save config settings from UI
 function saveConfigSettings() {
+    const oldCurrency = appConfig.currency;
     appConfig.defaultChartType = document.getElementById('configChartType').value;
     appConfig.currency = document.getElementById('configCurrency').value;
     saveAppConfig();
-    showToast('Settings saved successfully', 'success');
+    
+    // If currency changed and we have results, re-render to update prices
+    if (oldCurrency !== appConfig.currency && window.analysisResults && window.analysisResults.length > 0) {
+        displayResults(window.analysisResults);
+        showToast(`Settings saved! Prices updated to ${appConfig.currency}`, 'success');
+    } else {
+        showToast('Settings saved successfully', 'success');
+    }
 }
 
 // Update saved tickers list in modal
@@ -234,12 +274,12 @@ function addTickerToPortfolio() {
     const ticker = input.value.trim().toUpperCase();
     
     if (!ticker) {
-        alert('Please enter a ticker symbol');
+        showToast('Please enter a ticker symbol', 'warning');
         return;
     }
     
     if (portfolioTickers.includes(ticker)) {
-        alert('Ticker already in portfolio');
+        showToast('Ticker already in portfolio', 'warning');
         return;
     }
     
@@ -269,14 +309,14 @@ function removeFromPortfolio(ticker) {
 // Add ticker to portfolio from analysis view
 function addToPortfolioFromAnalysis(ticker) {
     if (portfolioTickers.includes(ticker)) {
-        alert(`${ticker} is already in your portfolio`);
+        showToast(`${ticker} is already in your portfolio`, 'info');
         return;
     }
     
     portfolioTickers.push(ticker);
     savePortfolioToStorage();
     updateTickerChips(); // Update star badges
-    alert(`✅ ${ticker} added to portfolio!`);
+    showToast(`${ticker} added to portfolio!`, 'success');
     
     // Re-render the stock details to show "In Portfolio" instead of button
     const resultIndex = window.analysisResults.findIndex(r => r.ticker === ticker);
@@ -288,19 +328,19 @@ function addToPortfolioFromAnalysis(ticker) {
 // Save portfolio preferences
 function savePortfolioPreferences() {
     if (portfolioTickers.length === 0) {
-        alert('Portfolio is empty. Add some tickers first!');
+        showToast('Portfolio is empty. Add some tickers first!', 'warning');
         return;
     }
     
     savePortfolioToStorage();
-    alert(`✅ Portfolio saved with ${portfolioTickers.length} ticker(s): ${portfolioTickers.join(', ')}`);
+    showToast(`Portfolio saved with ${portfolioTickers.length} ticker(s): ${portfolioTickers.join(', ')}`, 'success');
     togglePortfolioConfig();
 }
 
 // Clear all portfolio tickers with confirmation
 function clearAllTickers() {
     if (portfolioTickers.length === 0) {
-        alert('Portfolio is already empty.');
+        showToast('Portfolio is already empty.', 'info');
         return;
     }
     
@@ -308,7 +348,7 @@ function clearAllTickers() {
         portfolioTickers = [];
         savePortfolioToStorage();
         updateSavedTickersList();
-        alert('✅ Portfolio cleared successfully.');
+        showToast('Portfolio cleared successfully.', 'success');
     }
 }
 
@@ -589,7 +629,7 @@ function displaySummaryTable(results) {
                             </span>
                         </td>
                         <td>${r.combined_score.toFixed(3)}</td>
-                        <td>$${r.current_price.toFixed(2)}</td>
+                        <td>${formatPrice(r.current_price, r.ticker)}</td>
                         <td class="${r.price_change >= 0 ? 'price-change-positive' : 'price-change-negative'}">
                             ${r.price_change >= 0 ? '+' : ''}${r.price_change.toFixed(2)}%
                         </td>
@@ -619,7 +659,7 @@ function displayDetailedAnalysis(results) {
                             </span>
                         </h4>
                         <div class="accordion-header-metrics">
-                            <span class="metric-badge">Price: $${r.current_price.toFixed(2)}</span>
+                            <span class="metric-badge">Price: ${formatPrice(r.current_price, r.ticker)}</span>
                             <span class="metric-badge ${r.price_change >= 0 ? 'positive' : 'negative'}">
                                 ${r.price_change >= 0 ? '↑' : '↓'} ${Math.abs(r.price_change).toFixed(2)}%
                             </span>
@@ -709,7 +749,7 @@ function renderStockDetails(ticker, resultIndex) {
                 </div>
                 <div class="metric-box">
                     <div class="metric-label">Current Price</div>
-                    <div class="metric-value">$${r.current_price.toFixed(2)}</div>
+                    <div class="metric-value">${formatPrice(r.current_price, r.ticker)}</div>
                 </div>
             </div>
             
@@ -790,7 +830,7 @@ function renderStockDetails(ticker, resultIndex) {
                         <option value="max">All Time</option>
                     </select>
                     
-                    <button class="btn-small btn-refresh" onclick="refreshChart('${r.ticker}', ${resultIndex})">
+                    <button class="btn-small btn-refresh" id="refreshBtn_${r.ticker}" onclick="refreshChart('${r.ticker}', ${resultIndex})">
                         🔄 Refresh
                     </button>
                 </div>
@@ -801,15 +841,34 @@ function renderStockDetails(ticker, resultIndex) {
     
     body.innerHTML = html;
     
-    // Render chart if available
+    // Render chart if available and mark button as "Refresh" after first render
     if (r.chart_data) {
-        const initialChartType = document.getElementById('chartType').value;
+        const initialChartType = document.getElementById('chartType')?.value || 'candlestick';
         const dropdown = document.getElementById(`chartType_${r.ticker}`);
         if (dropdown) {
             dropdown.value = r.chart_type_used || initialChartType;
         }
+        
+        // Check if chart has been rendered before
+        const refreshBtn = document.getElementById(`refreshBtn_${r.ticker}`);
+        const chartDiv = document.getElementById(`chart_${r.ticker}`);
+        
+        if (chartDiv && chartDiv.innerHTML.trim() === '') {
+            // First time - button should say "Generate"
+            if (refreshBtn) {
+                refreshBtn.innerHTML = '📊 Generate Chart';
+            }
+        }
+        
         console.log(`Rendering ${r.ticker} with chart type: ${r.chart_type_used || initialChartType}`);
         renderChart(r.ticker, r.chart_data);
+        
+        // After rendering, change button to "Refresh"
+        setTimeout(() => {
+            if (refreshBtn) {
+                refreshBtn.innerHTML = '🔄 Refresh';
+            }
+        }, 500);
     }
 }
 
@@ -892,7 +951,21 @@ async function updateChart(ticker, resultIndex) {
 
 // Refresh current chart
 function refreshChart(ticker, resultIndex) {
+    const refreshBtn = document.getElementById(`refreshBtn_${ticker}`);
+    if (refreshBtn) {
+        refreshBtn.innerHTML = '⏳ Loading...';
+        refreshBtn.disabled = true;
+    }
+    
     updateChart(ticker, resultIndex);
+    
+    // Re-enable button after update
+    setTimeout(() => {
+        if (refreshBtn) {
+            refreshBtn.innerHTML = '🔄 Refresh';
+            refreshBtn.disabled = false;
+        }
+    }, 1000);
 }
 
 // ===== AI CHAT FUNCTIONS =====
@@ -1001,7 +1074,24 @@ function addChatMessage(message, isUser = false) {
     
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
-    contentDiv.textContent = message;
+    
+    // Format the message (convert markdown-style to HTML)
+    let formattedMessage = message
+        // Bold text: **text** -> <strong>text</strong>
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        // Bullet points: • text -> proper list item
+        .replace(/^• (.+)$/gm, '<li>$1</li>')
+        // Numbered lists: 1. text -> proper list item
+        .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+        // Line breaks
+        .replace(/\n/g, '<br>');
+    
+    // Wrap list items in ul tags
+    if (formattedMessage.includes('<li>')) {
+        formattedMessage = formattedMessage.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+    }
+    
+    contentDiv.innerHTML = formattedMessage;
     
     messageDiv.appendChild(contentDiv);
     messagesContainer.appendChild(messageDiv);
@@ -1020,25 +1110,46 @@ async function sendChatMessage() {
         return;
     }
     
-    // If no ticker selected, provide general response or ask user to be specific
+    // If no ticker selected, try to extract from question
     if (!ticker) {
         addChatMessage(question, true);
         input.value = '';
         
-        // Try to extract ticker from question (e.g., "What about MSFT?")
-        const tickerMatch = question.match(/\b([A-Z]{1,5}(?:\.[A-Z]{1,2})?)\b/);
-        if (tickerMatch && window.analysisResults) {
+        // Try to extract ticker from question (supports stocks and crypto)
+        // Matches: MSFT, BTC-USD, ETH-EUR, UPR.IR, etc.
+        const tickerMatch = question.match(/\b([A-Z]{2,5}(?:[-\.][A-Z]{2,4})?)\b/);
+        if (tickerMatch) {
             const extractedTicker = tickerMatch[1];
-            const foundResult = window.analysisResults.find(r => r.ticker === extractedTicker);
-            if (foundResult) {
-                // Auto-select and answer
-                tickerSelect.value = extractedTicker;
-                sendChatWithTicker(question, extractedTicker);
-                return;
+            
+            // Check if it's in analyzed results
+            if (window.analysisResults) {
+                const foundResult = window.analysisResults.find(r => 
+                    r.ticker.toUpperCase() === extractedTicker.toUpperCase()
+                );
+                if (foundResult) {
+                    // Auto-select and answer
+                    tickerSelect.value = foundResult.ticker;
+                    sendChatWithTicker(question, foundResult.ticker);
+                    return;
+                }
             }
+            
+            // Not analyzed yet - suggest analyzing it
+            addChatMessage(`💡 I found "${extractedTicker}" in your question, but it hasn't been analyzed yet.\n\n` +
+                `**To analyze ${extractedTicker}:**\n` +
+                `1. Add it to your analysis tickers\n` +
+                `2. Click "Analyze Portfolio"\n` +
+                `3. Then ask me questions about it!\n` +
+                `Or select a stock from the dropdown above that has already been analyzed.`, false);
+            return;
         }
         
-        addChatMessage('💡 Please select a stock from the dropdown, or mention a ticker in your question (e.g., "What about MSFT?").', false);
+        // No ticker found - provide help
+        addChatMessage('💡 I can help with stock and crypto analysis!\n\n' +
+            '**To ask a question:**\n' +
+            '• Select a stock/crypto from the dropdown above, OR\n' +
+            '• Mention a ticker in your question (e.g., "What about MSFT?" or "Analyze BTC-USD")\n\n' +
+            '**Available tickers:** ' + (window.analysisResults?.map(r => r.ticker).join(', ') || 'None yet - analyze some stocks first!'), false);
         return;
     }
     
@@ -1080,9 +1191,21 @@ async function sendChatWithTicker(question, ticker) {
         
         const data = await response.json();
         
+        // Check if analysis is needed
+        if (data.needs_analysis) {
+            addChatMessage(data.answer, false);
+            return;
+        }
+        
+        // Check if low confidence warning (don't show confidence for helpful messages)
+        if (data.low_confidence) {
+            addChatMessage(data.answer, false);
+            return;
+        }
+        
+        // Normal response - no confidence display
         if (data.success) {
-            const confidence = (data.confidence * 100).toFixed(0);
-            addChatMessage(`${data.answer}\n\n(Confidence: ${confidence}%)`, false);
+            addChatMessage(data.answer, false);
         } else {
             addChatMessage(data.answer || 'Sorry, I could not answer that question.', false);
         }
