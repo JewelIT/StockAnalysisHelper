@@ -42,11 +42,11 @@
                 <button onclick="analyzePortfolio()" class="btn btn-success" id="analyzeBtn">
                     🔍 Analyze Portfolio
                 </button>
-                <button onclick="clearTickers()" class="btn btn-secondary">
-                    🗑️ Clear All
+                <button onclick="loadPortfolioToSession()" class="btn btn-primary">
+                    📂 Load My Portfolio
                 </button>
-                <button onclick="loadDefaultPortfolio()" class="btn btn-info">
-                    📋 Load Default
+                <button onclick="togglePortfolioConfig()" class="btn btn-info">
+                    ⚙️ Manage Portfolio
                 </button>
             </div>
         </div>
@@ -60,6 +60,13 @@
             <h2>📈 Analysis Results</h2>
             <div id="timestamp" class="timestamp"></div>
             
+            <!-- Overall Portfolio Performance -->
+            <div class="portfolio-overview">
+                <div id="portfolioStats" class="portfolio-stats-grid">
+                    <!-- Stats will be populated here -->
+                </div>
+            </div>
+            
             <div class="summary-section">
                 <h3>Summary & Recommendations</h3>
                 <div id="summaryTable"></div>
@@ -70,6 +77,85 @@
                 <div id="detailsContainer"></div>
             </div>
         </div>
+        
+        <!-- Portfolio Configuration Modal -->
+        <div id="portfolioModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>⚙️ Portfolio Configuration</h2>
+                    <button class="modal-close" onclick="togglePortfolioConfig()">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="portfolio-add-section">
+                        <h3>Add Ticker to Portfolio</h3>
+                        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                            <input 
+                                type="text" 
+                                id="portfolioTickerInput" 
+                                placeholder="Enter ticker (e.g., AAPL, MSFT, TSM)"
+                                style="flex: 1; padding: 10px; border: 2px solid #ddd; border-radius: 8px;"
+                                onkeypress="if(event.key==='Enter') addTickerToPortfolio()"
+                            >
+                            <button onclick="addTickerToPortfolio()" class="btn btn-primary">
+                                ➕ Add
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <h3>Saved Portfolio Tickers</h3>
+                    <div id="savedTickersList" class="saved-tickers-list">
+                        <!-- Saved tickers will be listed here -->
+                    </div>
+                    
+                    <div class="modal-actions">
+                        <button onclick="savePortfolioPreferences()" class="btn btn-success">
+                            💾 Save Portfolio
+                        </button>
+                        <button onclick="clearAllTickers()" class="btn btn-danger">
+                            🗑️ Clear All Tickers
+                        </button>
+                    </div>
+                    
+                    <div class="help-section">
+                        <p><strong>Note:</strong> This is your saved portfolio, separate from the analysis session.</p>
+                        <p><strong>Tip:</strong> Supports US, European, Japanese, and other global tickers (1-5 characters).</p>
+                        <p>Remove individual tickers by clicking the × next to each one.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- AI Chat Assistant -->
+        <div id="chatPanel" class="chat-panel">
+            <div class="chat-header">
+                <h3>🤖 AI Stock Assistant</h3>
+                <button class="chat-toggle" onclick="toggleChat()">✕</button>
+            </div>
+            <div class="chat-messages" id="chatMessages">
+                <div class="chat-message bot-message">
+                    <div class="message-content">
+                        👋 Hi! I can answer questions about the stocks you've analyzed. Try asking:
+                        <ul style="margin: 10px 0; padding-left: 20px;">
+                            <li>"What is the recommendation?"</li>
+                            <li>"Why is the technical score high?"</li>
+                            <li>"What is the current price?"</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="chat-input-container">
+                <select id="chatTicker" class="chat-ticker-select">
+                    <option value="">Select Stock...</option>
+                </select>
+                <input type="text" id="chatInput" placeholder="Ask a question about the stock..." 
+                       onkeypress="if(event.key==='Enter') sendChatMessage()" />
+                <button onclick="sendChatMessage()" class="btn-chat-send">Send</button>
+            </div>
+        </div>
+        
+        <button class="chat-fab" onclick="toggleChat()" title="AI Assistant">
+            🤖
+        </button>
     </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>

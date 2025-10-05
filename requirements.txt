@@ -7,3 +7,5 @@ ta
 plotly
 flask
 kaleido
+praw
+requests

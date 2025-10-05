@@ -6,12 +6,14 @@ from datetime import datetime
 import json
 import os
 from src.portfolio_analyzer import PortfolioAnalyzer
+from src.stock_chat import StockChatAssistant
 
 app = Flask(__name__)
 app.config['EXPORTS_FOLDER'] = 'exports'
 
 # Initialize analyzer (will load model on first request)
 analyzer = None
+chat_assistant = None
 # Cache for storing analysis data per ticker (for chart regeneration)
 analysis_cache = {}
 
@@ -34,6 +36,7 @@ def analyze():
     data = request.get_json()
     tickers = data.get('tickers', [])
     chart_type = data.get('chart_type', 'candlestick')
+    timeframe = data.get('timeframe', '3mo')
     use_cache = data.get('use_cache', False)  # For chart-only updates
     
     if not tickers:
@@ -43,6 +46,11 @@ def analyze():
     valid_chart_types = ['candlestick', 'line', 'ohlc', 'area', 'mountain', 'volume']
     if chart_type not in valid_chart_types:
         chart_type = 'candlestick'
+    
+    # Validate timeframe
+    valid_timeframes = ['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', 'max']
+    if timeframe not in valid_timeframes:
+        timeframe = '3mo'
     
     # Get analyzer instance
     portfolio_analyzer = get_analyzer()
@@ -74,7 +82,7 @@ def analyze():
         })
     
     # Analyze portfolio (fresh analysis)
-    results = portfolio_analyzer.analyze_portfolio(tickers, chart_type=chart_type)
+    results = portfolio_analyzer.analyze_portfolio(tickers, chart_type=chart_type, timeframe=timeframe)
     
     # Cache the data for each ticker (store df and indicators for chart regeneration)
     for result in results:
@@ -120,6 +128,47 @@ def analyze():
 def download_export(filename):
     """Download exported analysis"""
     return send_from_directory(app.config['EXPORTS_FOLDER'], filename)
+
+@app.route('/chat', methods=['POST'])
+def chat():
+    """AI chat endpoint for stock questions"""
+    global chat_assistant, analysis_cache
+    
+    data = request.get_json()
+    question = data.get('question', '')
+    ticker = data.get('ticker', '')
+    
+    if not question:
+        return jsonify({'error': 'No question provided'}), 400
+    
+    # Initialize chat assistant if needed
+    if chat_assistant is None:
+        try:
+            chat_assistant = StockChatAssistant()
+            chat_assistant.load_model()
+        except Exception as e:
+            return jsonify({'error': f'Could not load chat model: {str(e)}'}), 500
+    
+    # Get context from analysis cache or provide generic response
+    context = ""
+    if ticker and ticker in analysis_cache:
+        cached_result = analysis_cache[ticker]['result']
+        context = chat_assistant.generate_context_from_analysis(cached_result)
+    elif ticker:
+        context = f"I don't have recent analysis data for {ticker}. Please analyze this stock first."
+    else:
+        context = "I can answer questions about stocks you've analyzed. Please specify a ticker symbol or analyze a stock first."
+    
+    # Answer the question
+    result = chat_assistant.answer_question(question, context)
+    
+    return jsonify({
+        'question': question,
+        'answer': result['answer'],
+        'confidence': result['confidence'],
+        'ticker': ticker,
+        'success': result['success']
+    })
 
 if __name__ == '__main__':
     # Ensure exports folder exists
