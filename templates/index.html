@@ -8,6 +8,9 @@
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
 </head>
 <body>
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="toast-container"></div>
+    
     <div class="container">
         <header>
             <h1>📊 Portfolio Analysis</h1>
@@ -25,19 +28,6 @@
                 <!-- Ticker chips will be added here -->
             </div>
             
-            <div class="chart-type-selector">
-                <label for="chartType">📊 Default Chart Type:</label>
-                <select id="chartType" class="chart-type-select">
-                    <option value="candlestick" selected>🕯️ Candlestick</option>
-                    <option value="line">📈 Line Chart</option>
-                    <option value="ohlc">📊 OHLC Bars</option>
-                    <option value="area">📉 Area Chart</option>
-                    <option value="mountain">⛰️ Mountain Chart</option>
-                    <option value="volume">📊 Volume Analysis</option>
-                </select>
-                <small class="help-text">You can change chart type per stock after analysis</small>
-            </div>
-            
             <div class="action-buttons">
                 <button onclick="analyzePortfolio()" class="btn btn-success" id="analyzeBtn">
                     🔍 Analyze Portfolio
@@ -46,7 +36,7 @@
                     📂 Load My Portfolio
                 </button>
                 <button onclick="togglePortfolioConfig()" class="btn btn-info">
-                    ⚙️ Manage Portfolio
+                    ⚙️ Configuration
                 </button>
             </div>
         </div>
@@ -78,16 +68,45 @@
             </div>
         </div>
         
-        <!-- Portfolio Configuration Modal -->
+        <!-- Configuration Modal -->
         <div id="portfolioModal" class="modal">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>⚙️ Portfolio Configuration</h2>
+                    <h2>⚙️ Configuration</h2>
                     <button class="modal-close" onclick="togglePortfolioConfig()">×</button>
                 </div>
                 <div class="modal-body">
+                    <!-- App Settings -->
+                    <div class="config-section">
+                        <h3>📊 Display Settings</h3>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Default Chart Type:</label>
+                            <select id="configChartType" class="chart-type-select" onchange="saveConfigSettings()" style="width: 100%;">
+                                <option value="candlestick">🕯️ Candlestick</option>
+                                <option value="line">📈 Line Chart</option>
+                                <option value="ohlc">📊 OHLC Bars</option>
+                                <option value="area">📉 Area Chart</option>
+                                <option value="mountain">⛰️ Mountain Chart</option>
+                                <option value="volume">📊 Volume Analysis</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Currency Display:</label>
+                            <select id="configCurrency" class="chart-type-select" onchange="saveConfigSettings()" style="width: 100%;">
+                                <option value="native">Native Currency (Stock's Market)</option>
+                                <option value="USD">🇺🇸 US Dollar (USD)</option>
+                                <option value="EUR">🇪🇺 Euro (EUR)</option>
+                            </select>
+                            <small style="color: #888; font-size: 0.85em;">Note: Currency conversion not yet implemented</small>
+                        </div>
+                    </div>
+                    
+                    <hr style="margin: 20px 0; border: none; border-top: 2px solid #f0f0f0;">
+                    
+                    <!-- Portfolio Management -->
                     <div class="portfolio-add-section">
-                        <h3>Add Ticker to Portfolio</h3>
+                        <h3>💼 Portfolio Management</h3>
+                        <h4 style="margin-top: 15px;">Add Ticker to Portfolio</h4>
                         <div style="display: flex; gap: 10px; margin-bottom: 20px;">
                             <input 
                                 type="text" 
@@ -118,8 +137,16 @@
                     
                     <div class="help-section">
                         <p><strong>Note:</strong> This is your saved portfolio, separate from the analysis session.</p>
-                        <p><strong>Tip:</strong> Supports US, European, Japanese, and other global tickers (1-5 characters).</p>
-                        <p>Remove individual tickers by clicking the × next to each one.</p>
+                        <p><strong>International Tickers:</strong></p>
+                        <ul style="font-size: 0.9em; margin-left: 20px; color: #666;">
+                            <li>🇺🇸 US: AAPL, MSFT, GOOGL</li>
+                            <li>🇮🇪 Irish: UPL.IR, RYA.IR</li>
+                            <li>🇬🇧 London: HSBA.L, BP.L</li>
+                            <li>🇩🇪 German: SAP.DE, VOW3.DE</li>
+                            <li>🇯🇵 Tokyo: 7203.T (Toyota), 6758.T (Sony)</li>
+                            <li>🇫🇷 Paris: MC.PA, OR.PA</li>
+                        </ul>
+                        <p style="margin-top: 10px;">Remove individual tickers by clicking the × next to each one.</p>
                     </div>
                 </div>
             </div>

@@ -1,16 +1,79 @@
 // Portfolio Analysis App
 const PORTFOLIO_STORAGE_KEY = 'saved_portfolio_tickers';  // Persistent portfolio
 const SESSION_STORAGE_KEY = 'session_analysis_tickers';    // Current session
+const CONFIG_STORAGE_KEY = 'app_configuration';             // App settings
 const DEFAULT_TICKERS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA'];
 
 let sessionTickers = [];      // Tickers for current analysis (temporary)
 let portfolioTickers = [];    // Saved portfolio tickers (persistent)
+let appConfig = {              // App configuration
+    currency: 'USD',           // USD, EUR, or 'native'
+    defaultChartType: 'candlestick',
+    displayMode: 'accordion'   // accordion or tabs (for future)
+};
+
+// ===== TOAST NOTIFICATION SYSTEM =====
+
+function showToast(message, type = 'info', title = null) {
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    
+    const icons = {
+        success: '✅',
+        error: '❌',
+        warning: '⚠️',
+        info: 'ℹ️'
+    };
+    
+    const defaultTitles = {
+        success: 'Success',
+        error: 'Error',
+        warning: 'Warning',
+        info: 'Information'
+    };
+    
+    toast.innerHTML = `
+        <div class="toast-icon">${icons[type] || icons.info}</div>
+        <div class="toast-content">
+            <div class="toast-title">${title || defaultTitles[type]}</div>
+            <div class="toast-message">${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+    `;
+    
+    container.appendChild(toast);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        toast.classList.add('hiding');
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
+}
+
+// Load and save app configuration
+function loadAppConfig() {
+    const stored = localStorage.getItem(CONFIG_STORAGE_KEY);
+    if (stored) {
+        try {
+            appConfig = { ...appConfig, ...JSON.parse(stored) };
+        } catch (e) {
+            console.error('Failed to load config:', e);
+        }
+    }
+}
+
+function saveAppConfig() {
+    localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(appConfig));
+}
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', function() {
+    loadAppConfig();
     loadPortfolioFromStorage();
     loadSessionTickers();
     updateTickerChips();
+    updateChatTickers();  // Populate chat with portfolio tickers
     
     // Enter key support for analysis
     document.getElementById('tickerInput').addEventListener('keypress', function(e) {
@@ -66,12 +129,12 @@ function addTicker() {
     const ticker = input.value.trim().toUpperCase();
     
     if (!ticker) {
-        alert('Please enter a ticker symbol');
+        showToast('Please enter a ticker symbol', 'warning');
         return;
     }
     
     if (sessionTickers.includes(ticker)) {
-        alert('Ticker already added to analysis');
+        showToast(`${ticker} is already in your analysis session`, 'info');
         return;
     }
     
@@ -79,6 +142,7 @@ function addTicker() {
     input.value = '';
     saveSessionTickers();
     updateTickerChips();
+    showToast(`${ticker} added to analysis session`, 'success');
 }
 
 // Remove ticker from analysis session (not from portfolio)
@@ -103,7 +167,7 @@ function clearTickers() {
 // Load portfolio into analysis session
 function loadPortfolioToSession() {
     if (portfolioTickers.length === 0) {
-        alert('No saved portfolio found. Please configure your portfolio first.');
+        showToast('No saved portfolio found. Please configure your portfolio first.', 'warning');
         togglePortfolioConfig();
         return;
     }
@@ -111,7 +175,7 @@ function loadPortfolioToSession() {
     sessionTickers = [...portfolioTickers];
     saveSessionTickers();
     updateTickerChips();
-    alert(`✅ Loaded ${portfolioTickers.length} ticker(s) from portfolio`);
+    showToast(`Loaded ${portfolioTickers.length} ticker(s) from portfolio: ${portfolioTickers.join(', ')}`, 'success');
 }
 
 // Load default portfolio
@@ -129,7 +193,22 @@ function togglePortfolioConfig() {
     } else {
         modal.classList.add('show');
         updateSavedTickersList();
+        loadConfigToUI();
     }
+}
+
+// Load config settings to UI
+function loadConfigToUI() {
+    document.getElementById('configChartType').value = appConfig.defaultChartType;
+    document.getElementById('configCurrency').value = appConfig.currency;
+}
+
+// Save config settings from UI
+function saveConfigSettings() {
+    appConfig.defaultChartType = document.getElementById('configChartType').value;
+    appConfig.currency = document.getElementById('configCurrency').value;
+    saveAppConfig();
+    showToast('Settings saved successfully', 'success');
 }
 
 // Update saved tickers list in modal
@@ -185,6 +264,25 @@ function removeFromPortfolio(ticker) {
     portfolioTickers = portfolioTickers.filter(t => t !== ticker);
     savePortfolioToStorage();
     updateSavedTickersList();
+}
+
+// Add ticker to portfolio from analysis view
+function addToPortfolioFromAnalysis(ticker) {
+    if (portfolioTickers.includes(ticker)) {
+        alert(`${ticker} is already in your portfolio`);
+        return;
+    }
+    
+    portfolioTickers.push(ticker);
+    savePortfolioToStorage();
+    updateTickerChips(); // Update star badges
+    alert(`✅ ${ticker} added to portfolio!`);
+    
+    // Re-render the stock details to show "In Portfolio" instead of button
+    const resultIndex = window.analysisResults.findIndex(r => r.ticker === ticker);
+    if (resultIndex !== -1) {
+        renderStockDetails(ticker, resultIndex);
+    }
 }
 
 // Save portfolio preferences
@@ -246,12 +344,12 @@ function updateTickerChips() {
 // Analyze portfolio
 async function analyzePortfolio() {
     if (sessionTickers.length === 0) {
-        alert('Please add at least one ticker to analyze');
+        showToast('Please add at least one ticker to analyze', 'warning');
         return;
     }
     
-    // Get selected default chart type (used for initial render)
-    const chartType = document.getElementById('chartType').value;
+    // Use configured default chart type
+    const chartType = appConfig.defaultChartType;
     
     // Show loading
     document.getElementById('loadingIndicator').style.display = 'block';
@@ -275,10 +373,32 @@ async function analyzePortfolio() {
         }
         
         const data = await response.json();
-        displayResults(data);
+        
+        // Check if any results failed
+        if (data.results && data.results.length > 0) {
+            const failedTickers = sessionTickers.filter(t => 
+                !data.results.find(r => r.ticker === t)
+            );
+            
+            if (failedTickers.length > 0) {
+                showToast(
+                    `Failed to analyze: ${failedTickers.join(', ')}. Check ticker symbols and try adding exchange suffix (e.g., UPL.IR for Irish stocks).`,
+                    'error',
+                    'Analysis Warning'
+                );
+            }
+            
+            if (data.results.length > 0) {
+                displayResults(data);
+            } else {
+                showToast('No stocks were successfully analyzed. Please check your ticker symbols.', 'error');
+            }
+        } else {
+            showToast('Analysis returned no results. Please verify your ticker symbols.', 'error');
+        }
         
     } catch (error) {
-        alert('Error analyzing portfolio: ' + error.message);
+        showToast('Error analyzing portfolio: ' + error.message, 'error');
         console.error('Error:', error);
     } finally {
         document.getElementById('loadingIndicator').style.display = 'none';
@@ -291,7 +411,7 @@ function displayResults(data) {
     const results = data.results;
     
     if (!results || results.length === 0) {
-        alert('No results to display');
+        showToast('No results to display', 'warning');
         return;
     }
     
@@ -331,18 +451,23 @@ function displayPortfolioStats(results) {
     // Calculate stats
     const totalStocks = results.length;
     const avgScore = (results.reduce((sum, r) => sum + (r.combined_score || 0), 0) / totalStocks).toFixed(1);
-    const avgChange = results.reduce((sum, r) => sum + (r.three_month_change || 0), 0) / totalStocks;
+    const avgChange = results.reduce((sum, r) => sum + (r.price_change || 0), 0) / totalStocks;
     
-    // Count recommendations
+    // Count recommendations - normalize STRONG BUY/SELL to BUY/SELL
     const recommendations = results.reduce((acc, r) => {
-        const rec = r.recommendation || 'HOLD';
+        let rec = r.recommendation || 'HOLD';
+        // Normalize: STRONG BUY -> BUY, STRONG SELL -> SELL
+        if (rec.includes('BUY')) rec = 'BUY';
+        else if (rec.includes('SELL')) rec = 'SELL';
+        else if (!rec.includes('HOLD')) rec = 'HOLD';
+        
         acc[rec] = (acc[rec] || 0) + 1;
         return acc;
     }, {});
     
     // Find best and worst performers
     const sortedByChange = [...results].sort((a, b) => 
-        (b.three_month_change || 0) - (a.three_month_change || 0)
+        (b.price_change || 0) - (a.price_change || 0)
     );
     const bestPerformer = sortedByChange[0];
     const worstPerformer = sortedByChange[sortedByChange.length - 1];
@@ -358,22 +483,27 @@ function displayPortfolioStats(results) {
         overallEmoji = '😞';
     }
     
-    // Render stats grid
-    container.innerHTML = `
+    // Render stats grid based on number of stocks
+    let statsHTML = `
         <div class="stat-card">
             <div class="stat-label">Total Stocks</div>
             <div class="stat-value neutral">${totalStocks}</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">Avg Sentiment</div>
+            <div class="stat-label">${totalStocks > 1 ? 'Avg Sentiment' : 'Sentiment'}</div>
             <div class="stat-value ${overallClass}">${overallEmoji} ${(avgScore * 100).toFixed(1)}%</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">Avg 3M Change</div>
+            <div class="stat-label">${totalStocks > 1 ? 'Avg 3M Change' : '3M Change'}</div>
             <div class="stat-value ${avgChange >= 0 ? 'positive' : 'negative'}">
                 ${avgChange >= 0 ? '▲' : '▼'} ${Math.abs(avgChange).toFixed(2)}%
             </div>
         </div>
+    `;
+    
+    // Only show recommendation breakdown if multiple stocks
+    if (totalStocks > 1) {
+        statsHTML += `
         <div class="stat-card">
             <div class="stat-label">Recommendations</div>
             <div class="stat-value neutral">
@@ -384,21 +514,52 @@ function displayPortfolioStats(results) {
                 </div>
             </div>
         </div>
+        `;
+    } else {
+        // Single stock - show the recommendation directly
+        const singleRec = results[0].recommendation || 'HOLD';
+        // Determine class and emoji based on recommendation
+        let recClass, recEmoji;
+        if (singleRec.includes('BUY')) {
+            recClass = 'positive';
+            recEmoji = '📈';
+        } else if (singleRec.includes('SELL')) {
+            recClass = 'negative';
+            recEmoji = '📉';
+        } else {
+            recClass = 'neutral';
+            recEmoji = '➡️';
+        }
+        
+        statsHTML += `
+        <div class="stat-card">
+            <div class="stat-label">Recommendation</div>
+            <div class="stat-value ${recClass}">${recEmoji} ${singleRec}</div>
+        </div>
+        `;
+    }
+    
+    // Only show best/worst performers if multiple stocks
+    if (totalStocks > 1) {
+        statsHTML += `
         <div class="stat-card">
             <div class="stat-label">🏆 Best Performer</div>
             <div class="stat-value positive">
                 ${bestPerformer.ticker}
-                <div class="stat-subtext">+${(bestPerformer.three_month_change || 0).toFixed(2)}%</div>
+                <div class="stat-subtext">+${(bestPerformer.price_change || 0).toFixed(2)}%</div>
             </div>
         </div>
         <div class="stat-card">
             <div class="stat-label">📉 Worst Performer</div>
             <div class="stat-value negative">
                 ${worstPerformer.ticker}
-                <div class="stat-subtext">${(worstPerformer.three_month_change || 0).toFixed(2)}%</div>
+                <div class="stat-subtext">${(worstPerformer.price_change || 0).toFixed(2)}%</div>
             </div>
         </div>
-    `;
+        `;
+    }
+    
+    container.innerHTML = statsHTML;
 }
 
 // Display summary table
@@ -512,9 +673,19 @@ function toggleStockDetails(ticker, resultIndex) {
 function renderStockDetails(ticker, resultIndex) {
     const r = window.analysisResults[resultIndex];
     const body = document.getElementById(`body_${ticker}`);
+    const isInPortfolio = portfolioTickers.includes(ticker);
     
     const html = `
         <div class="stock-details-content">
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+                ${!isInPortfolio ? `
+                    <button onclick="addToPortfolioFromAnalysis('${ticker}')" class="btn-small btn-primary" style="display: flex; align-items: center; gap: 5px;">
+                        ⭐ Add to Portfolio
+                    </button>
+                ` : `
+                    <span style="color: #22c55e; font-weight: 600;">⭐ In Portfolio</span>
+                `}
+            </div>
             <div class="metrics-grid">
                 <div class="metric-box">
                     <div class="metric-label">Combined Score</div>
@@ -736,20 +907,90 @@ function updateChatTickers() {
     const currentValue = chatTicker.value;
     
     // Clear and rebuild options
-    chatTicker.innerHTML = '<option value="">Select Stock...</option>';
+    chatTicker.innerHTML = '<option value="">💬 General Question...</option>';
     
+    // Combine all available stocks: analyzed + portfolio + session
+    const availableTickers = new Map(); // Use Map to avoid duplicates
+    
+    // 1. Add currently analyzed stocks (highest priority - has full data)
     if (window.analysisResults && window.analysisResults.length > 0) {
         window.analysisResults.forEach(result => {
-            const option = document.createElement('option');
-            option.value = result.ticker;
-            option.textContent = `${result.ticker} - ${result.name || result.ticker}`;
-            chatTicker.appendChild(option);
+            availableTickers.set(result.ticker, {
+                ticker: result.ticker,
+                name: result.name || result.ticker,
+                source: 'analyzed'
+            });
         });
-        
-        // Restore selection if it still exists
-        if (currentValue) {
-            chatTicker.value = currentValue;
+    }
+    
+    // 2. Add portfolio tickers
+    portfolioTickers.forEach(ticker => {
+        if (!availableTickers.has(ticker)) {
+            availableTickers.set(ticker, {
+                ticker: ticker,
+                name: ticker,
+                source: 'portfolio'
+            });
         }
+    });
+    
+    // 3. Add session tickers
+    sessionTickers.forEach(ticker => {
+        if (!availableTickers.has(ticker)) {
+            availableTickers.set(ticker, {
+                ticker: ticker,
+                name: ticker,
+                source: 'session'
+            });
+        }
+    });
+    
+    // Populate dropdown with sections
+    if (availableTickers.size > 0) {
+        const analyzed = Array.from(availableTickers.values()).filter(s => s.source === 'analyzed');
+        const portfolio = Array.from(availableTickers.values()).filter(s => s.source === 'portfolio');
+        const session = Array.from(availableTickers.values()).filter(s => s.source === 'session');
+        
+        if (analyzed.length > 0) {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = '📊 Analyzed Stocks';
+            analyzed.forEach(stock => {
+                const option = document.createElement('option');
+                option.value = stock.ticker;
+                option.textContent = `${stock.ticker}${stock.name !== stock.ticker ? ' - ' + stock.name : ''}`;
+                optgroup.appendChild(option);
+            });
+            chatTicker.appendChild(optgroup);
+        }
+        
+        if (portfolio.length > 0) {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = '⭐ Portfolio';
+            portfolio.forEach(stock => {
+                const option = document.createElement('option');
+                option.value = stock.ticker;
+                option.textContent = stock.ticker;
+                optgroup.appendChild(option);
+            });
+            chatTicker.appendChild(optgroup);
+        }
+        
+        if (session.length > 0) {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = '🔍 Session';
+            session.forEach(stock => {
+                const option = document.createElement('option');
+                option.value = stock.ticker;
+                option.textContent = stock.ticker;
+                optgroup.appendChild(option);
+            });
+            chatTicker.appendChild(optgroup);
+        }
+    }
+    
+    // Restore selection if it still exists
+    if (currentValue && availableTickers.has(currentValue)) {
+        chatTicker.value = currentValue;
     }
 }
 
@@ -779,8 +1020,25 @@ async function sendChatMessage() {
         return;
     }
     
+    // If no ticker selected, provide general response or ask user to be specific
     if (!ticker) {
-        addChatMessage('Please select a stock first.', false);
+        addChatMessage(question, true);
+        input.value = '';
+        
+        // Try to extract ticker from question (e.g., "What about MSFT?")
+        const tickerMatch = question.match(/\b([A-Z]{1,5}(?:\.[A-Z]{1,2})?)\b/);
+        if (tickerMatch && window.analysisResults) {
+            const extractedTicker = tickerMatch[1];
+            const foundResult = window.analysisResults.find(r => r.ticker === extractedTicker);
+            if (foundResult) {
+                // Auto-select and answer
+                tickerSelect.value = extractedTicker;
+                sendChatWithTicker(question, extractedTicker);
+                return;
+            }
+        }
+        
+        addChatMessage('💡 Please select a stock from the dropdown, or mention a ticker in your question (e.g., "What about MSFT?").', false);
         return;
     }
     
@@ -788,6 +1046,10 @@ async function sendChatMessage() {
     addChatMessage(question, true);
     input.value = '';
     
+    await sendChatWithTicker(question, ticker);
+}
+
+async function sendChatWithTicker(question, ticker) {
     // Show loading
     const loadingId = 'loading-' + Date.now();
     addChatMessage('🤔 Thinking...', false);
