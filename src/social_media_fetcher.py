@@ -58,11 +58,14 @@ class SocialMediaFetcher:
                 if 'messages' in data:
                     for msg in data['messages'][:max_messages]:
                         # Extract message data
+                        message_id = msg.get('id', '')
                         message_data = {
                             'text': msg.get('body', ''),
                             'created_at': msg.get('created_at', ''),
                             'source': 'StockTwits',
-                            'user': msg.get('user', {}).get('username', 'Unknown')
+                            'user': msg.get('user', {}).get('username', 'Unknown'),
+                            # Construct link to the post
+                            'link': f'https://stocktwits.com/message/{message_id}' if message_id else ''
                         }
                         
                         # StockTwits sometimes includes user sentiment tags
@@ -113,7 +116,7 @@ class SocialMediaFetcher:
                             'created_at': datetime.fromtimestamp(post.created_utc).isoformat(),
                             'source': f'Reddit r/{subreddit_name}',
                             'score': post.score,
-                            'url': f"https://reddit.com{post.permalink}"
+                            'link': f"https://reddit.com{post.permalink}"  # Consistent field name
                         }
                         posts.append(post_data)
                         

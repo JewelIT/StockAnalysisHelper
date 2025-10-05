@@ -32,32 +32,61 @@ class DataFetcher:
             if isinstance(article, dict):
                 article_data = {}
                 
+                # Check if article has nested 'content' structure (newer Yahoo Finance format)
+                content = article.get('content', {}) if isinstance(article.get('content'), dict) else {}
+                
                 # Extract title
                 if 'title' in article:
                     article_data['title'] = article['title']
                 elif 'headline' in article:
                     article_data['title'] = article['headline']
-                elif 'content' in article and isinstance(article['content'], dict):
-                    article_data['title'] = article['content'].get('title', 'Untitled')
+                elif content.get('title'):
+                    article_data['title'] = content['title']
                 else:
                     continue
                 
-                # Extract link
-                article_data['link'] = article.get('link', '') or article.get('url', '')
+                # Extract link (multiple possible locations)
+                link = (
+                    article.get('link') or 
+                    article.get('url') or 
+                    content.get('canonicalUrl', {}).get('url') or
+                    content.get('clickThroughUrl', {}).get('url') or
+                    ''
+                )
+                article_data['link'] = link
                 
-                # Extract publisher
-                article_data['publisher'] = article.get('publisher', 'Unknown')
+                # Extract publisher (check nested structure first)
+                publisher = 'Unknown'
+                if content.get('provider', {}).get('displayName'):
+                    publisher = content['provider']['displayName']
+                elif article.get('publisher'):
+                    publisher = article['publisher']
+                elif article.get('source'):
+                    publisher = article['source']
+                article_data['publisher'] = publisher
                 
                 # Extract publish date
-                article_data['published'] = article.get('providerPublishTime', '')
+                pub_date = (
+                    article.get('providerPublishTime') or 
+                    content.get('pubDate') or
+                    content.get('displayTime') or
+                    ''
+                )
+                article_data['published'] = pub_date
                 
                 # Extract thumbnail if available
                 article_data['thumbnail'] = None
-                if 'thumbnail' in article and article['thumbnail']:
-                    if isinstance(article['thumbnail'], dict):
-                        article_data['thumbnail'] = article['thumbnail'].get('resolutions', [{}])[0].get('url', '')
-                    elif isinstance(article['thumbnail'], str):
-                        article_data['thumbnail'] = article['thumbnail']
+                thumbnail = content.get('thumbnail') or article.get('thumbnail')
+                if thumbnail:
+                    if isinstance(thumbnail, dict):
+                        # Get highest quality resolution or original
+                        resolutions = thumbnail.get('resolutions', [])
+                        if resolutions and len(resolutions) > 0:
+                            article_data['thumbnail'] = resolutions[0].get('url', '')
+                        elif thumbnail.get('originalUrl'):
+                            article_data['thumbnail'] = thumbnail['originalUrl']
+                    elif isinstance(thumbnail, str):
+                        article_data['thumbnail'] = thumbnail
                 
                 articles.append(article_data)
         
