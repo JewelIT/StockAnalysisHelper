@@ -1,17 +1,26 @@
 """
 Data Fetcher Module
+Handles both traditional stocks (yfinance) and cryptocurrencies (CoinGecko)
 """
 import yfinance as yf
+from .coingecko_fetcher import CoinGeckoFetcher
 
 class DataFetcher:
-    @staticmethod
-    def fetch_news(ticker, max_articles=5):
+    def __init__(self):
+        self.coingecko = CoinGeckoFetcher()
+    def fetch_news(self, ticker, max_articles=5):
         """
-        Fetch latest news from Yahoo Finance with links
+        Fetch latest news from Yahoo Finance or CoinGecko (for crypto)
         
         Returns:
             List of dicts with 'title', 'link', 'publisher', 'published'
         """
+        # Check if it's a cryptocurrency
+        if CoinGeckoFetcher.is_crypto_ticker(ticker):
+            print(f"  📰 Fetching crypto news from CoinGecko for {ticker}...")
+            return self.coingecko.fetch_news(ticker, max_articles)
+        
+        # Otherwise use Yahoo Finance
         stock = yf.Ticker(ticker)
         try:
             news_list = stock.news[:max_articles] if hasattr(stock, 'news') and stock.news else []
@@ -54,9 +63,14 @@ class DataFetcher:
         
         return articles
     
-    @staticmethod
-    def fetch_historical_data(ticker, period="3mo"):
-        """Fetch historical stock price data"""
+    def fetch_historical_data(self, ticker, period="3mo"):
+        """Fetch historical stock/crypto price data"""
+        # Check if it's a cryptocurrency
+        if CoinGeckoFetcher.is_crypto_ticker(ticker):
+            print(f"  💰 Using CoinGecko for crypto: {ticker}")
+            return self.coingecko.fetch_historical_data(ticker, period)
+        
+        # Otherwise use Yahoo Finance
         stock = yf.Ticker(ticker)
         try:
             hist = stock.history(period=period)
@@ -64,9 +78,13 @@ class DataFetcher:
         except:
             return None
     
-    @staticmethod
-    def get_stock_info(ticker):
-        """Get basic stock information"""
+    def get_stock_info(self, ticker):
+        """Get basic stock/crypto information"""
+        # Check if it's a cryptocurrency
+        if CoinGeckoFetcher.is_crypto_ticker(ticker):
+            return self.coingecko.get_coin_info(ticker)
+        
+        # Otherwise use Yahoo Finance
         try:
             stock = yf.Ticker(ticker)
             info = stock.info
