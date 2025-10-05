@@ -1,7 +1,7 @@
 """
 Flask Web Application for Portfolio Analysis
 """
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, session
 from datetime import datetime
 import json
 import os
@@ -15,6 +15,9 @@ logger = setup_logging()
 
 app = Flask(__name__)
 app.config['EXPORTS_FOLDER'] = 'exports'
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Initialize analyzer (will load model on first request)
 analyzer = None
@@ -24,8 +27,32 @@ analysis_cache = {}
 
 @app.route('/')
 def index():
-    """Main page"""
+    """Main page - Modern Bootstrap UI"""
+    return render_template('index-modern.html')
+
+@app.route('/legacy')
+def legacy():
+    """Legacy page for fallback"""
     return render_template('index.html')
+
+@app.route('/clear-chat', methods=['POST'])
+def clear_chat():
+    """Clear conversation history"""
+    session.pop('conversation_history', None)
+    session.pop('last_ticker', None)
+    session.pop('conversation_tickers', None)
+    return jsonify({'success': True, 'message': 'Conversation history cleared'})
+
+@app.route('/get-chat-history', methods=['GET'])
+def get_chat_history():
+    """Retrieve conversation history from session"""
+    history = session.get('conversation_history', [])
+    last_ticker = session.get('last_ticker', '')
+    return jsonify({
+        'history': history,
+        'last_ticker': last_ticker,
+        'success': True
+    })
 
 def get_analyzer():
     global analyzer
@@ -141,6 +168,38 @@ chat_context = {
     'conversation_tickers': []
 }
 
+def store_chat_in_session(question, answer, ticker=''):
+    """Store chat message in session history (last 30 exchanges)"""
+    if 'conversation_history' not in session:
+        session['conversation_history'] = []
+    
+    # Store user question
+    session['conversation_history'].append({
+        'role': 'user',
+        'content': question,
+        'ticker': ticker,
+        'timestamp': datetime.now().isoformat()
+    })
+    
+    # Store assistant answer
+    session['conversation_history'].append({
+        'role': 'assistant',
+        'content': answer,
+        'ticker': ticker,
+        'timestamp': datetime.now().isoformat()
+    })
+    
+    # Keep only last 30 messages (15 exchanges)
+    if len(session['conversation_history']) > 30:
+        session['conversation_history'] = session['conversation_history'][-30:]
+    
+    # Update last ticker
+    if ticker:
+        session['last_ticker'] = ticker
+    
+    # Mark session as modified
+    session.modified = True
+
 @app.route('/chat', methods=['POST'])
 def chat():
     """AI chat endpoint - Conversational and context-aware"""
@@ -150,6 +209,10 @@ def chat():
     question = data.get('question', '')
     ticker = data.get('ticker', '')
     context_ticker = data.get('context_ticker', '')  # From frontend context
+    
+    # Check session for last ticker if not provided
+    if not context_ticker and 'last_ticker' in session:
+        context_ticker = session.get('last_ticker', '')
     
     if not question:
         return jsonify({'error': 'No question provided'}), 400
@@ -195,6 +258,7 @@ def chat():
     
     if (is_educational or is_general_question) and not ticker:
         educational_response = chat_assistant.get_educational_response(question)
+        store_chat_in_session(question, educational_response, '')
         return jsonify({
             'question': question,
             'answer': educational_response,
@@ -230,9 +294,11 @@ def chat():
             unanalyzed_ticker = potential_tickers[0]
             chat_context['last_ticker'] = unanalyzed_ticker
             
+            answer = f'🔍 I can analyze **{unanalyzed_ticker}** for you!\n\nWould you like me to:\n\n1️⃣ **Analyze in background** - Quick, just answer your question\n2️⃣ **Full analysis** - Display complete analysis on screen\n\n*(Reply "background" or "full", or I\'ll do background analysis automatically)*'
+            store_chat_in_session(question, answer, unanalyzed_ticker)
             return jsonify({
                 'question': question,
-                'answer': f'🔍 I can analyze **{unanalyzed_ticker}** for you!\n\nWould you like me to:\n\n1️⃣ **Analyze in background** - Quick, just answer your question\n2️⃣ **Full analysis** - Display complete analysis on screen\n\n*(Reply "background" or "full", or I\'ll do background analysis automatically)*',
+                'answer': answer,
                 'ticker': unanalyzed_ticker,
                 'success': True,
                 'needs_background_analysis': True,
@@ -276,6 +342,7 @@ def chat():
                     answer += f'*Want to know more? Ask about the technical indicators or sentiment!*'
                     
                     chat_context['last_ticker'] = last_ticker
+                    store_chat_in_session(question, answer, last_ticker)
                     
                     return jsonify({
                         'question': question,
@@ -315,6 +382,7 @@ def chat():
                 else:
                     answer = '� **Welcome! I\'m your AI Investment Advisor.**\n\n**I can help you:**\n\n📊 **Analyze Stocks/Crypto:**\nJust mention any ticker (e.g., "What about AAPL?" or "Tell me about BTC-USD")\n\n📚 **Learn About Investing:**\n• "How do I start investing?"\n• "What books should I read?"\n• "Explain diversification"\n• "How do I manage risk?"\n\n**I\'ll answer naturally - just ask!**\n\n⚠️ *Educational purposes only. Not financial advice.*'
                 
+                store_chat_in_session(question, answer, '')
                 return jsonify({
                     'question': question,
                     'answer': answer,
@@ -330,9 +398,11 @@ def chat():
     
     # Check if we have analysis for this ticker
     if ticker not in analysis_cache:
+        answer = f'🔍 I need to analyze **{ticker}** first!\n\nWould you like:\n\n1️⃣ **Background analysis** - Quick answer to your question\n2️⃣ **Full analysis** - Complete report with charts\n\n*(I\'ll do background analysis by default in 3 seconds...)*'
+        store_chat_in_session(question, answer, ticker)
         return jsonify({
             'question': question,
-            'answer': f'🔍 I need to analyze **{ticker}** first!\n\nWould you like:\n\n1️⃣ **Background analysis** - Quick answer to your question\n2️⃣ **Full analysis** - Complete report with charts\n\n*(I\'ll do background analysis by default in 3 seconds...)*',
+            'answer': answer,
             'ticker': ticker,
             'success': True,
             'needs_background_analysis': True,
@@ -374,23 +444,27 @@ def chat():
             currency_symbol = '€' if detected_currency in ['eur', 'euro', 'euros'] else '£' if detected_currency in ['gbp', 'pound', 'pounds'] else '¥'
             currency_code = 'EUR' if detected_currency in ['eur', 'euro', 'euros'] else 'GBP' if detected_currency in ['gbp', 'pound', 'pounds'] else 'JPY'
             
+            answer = f'''{ticker} is currently **{currency_symbol}{converted_price:.2f} {currency_code}**
+
+(Converted from ${price_usd:.2f} USD using approximate exchange rate)'''
+            store_chat_in_session(question, answer, ticker)
             return jsonify({
                 'question': question,
-                'answer': f'''{ticker} is currently **{currency_symbol}{converted_price:.2f} {currency_code}**
-
-(Converted from ${price_usd:.2f} USD using approximate exchange rate)''',
+                'answer': answer,
                 'ticker': ticker,
                 'success': True
             })
         else:
-            return jsonify({
-                'question': question,
-                'answer': f'''I can't convert to that currency right now. I currently support:
+            answer = f'''I can't convert to that currency right now. I currently support:
 • EUR (Euro)
 • GBP (British Pound)
 • JPY (Japanese Yen)
 
-The current price is **${price_usd:.2f} USD**.''',
+The current price is **${price_usd:.2f} USD**.'''
+            store_chat_in_session(question, answer, ticker)
+            return jsonify({
+                'question': question,
+                'answer': answer,
                 'ticker': ticker,
                 'success': True
             })
@@ -449,6 +523,7 @@ I'm not sure how to answer that specific question, but here's what I know about 
 • What's the RSI value?
         """.strip()
         
+        store_chat_in_session(question, available_info, ticker)
         return jsonify({
             'question': question,
             'answer': available_info,
@@ -456,6 +531,9 @@ I'm not sure how to answer that specific question, but here's what I know about 
             'success': True,
             'low_confidence': True
         })
+    
+    # Store successful chat interaction
+    store_chat_in_session(question, result['answer'], ticker)
     
     return jsonify({
         'question': question,

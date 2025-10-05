@@ -99,6 +99,7 @@ class PortfolioAnalyzer:
                             sentiment['text'] = post['text'][:200] + '...' if len(post['text']) > 200 else post['text']
                             sentiment['source'] = post.get('source', 'Unknown')
                             sentiment['created_at'] = post.get('created_at', '')
+                            sentiment['link'] = post.get('link', '')
                             sentiment['source_type'] = 'social_media'
                             social_sentiment_results.append(sentiment)
                         
