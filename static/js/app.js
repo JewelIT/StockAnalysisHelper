@@ -12,6 +12,13 @@ let appConfig = {              // App configuration
     displayMode: 'accordion'   // accordion or tabs (for future)
 };
 
+// Conversation context for chat
+let conversationContext = {
+    lastTicker: null,
+    lastTopic: null,
+    analyzedTickers: []
+};
+
 // Exchange rates (updated periodically, fallback values)
 let exchangeRates = {
     EUR: 0.92,  // 1 USD = 0.92 EUR
@@ -132,7 +139,7 @@ function savePortfolioToStorage() {
     localStorage.setItem(PORTFOLIO_STORAGE_KEY, JSON.stringify(portfolioTickers));
 }
 
-// Load session tickers (or use portfolio if session is empty)
+// Load session tickers (don't auto-load portfolio)
 function loadSessionTickers() {
     const stored = localStorage.getItem(SESSION_STORAGE_KEY);
     if (stored) {
@@ -142,12 +149,7 @@ function loadSessionTickers() {
             sessionTickers = [];
         }
     }
-    
-    // If no session tickers, use portfolio tickers
-    if (sessionTickers.length === 0 && portfolioTickers.length > 0) {
-        sessionTickers = [...portfolioTickers];
-        saveSessionTickers();
-    }
+    // Session starts empty - user must explicitly load portfolio or add tickers
 }
 
 // Save session tickers
@@ -208,6 +210,42 @@ function loadPortfolioToSession() {
     saveSessionTickers();
     updateTickerChips();
     showToast(`Loaded ${portfolioTickers.length} ticker(s) from portfolio: ${portfolioTickers.join(', ')}`, 'success');
+}
+
+// Analyze saved portfolio directly (without loading to session)
+async function analyzeSavedPortfolio() {
+    if (portfolioTickers.length === 0) {
+        showToast('No saved portfolio found. Please configure your portfolio first.', 'warning');
+        togglePortfolioConfig();
+        return;
+    }
+    
+    // Temporarily use portfolio for analysis
+    const originalSession = [...sessionTickers];
+    sessionTickers = [...portfolioTickers];
+    
+    showToast(`Analyzing your portfolio: ${portfolioTickers.join(', ')}`, 'info');
+    
+    // Run analysis
+    await analyzePortfolio();
+    
+    // Restore original session
+    sessionTickers = originalSession;
+    saveSessionTickers();
+}
+
+// Clear all session tickers
+function clearSessionTickers() {
+    if (sessionTickers.length === 0) {
+        showToast('No tickers to clear', 'info');
+        return;
+    }
+    
+    sessionTickers = [];
+    saveSessionTickers();
+    updateTickerChips();
+    document.getElementById('results').style.display = 'none';
+    showToast('All tickers cleared from analysis list', 'success');
 }
 
 // Load default portfolio
@@ -409,6 +447,53 @@ function updateTickerChips() {
 }
 
 // Analyze portfolio
+async function analyzeSingleTicker(ticker) {
+    /**
+     * Analyze a single ticker without showing UI - for chat background analysis
+     */
+    const chartType = appConfig.defaultChartType;
+    
+    try {
+        const response = await fetch('/analyze', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ 
+                tickers: [ticker],  // Only analyze this one ticker
+                chart_type: chartType
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to analyze ${ticker}`);
+        }
+        
+        const data = await response.json();
+        
+        if (data.results && data.results.length > 0) {
+            // Update results array
+            window.analysisResults = window.analysisResults || [];
+            
+            // Remove old result for this ticker if exists
+            window.analysisResults = window.analysisResults.filter(r => r.ticker !== ticker);
+            
+            // Add new result
+            window.analysisResults.push(...data.results);
+            
+            // Update chat ticker dropdown
+            updateChatTickerSelect();
+            
+            return data.results[0];
+        } else {
+            throw new Error(`No analysis data received for ${ticker}`);
+        }
+    } catch (error) {
+        console.error('Single ticker analysis error:', error);
+        throw error;
+    }
+}
+
 async function analyzePortfolio() {
     if (sessionTickers.length === 0) {
         showToast('Please add at least one ticker to analyze', 'warning');
@@ -1164,22 +1249,39 @@ async function sendChatMessage() {
                 }
             }
             
-            // Not analyzed yet - suggest analyzing it
-            addChatMessage(`💡 I found "${extractedTicker}" in your question, but it hasn't been analyzed yet.\n\n` +
-                `**To analyze ${extractedTicker}:**\n` +
-                `1. Add it to your analysis tickers\n` +
-                `2. Click "Analyze Portfolio"\n` +
-                `3. Then ask me questions about it!\n` +
-                `Or select a stock from the dropdown above that has already been analyzed.`, false);
+            // Not analyzed yet - trigger auto-analysis
+            addChatMessage(`� I found **${extractedTicker}** in your question!\n\nLet me analyze it for you right away... ⏳`, false);
+            
+            // Add to session tickers if not already there
+            if (!sessionTickers.includes(extractedTicker)) {
+                sessionTickers.push(extractedTicker);
+                saveSessionTickers();
+                updateTickerChips();
+            }
+            
+            // Show analyzing message
+            addChatMessage(`📊 Analyzing **${extractedTicker}** only (not the whole portfolio)...`, false);
+            
+            // Trigger SINGLE ticker analysis (not whole portfolio!)
+            try {
+                await analyzeSingleTicker(extractedTicker);
+                
+                // After analysis completes, answer the original question
+                addChatMessage(`✅ Analysis complete! Now let me answer your question...`, false);
+                
+                // Wait a moment for analysis to be cached, then re-ask the question
+                setTimeout(async () => {
+                    await sendChatWithTicker(question, extractedTicker);
+                }, 1000);
+                
+            } catch (error) {
+                addChatMessage(`❌ Sorry, there was an error analyzing ${extractedTicker}. Please try again manually.`, false);
+            }
             return;
         }
         
-        // No ticker found - provide help
-        addChatMessage('💡 I can help with stock and crypto analysis!\n\n' +
-            '**To ask a question:**\n' +
-            '• Select a stock/crypto from the dropdown above, OR\n' +
-            '• Mention a ticker in your question (e.g., "What about MSFT?" or "Analyze BTC-USD")\n\n' +
-            '**Available tickers:** ' + (window.analysisResults?.map(r => r.ticker).join(', ') || 'None yet - analyze some stocks first!'), false);
+        // No ticker found - send to backend anyway (it handles educational questions!)
+        await sendChatWithTicker(question, '');
         return;
     }
     
@@ -1198,6 +1300,9 @@ async function sendChatWithTicker(question, ticker) {
     const loadingMsg = messagesContainer.lastChild;
     loadingMsg.id = loadingId;
     
+    // Get context ticker (last discussed ticker)
+    const contextTicker = conversationContext?.lastTicker || '';
+    
     try {
         const response = await fetch('/chat', {
             method: 'POST',
@@ -1206,7 +1311,8 @@ async function sendChatWithTicker(question, ticker) {
             },
             body: JSON.stringify({
                 question: question,
-                ticker: ticker
+                ticker: ticker,
+                context_ticker: contextTicker
             })
         });
         
@@ -1221,19 +1327,72 @@ async function sendChatWithTicker(question, ticker) {
         
         const data = await response.json();
         
-        // Check if analysis is needed
-        if (data.needs_analysis) {
+        // Update conversation context
+        if (data.ticker && conversationContext) {
+            conversationContext.lastTicker = data.ticker;
+            if (!conversationContext.analyzedTickers.includes(data.ticker)) {
+                conversationContext.analyzedTickers.push(data.ticker);
+            }
+        }
+        
+        // Check if background analysis is needed
+        if (data.needs_background_analysis && data.pending_ticker) {
+            addChatMessage(data.answer, false);
+            
+            // Auto-trigger background analysis after 3 seconds if no response
+            setTimeout(async () => {
+                addChatMessage(`⏳ Running background analysis for ${data.pending_ticker}...`, false);
+                
+                // Add to session without updating UI
+                if (!sessionTickers.includes(data.pending_ticker)) {
+                    sessionTickers.push(data.pending_ticker);
+                    saveSessionTickers();
+                }
+                
+                try {
+                    // Silent analysis - SINGLE TICKER ONLY
+                    await analyzeSingleTicker(data.pending_ticker);
+                    addChatMessage(`✅ Analysis complete! Now let me answer your question...`, false);
+                    
+                    // Re-ask the original question
+                    setTimeout(async () => {
+                        await sendChatWithTicker(question, data.pending_ticker);
+                    }, 500);
+                } catch (error) {
+                    addChatMessage(`❌ Sorry, I encountered an error. You can try analyzing ${data.pending_ticker} manually.`, false);
+                }
+            }, 3000);
+            return;
+        }
+        
+        // Check if it's an educational response
+        if (data.educational) {
             addChatMessage(data.answer, false);
             return;
         }
         
-        // Check if low confidence warning (don't show confidence for helpful messages)
-        if (data.low_confidence) {
+        // Check if ticker was inferred
+        if (data.inferred_ticker) {
+            addChatMessage(data.answer, false);
+            if (data.ticker && conversationContext) {
+                conversationContext.lastTicker = data.ticker;
+            }
+            return;
+        }
+        
+        // Check for general response
+        if (data.general_response) {
             addChatMessage(data.answer, false);
             return;
         }
         
-        // Normal response - no confidence display
+        // Check for security warning
+        if (data.security_warning) {
+            addChatMessage(data.answer, false);
+            return;
+        }
+        
+        // Normal response
         if (data.success) {
             addChatMessage(data.answer, false);
         } else {
