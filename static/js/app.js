@@ -226,7 +226,34 @@ function togglePortfolioConfig() {
         modal.classList.add('show');
         updateSavedTickersList();
         loadConfigToUI();
+        // Default to display tab
+        switchTab('display');
     }
+}
+
+// Switch between tabs in configuration modal
+function switchTab(tabName) {
+    // Hide all tab contents
+    const tabContents = document.querySelectorAll('.tab-content');
+    tabContents.forEach(tab => tab.classList.remove('active'));
+    
+    // Remove active class from all tab buttons
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    tabBtns.forEach(btn => btn.classList.remove('active'));
+    
+    // Show selected tab
+    const selectedTab = document.getElementById(`${tabName}Tab`);
+    if (selectedTab) {
+        selectedTab.classList.add('active');
+    }
+    
+    // Highlight selected tab button
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    tabButtons.forEach(btn => {
+        if (btn.textContent.includes(tabName === 'display' ? 'Display' : tabName === 'portfolio' ? 'Portfolio' : 'About')) {
+            btn.classList.add('active');
+        }
+    });
 }
 
 // Load config settings to UI

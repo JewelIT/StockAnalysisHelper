@@ -15,6 +15,10 @@
         <header>
             <h1>📊 Portfolio Analysis</h1>
             <p class="subtitle">AI-Powered Stock Analysis with FinBERT & Technical Indicators</p>
+            <!-- Settings Button - Top Right -->
+            <button class="settings-btn" onclick="togglePortfolioConfig()" title="Settings">
+                ⚙️
+            </button>
         </header>
 
         <div class="ticker-input-section">
@@ -30,13 +34,10 @@
             
             <div class="action-buttons">
                 <button onclick="analyzePortfolio()" class="btn btn-success" id="analyzeBtn">
-                    🔍 Analyze Portfolio
+                    🔍 Analyze
                 </button>
                 <button onclick="loadPortfolioToSession()" class="btn btn-primary">
                     📂 Load My Portfolio
-                </button>
-                <button onclick="togglePortfolioConfig()" class="btn btn-info">
-                    ⚙️ Configuration
                 </button>
             </div>
         </div>
@@ -72,12 +73,26 @@
         <div id="portfolioModal" class="modal">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h2>⚙️ Configuration</h2>
+                    <h2>⚙️ Settings</h2>
                     <button class="modal-close" onclick="togglePortfolioConfig()">×</button>
                 </div>
+                
+                <!-- Tabs -->
+                <div class="modal-tabs">
+                    <button class="tab-btn active" onclick="switchTab('display')">
+                        📊 Display
+                    </button>
+                    <button class="tab-btn" onclick="switchTab('portfolio')">
+                        💼 Portfolio
+                    </button>
+                    <button class="tab-btn" onclick="switchTab('about')">
+                        ℹ️ About
+                    </button>
+                </div>
+                
                 <div class="modal-body">
-                    <!-- App Settings -->
-                    <div class="config-section">
+                    <!-- Display Settings Tab -->
+                    <div id="displayTab" class="tab-content active">
                         <h3>📊 Display Settings</h3>
                         <div style="margin-bottom: 15px;">
                             <label style="display: block; margin-bottom: 5px; font-weight: 600;">Default Chart Type:</label>
@@ -101,11 +116,11 @@
                         </div>
                     </div>
                     
-                    <hr style="margin: 20px 0; border: none; border-top: 2px solid #f0f0f0;">
-                    
-                    <!-- Portfolio Management -->
-                    <div class="portfolio-add-section">
+                    <!-- Portfolio Management Tab -->
+                    <div id="portfolioTab" class="tab-content">
                         <h3>💼 Portfolio Management</h3>
+                        <p style="color: #666; margin-bottom: 20px;">Manage your saved portfolio tickers. These persist across sessions.</p>
+                        
                         <h4 style="margin-top: 15px;">Add Ticker to Portfolio</h4>
                         <div style="display: flex; gap: 10px; margin-bottom: 20px;">
                             <input 
@@ -119,34 +134,77 @@
                                 ➕ Add
                             </button>
                         </div>
+                        
+                        <h4>Saved Portfolio Tickers</h4>
+                        <div id="savedTickersList" class="saved-tickers-list">
+                            <!-- Saved tickers will be listed here -->
+                        </div>
+                        
+                        <div class="modal-actions">
+                            <button onclick="savePortfolioPreferences()" class="btn btn-success">
+                                💾 Save Portfolio
+                            </button>
+                            <button onclick="clearAllTickers()" class="btn btn-danger">
+                                🗑️ Clear All Tickers
+                            </button>
+                        </div>
+                        
+                        <div class="help-section">
+                            <p><strong>International Tickers:</strong></p>
+                            <ul style="font-size: 0.9em; margin-left: 20px; color: #666;">
+                                <li>🇺🇸 US: AAPL, MSFT, GOOGL</li>
+                                <li>🇮🇪 Irish: UPL.IR, RYA.IR</li>
+                                <li>🇬🇧 London: HSBA.L, BP.L</li>
+                                <li>🇩🇪 German: SAP.DE, VOW3.DE</li>
+                                <li>🇯🇵 Tokyo: 7203.T (Toyota), 6758.T (Sony)</li>
+                                <li>🇫🇷 Paris: MC.PA, OR.PA</li>
+                            </ul>
+                        </div>
                     </div>
                     
-                    <h3>Saved Portfolio Tickers</h3>
-                    <div id="savedTickersList" class="saved-tickers-list">
-                        <!-- Saved tickers will be listed here -->
-                    </div>
-                    
-                    <div class="modal-actions">
-                        <button onclick="savePortfolioPreferences()" class="btn btn-success">
-                            💾 Save Portfolio
-                        </button>
-                        <button onclick="clearAllTickers()" class="btn btn-danger">
-                            🗑️ Clear All Tickers
-                        </button>
-                    </div>
-                    
-                    <div class="help-section">
-                        <p><strong>Note:</strong> This is your saved portfolio, separate from the analysis session.</p>
-                        <p><strong>International Tickers:</strong></p>
-                        <ul style="font-size: 0.9em; margin-left: 20px; color: #666;">
-                            <li>🇺🇸 US: AAPL, MSFT, GOOGL</li>
-                            <li>🇮🇪 Irish: UPL.IR, RYA.IR</li>
-                            <li>🇬🇧 London: HSBA.L, BP.L</li>
-                            <li>🇩🇪 German: SAP.DE, VOW3.DE</li>
-                            <li>🇯🇵 Tokyo: 7203.T (Toyota), 6758.T (Sony)</li>
-                            <li>🇫🇷 Paris: MC.PA, OR.PA</li>
-                        </ul>
-                        <p style="margin-top: 10px;">Remove individual tickers by clicking the × next to each one.</p>
+                    <!-- About Tab -->
+                    <div id="aboutTab" class="tab-content">
+                        <h3>ℹ️ About This Application</h3>
+                        <p style="color: #666; margin-bottom: 25px;">Built with powerful AI models to help you make informed investment decisions.</p>
+                        
+                        <h4 style="margin-top: 20px; margin-bottom: 12px;">🤖 AI Models</h4>
+                        <div style="margin-left: 0; margin-bottom: 25px;">
+                            <p style="margin: 8px 0; color: #555;">• <strong>FinBERT</strong> - Financial sentiment analysis (Yi Yang, HKU)</p>
+                            <p style="margin: 8px 0; color: #555;">• <strong>Twitter-RoBERTa</strong> - Social media sentiment (Cardiff NLP)</p>
+                            <p style="margin: 8px 0; color: #555;">• <strong>DistilBERT</strong> - Q&A assistant (HuggingFace)</p>
+                        </div>
+                        
+                        <h4 style="margin-top: 20px; margin-bottom: 12px;">📊 Data Sources</h4>
+                        <div style="margin-left: 0; margin-bottom: 25px;">
+                            <p style="margin: 8px 0; color: #555;">• <strong>Yahoo Finance</strong> - Stock prices and news</p>
+                            <p style="margin: 8px 0; color: #555;">• <strong>CoinGecko</strong> - Cryptocurrency data</p>
+                        </div>
+                        
+                        <h4 style="margin-top: 20px; margin-bottom: 12px;">📜 License & Credits</h4>
+                        <p style="margin-bottom: 10px; color: #555;">This application is open source (MIT License).</p>
+                        <p style="margin-bottom: 25px;">
+                            <a href="https://github.com/JewelIT/StockAnalysisHelper/blob/main/MODEL_CREDITS.md" target="_blank" style="color: #667eea; text-decoration: none; font-weight: 500;">
+                                📖 View Full Model Credits & Citations →
+                            </a>
+                        </p>
+                        
+                        <h4 style="margin-top: 20px; margin-bottom: 12px;">🌟 Links</h4>
+                        <div style="margin-left: 0; margin-bottom: 25px;">
+                            <p style="margin: 8px 0;">
+                                <a href="https://github.com/JewelIT/StockAnalysisHelper" target="_blank" style="color: #667eea; text-decoration: none;">• GitHub Repository</a>
+                            </p>
+                            <p style="margin: 8px 0;">
+                                <a href="https://github.com/JewelIT/StockAnalysisHelper/blob/main/README.md" target="_blank" style="color: #667eea; text-decoration: none;">• Documentation</a>
+                            </p>
+                            <p style="margin: 8px 0;">
+                                <a href="https://github.com/JewelIT/StockAnalysisHelper/issues" target="_blank" style="color: #667eea; text-decoration: none;">• Report Issues</a>
+                            </p>
+                        </div>
+                        
+                        <div style="text-align: center; margin-top: 35px; padding-top: 20px; border-top: 2px solid #e0e0e0;">
+                            <p style="color: #888; margin-bottom: 8px;">Built with ❤️ for traders and investors worldwide</p>
+                            <p style="color: #999; font-size: 0.9em; margin-top: 0;">Version 1.0.0 • October 2025</p>
+                        </div>
                     </div>
                 </div>
             </div>
