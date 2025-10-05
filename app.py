@@ -5,8 +5,13 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 from datetime import datetime
 import json
 import os
+import logging
 from src.portfolio_analyzer import PortfolioAnalyzer
 from src.stock_chat import StockChatAssistant
+from logging_config import setup_logging, log_security_event, log_chat_interaction, log_analysis_request, log_unanswered_question
+
+# Setup logging first
+logger = setup_logging()
 
 app = Flask(__name__)
 app.config['EXPORTS_FOLDER'] = 'exports'
@@ -129,14 +134,22 @@ def download_export(filename):
     """Download exported analysis"""
     return send_from_directory(app.config['EXPORTS_FOLDER'], filename)
 
+# Track conversation context across requests
+chat_context = {
+    'last_ticker': None,
+    'last_topic': None,
+    'conversation_tickers': []
+}
+
 @app.route('/chat', methods=['POST'])
 def chat():
-    """AI chat endpoint for stock questions"""
-    global chat_assistant, analysis_cache
+    """AI chat endpoint - Conversational and context-aware"""
+    global chat_assistant, analysis_cache, chat_context
     
     data = request.get_json()
     question = data.get('question', '')
     ticker = data.get('ticker', '')
+    context_ticker = data.get('context_ticker', '')  # From frontend context
     
     if not question:
         return jsonify({'error': 'No question provided'}), 400
@@ -149,55 +162,182 @@ def chat():
         except Exception as e:
             return jsonify({'error': f'Could not load chat model: {str(e)}'}), 500
     
-    # Check if stock has been analyzed
-    if ticker and ticker not in analysis_cache:
+    question_lower = question.lower()
+    
+    # Check for educational questions first (highest priority)
+    # These are general investing questions that don't require a specific ticker
+    educational_keywords = [
+        'learn', 'beginner', 'start', 'starting', 'new to', 'just starting',
+        'how to invest', 'how do i invest', 'what should i', 'suggest', 'advice',
+        'book', 'books', 'read', 'resource', 'course', 'education',
+        'diversif', 'portfolio', 'allocation', 'asset allocation',
+        'technical analysis', 'fundamental', 'fundamental analysis',
+        'ethical', 'ethics', 'responsible investing', 'esg',
+        'what is', 'what are', 'explain', 'definition of',
+        'how does', 'how do', 'tell me about investing',
+        'risk management', 'manage risk', 'how risky',
+        'difference between', 'vs', 'versus', 'compare stocks',
+        'trading', 'day trading', 'swing trading', 'long term',
+        'dividend', 'dividends', 'passive income',
+        'index fund', 'etf', 'mutual fund', 'bonds',
+        'market crash', 'recession', 'bear market', 'bull market',
+        'dollar cost averaging', 'dca', 'compound interest',
+        'tax', 'taxes', 'capital gains', 'tax efficient'
+    ]
+    is_educational = any(keyword in question_lower for keyword in educational_keywords)
+    
+    # Special case: if question is very short or general without ticker, treat as educational
+    is_general_question = (
+        len(question.split()) <= 10 and 
+        not ticker and 
+        not any(char.isupper() for word in question.split() for char in word if len(word) > 1)
+    )
+    
+    if (is_educational or is_general_question) and not ticker:
+        educational_response = chat_assistant.get_educational_response(question)
         return jsonify({
             'question': question,
-            'answer': f'⚠️ I don\'t have analysis data for {ticker} yet. Please analyze this stock first using the "Analyze Portfolio" button.',
-            'ticker': ticker,
-            'success': False,
-            'needs_analysis': True
+            'answer': educational_response,
+            'ticker': '',
+            'success': True,
+            'educational': True
         })
     
-    # If no ticker provided, try to infer from question or provide general guidance
+    # Try to determine which ticker the user is asking about
     if not ticker:
-        # Try to extract ticker from question
+        # 1. Try to extract ticker from question
         import re
         ticker_pattern = r'\b([A-Z]{2,5}(?:[-\.][A-Z]{2,4})?)\b'
         potential_tickers = re.findall(ticker_pattern, question)
         
-        # Check if any extracted ticker is in our analysis cache
+        # 2. Check if extracted ticker is already analyzed
         for potential_ticker in potential_tickers:
             if potential_ticker in analysis_cache:
                 ticker = potential_ticker
+                chat_context['last_ticker'] = ticker
                 break
         
-        # If still no ticker found, provide general market guidance
-        if not ticker:
-            # Provide general financial advice without specific stock
-            general_responses = {
-                'market': '📊 For general market questions, I can help once you analyze some stocks. Common analysis includes:\n\n• **Sentiment Analysis** - How news affects stock prices\n• **Technical Indicators** - RSI, MACD, Moving Averages\n• **Buy/Sell Signals** - Based on combined sentiment + technical analysis\n\nTry analyzing stocks like AAPL, MSFT, or TSLA to get started!',
-                'how': '🤔 I analyze stocks using:\n\n1. **AI Sentiment Analysis** - FinBERT analyzes news sentiment\n2. **Technical Analysis** - RSI, MACD, Bollinger Bands\n3. **Combined Score** - 40% sentiment + 60% technical indicators\n\nAdd some tickers and click "Analyze" to see it in action!',
-                'recommend': '💡 To get stock recommendations:\n\n1. Add tickers (e.g., AAPL, MSFT)\n2. Click "Analyze Portfolio"\n3. I\'ll provide BUY/SELL/HOLD recommendations\n4. Then ask me questions about specific stocks!',
-            }
-            
-            question_lower = question.lower()
-            if any(word in question_lower for word in ['market', 'markets', 'generally', 'overall']):
-                answer = general_responses['market']
-            elif any(word in question_lower for word in ['how', 'what', 'explain', 'work']):
-                answer = general_responses['how']
-            elif any(word in question_lower for word in ['recommend', 'suggestion', 'advice', 'should i']):
-                answer = general_responses['recommend']
-            else:
-                answer = '💡 I can answer questions about analyzed stocks!\n\n**To get started:**\n1. Add tickers to analyze\n2. Click "Analyze Portfolio"\n3. Ask me questions!\n\n**Or mention a ticker** in your question (e.g., "What about AAPL?")\n\n**Available stocks:** ' + (', '.join(analysis_cache.keys()) if analysis_cache else 'None yet')
+        # 3. Use context ticker from frontend (last discussed)
+        if not ticker and context_ticker and context_ticker in analysis_cache:
+            ticker = context_ticker
+        
+        # 4. Use last_ticker from server context (for follow-up questions)
+        if not ticker and chat_context['last_ticker'] and chat_context['last_ticker'] in analysis_cache:
+            ticker = chat_context['last_ticker']
+        
+        # 5. If ticker found but not analyzed, offer background analysis
+        if not ticker and potential_tickers:
+            unanalyzed_ticker = potential_tickers[0]
+            chat_context['last_ticker'] = unanalyzed_ticker
             
             return jsonify({
                 'question': question,
-                'answer': answer,
-                'ticker': '',
+                'answer': f'🔍 I can analyze **{unanalyzed_ticker}** for you!\n\nWould you like me to:\n\n1️⃣ **Analyze in background** - Quick, just answer your question\n2️⃣ **Full analysis** - Display complete analysis on screen\n\n*(Reply "background" or "full", or I\'ll do background analysis automatically)*',
+                'ticker': unanalyzed_ticker,
                 'success': True,
-                'general_response': True
+                'needs_background_analysis': True,
+                'pending_ticker': unanalyzed_ticker
             })
+        
+        # 6. No ticker found - check if it's a follow-up question
+        if not ticker:
+            # Check for follow-up question patterns
+            follow_up_patterns = [
+                'is it', 'should i', 'why', 'how come', 'what about', 'tell me more',
+                'explain', 'worth it', 'good investment', 'recommend', 'buy', 'sell'
+            ]
+            is_follow_up = any(pattern in question_lower for pattern in follow_up_patterns)
+            
+            if is_follow_up and list(analysis_cache.keys()):
+                # This looks like a follow-up question about analyzed stocks
+                available_tickers = list(analysis_cache.keys())
+                last_ticker = available_tickers[-1]  # Most recent
+                
+                answer = f'🤔 **Great question!** I think you\'re asking about **{last_ticker}**.\n\n'
+                
+                # Try to answer based on the question type
+                if any(word in question_lower for word in ['good investment', 'should i buy', 'worth it', 'recommend']):
+                    result = analysis_cache[last_ticker]['result']
+                    rec = result.get('recommendation', 'N/A')
+                    score = result.get('combined_score', 0.5)
+                    reasons = result.get('reasons', [])
+                    
+                    answer += f'Based on my analysis:\n\n'
+                    answer += f'📊 **Recommendation:** {rec}\n'
+                    answer += f'📈 **Confidence Score:** {score:.1%}\n\n'
+                    answer += f'**Key Factors:**\n'
+                    for reason in reasons[:3]:
+                        answer += f'• {reason}\n'
+                    answer += f'\n⚠️ **Remember:** This is based on technical and sentiment analysis. Always:\n'
+                    answer += f'• Do your own research (DYOR)\n'
+                    answer += f'• Consider your risk tolerance\n'
+                    answer += f'• Diversify your portfolio\n'
+                    answer += f'• Consult with a financial advisor\n\n'
+                    answer += f'*Want to know more? Ask about the technical indicators or sentiment!*'
+                    
+                    chat_context['last_ticker'] = last_ticker
+                    
+                    return jsonify({
+                        'question': question,
+                        'answer': answer,
+                        'ticker': last_ticker,
+                        'success': True,
+                        'inferred_ticker': True
+                    })
+                
+                elif any(word in question_lower for word in ['why', 'reason', 'because']):
+                    answer += f'Let me explain the analysis...\n\n'
+                    ticker = last_ticker
+                    # Continue to normal processing below
+                
+                else:
+                    answer += f'*If you meant a different stock, just mention it by name!*\n\n'
+                    ticker = last_ticker
+                    # Continue to normal processing below
+            
+            # 7. Still no ticker - provide helpful guidance
+            if not ticker:
+                # Log this as potentially unanswered if it's a substantive question
+                if len(question.split()) > 3 and not any(word in question_lower for word in ['help', 'hello', 'hi', 'hey', 'thanks', 'thank you']):
+                    log_unanswered_question(
+                        question=question,
+                        question_type='no_ticker_found',
+                        context={
+                            'analyzed_tickers': list(analysis_cache.keys()) if analysis_cache else [],
+                            'question_length': len(question),
+                            'has_analysis': len(analysis_cache) > 0
+                        }
+                    )
+                
+                if analysis_cache:
+                    available_tickers = ', '.join(analysis_cache.keys())
+                    answer = f'💡 **I\'d love to help!**\n\n**Available analysis:** {available_tickers}\n\n**You can ask me:**\n• "Is {list(analysis_cache.keys())[0]} a good investment?"\n• "Why did it go up/down?"\n• "What\'s the sentiment?"\n\n**Or learn about investing:**\n• "How do I start investing?"\n• "What books should I read?"\n• "Explain technical analysis"\n\n⚠️ *My analysis is for educational purposes only. Always do your own research!*'
+                else:
+                    answer = '� **Welcome! I\'m your AI Investment Advisor.**\n\n**I can help you:**\n\n📊 **Analyze Stocks/Crypto:**\nJust mention any ticker (e.g., "What about AAPL?" or "Tell me about BTC-USD")\n\n📚 **Learn About Investing:**\n• "How do I start investing?"\n• "What books should I read?"\n• "Explain diversification"\n• "How do I manage risk?"\n\n**I\'ll answer naturally - just ask!**\n\n⚠️ *Educational purposes only. Not financial advice.*'
+                
+                return jsonify({
+                    'question': question,
+                    'answer': answer,
+                    'ticker': '',
+                    'success': True,
+                    'general_response': True
+                })
+    
+    # We have a ticker! Update context and get analysis
+    chat_context['last_ticker'] = ticker
+    if ticker not in chat_context['conversation_tickers']:
+        chat_context['conversation_tickers'].append(ticker)
+    
+    # Check if we have analysis for this ticker
+    if ticker not in analysis_cache:
+        return jsonify({
+            'question': question,
+            'answer': f'🔍 I need to analyze **{ticker}** first!\n\nWould you like:\n\n1️⃣ **Background analysis** - Quick answer to your question\n2️⃣ **Full analysis** - Complete report with charts\n\n*(I\'ll do background analysis by default in 3 seconds...)*',
+            'ticker': ticker,
+            'success': True,
+            'needs_background_analysis': True,
+            'pending_ticker': ticker
+        })
     
     # Get context from analysis cache
     cached_result = analysis_cache[ticker]['result']
@@ -256,7 +396,39 @@ The current price is **${price_usd:.2f} USD**.''',
             })
     
     # Answer the question
-    result = chat_assistant.answer_question(question, context)
+    result = chat_assistant.answer_question(question, context, ticker)
+    
+    # Log security warnings if present
+    if result.get('security_warning'):
+        log_security_event(
+            event_type='prompt_injection_attempt',
+            severity='HIGH',
+            details={
+                'question': question[:200],  # Truncate for logging
+                'ticker': ticker,
+                'user_agent': request.headers.get('User-Agent', 'Unknown'),
+                'ip_address': request.remote_addr
+            },
+            user_info={
+                'session': request.cookies.get('session', 'anonymous'),
+                'timestamp': datetime.now().isoformat()
+            }
+        )
+        # Log chat interaction
+        log_chat_interaction(
+            question=question[:100],
+            response_type='security_rejection',
+            ticker=ticker,
+            success=False
+        )
+    else:
+        # Log normal chat interaction
+        log_chat_interaction(
+            question=question[:100],
+            response_type='financial_advice',
+            ticker=ticker,
+            success=result.get('success', False)
+        )
     
     # Check if confidence is too low
     if result['confidence'] < 0.3:
