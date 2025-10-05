@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio Analysis - FinBERT</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Portfolio Analysis</h1>
+            <p class="subtitle">AI-Powered Stock Analysis with FinBERT & Technical Indicators</p>
+        </header>
+
+        <div class="ticker-input-section">
+            <h2>🎯 Select Stocks to Analyze</h2>
+            <div class="input-group">
+                <input type="text" id="tickerInput" placeholder="Enter ticker symbol (e.g., AAPL)" />
+                <button onclick="addTicker()" class="btn btn-primary">Add Ticker</button>
+            </div>
+            
+            <div class="ticker-chips" id="tickerChips">
+                <!-- Ticker chips will be added here -->
+            </div>
+            
+            <div class="chart-type-selector">
+                <label for="chartType">📊 Default Chart Type:</label>
+                <select id="chartType" class="chart-type-select">
+                    <option value="candlestick" selected>🕯️ Candlestick</option>
+                    <option value="line">📈 Line Chart</option>
+                    <option value="ohlc">📊 OHLC Bars</option>
+                    <option value="area">📉 Area Chart</option>
+                    <option value="mountain">⛰️ Mountain Chart</option>
+                    <option value="volume">📊 Volume Analysis</option>
+                </select>
+                <small class="help-text">You can change chart type per stock after analysis</small>
+            </div>
+            
+            <div class="action-buttons">
+                <button onclick="analyzePortfolio()" class="btn btn-success" id="analyzeBtn">
+                    🔍 Analyze Portfolio
+                </button>
+                <button onclick="clearTickers()" class="btn btn-secondary">
+                    🗑️ Clear All
+                </button>
+                <button onclick="loadDefaultPortfolio()" class="btn btn-info">
+                    📋 Load Default
+                </button>
+            </div>
+        </div>
+
+        <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+            <div class="spinner"></div>
+            <p>Analyzing portfolio... This may take a few minutes.</p>
+        </div>
+
+        <div id="results" style="display: none;">
+            <h2>📈 Analysis Results</h2>
+            <div id="timestamp" class="timestamp"></div>
+            
+            <div class="summary-section">
+                <h3>Summary & Recommendations</h3>
+                <div id="summaryTable"></div>
+            </div>
+
+            <div class="details-section">
+                <h3>Detailed Analysis</h3>
+                <div id="detailsContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

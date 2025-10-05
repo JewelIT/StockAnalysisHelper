@@ -1,0 +1,9 @@
+transformers
+torch
+pandas
+yfinance
+matplotlib
+ta
+plotly
+flask
+kaleido
