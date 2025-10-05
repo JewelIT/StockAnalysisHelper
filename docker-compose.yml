@@ -1,0 +1,32 @@
+# Docker Compose for Stock Analysis Helper
+# Easy setup: docker-compose up
+
+version: '3.8'
+
+services:
+  stockanalysis:
+    build: .
+    container_name: stock-analysis-helper
+    ports:
+      - "5000:5000"
+    volumes:
+      # Persist model cache (so models don't re-download each time)
+      - model-cache:/root/.cache/huggingface
+      # Persist analysis exports
+      - ./exports:/app/exports
+    environment:
+      - FLASK_ENV=production
+      # Optional: Reddit API credentials
+      - REDDIT_CLIENT_ID=${REDDIT_CLIENT_ID:-}
+      - REDDIT_CLIENT_SECRET=${REDDIT_CLIENT_SECRET:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  model-cache:
+    driver: local

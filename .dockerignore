@@ -1,0 +1,53 @@
+# Docker ignore file - exclude unnecessary files from Docker image
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation (if not needed in container)
+*.md
+!README.md
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Exports (mount as volume instead)
+exports/*
+
+# Models cache (will download on first run or mount as volume)
+.cache/
+models/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files themselves
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Build scripts
+build-executable.sh
+StockAnalysisHelper.spec
