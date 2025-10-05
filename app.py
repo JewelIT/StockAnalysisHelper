@@ -227,6 +227,16 @@ def chat():
     
     question_lower = question.lower()
     
+    # Get conversation history to understand context
+    conversation_history = session.get('conversation_history', [])
+    last_bot_message = ''
+    if len(conversation_history) >= 2:
+        # Get the last assistant message
+        for msg in reversed(conversation_history):
+            if msg.get('role') == 'assistant':
+                last_bot_message = msg.get('content', '').lower()
+                break
+    
     # Check for educational questions first (highest priority)
     # These are general investing questions that don't require a specific ticker
     educational_keywords = [
@@ -249,14 +259,27 @@ def chat():
     ]
     is_educational = any(keyword in question_lower for keyword in educational_keywords)
     
+    # Check if this is a follow-up response to bot's question
+    is_follow_up_response = False
+    if last_bot_message and len(question.split()) <= 3:
+        # Bot asked a question, user gave short answer
+        follow_up_indicators = ['yes', 'no', 'sure', 'ok', 'okay', 'please', 'yep', 'yeah', 'nah']
+        if any(word in question_lower for word in follow_up_indicators):
+            is_follow_up_response = True
+    
     # Special case: if question is very short or general without ticker, treat as educational
+    # BUT NOT if it's a follow-up response or mentions a ticker name
     is_general_question = (
         len(question.split()) <= 10 and 
         not ticker and 
-        not any(char.isupper() for word in question.split() for char in word if len(word) > 1)
+        not any(char.isupper() for word in question.split() for char in word if len(word) > 1) and
+        not is_follow_up_response
     )
     
-    if (is_educational or is_general_question) and not ticker:
+    # Don't treat as educational if user mentioned a company name or ticker
+    mentions_ticker = any(word in question_lower for word in ['apple', 'microsoft', 'tesla', 'amazon', 'google', 'meta', 'nvidia'])
+    
+    if (is_educational or is_general_question) and not ticker and not mentions_ticker:
         educational_response = chat_assistant.get_educational_response(question)
         store_chat_in_session(question, educational_response, '')
         return jsonify({
@@ -269,43 +292,89 @@ def chat():
     
     # Try to determine which ticker the user is asking about
     if not ticker:
-        # 1. Try to extract ticker from question
+        # 1. Try to map company names to tickers
+        company_to_ticker = {
+            'apple': 'AAPL',
+            'microsoft': 'MSFT',
+            'tesla': 'TSLA',
+            'amazon': 'AMZN',
+            'google': 'GOOGL',
+            'meta': 'META',
+            'facebook': 'META',
+            'nvidia': 'NVDA',
+            'netflix': 'NFLX',
+            'disney': 'DIS'
+        }
+        
+        for company, company_ticker in company_to_ticker.items():
+            if company in question_lower:
+                ticker = company_ticker
+                break
+        
+        # 2. Try to extract ticker from question
         import re
         ticker_pattern = r'\b([A-Z]{2,5}(?:[-\.][A-Z]{2,4})?)\b'
         potential_tickers = re.findall(ticker_pattern, question)
         
-        # 2. Check if extracted ticker is already analyzed
-        for potential_ticker in potential_tickers:
-            if potential_ticker in analysis_cache:
-                ticker = potential_ticker
-                chat_context['last_ticker'] = ticker
-                break
+        # Override with extracted ticker if found
+        if potential_tickers and not ticker:
+            ticker = potential_tickers[0]
         
-        # 3. Use context ticker from frontend (last discussed)
+        # 3. Check if extracted/mapped ticker is already analyzed
+        if ticker and ticker in analysis_cache:
+            chat_context['last_ticker'] = ticker
+        elif potential_tickers:
+            for potential_ticker in potential_tickers:
+                if potential_ticker in analysis_cache:
+                    ticker = potential_ticker
+                    chat_context['last_ticker'] = ticker
+                    break
+        
+        # 4. Use context ticker from frontend (last discussed)
         if not ticker and context_ticker and context_ticker in analysis_cache:
             ticker = context_ticker
         
-        # 4. Use last_ticker from server context (for follow-up questions)
+        # 5. Use last_ticker from server context (for follow-up questions)
         if not ticker and chat_context['last_ticker'] and chat_context['last_ticker'] in analysis_cache:
             ticker = chat_context['last_ticker']
         
-        # 5. If ticker found but not analyzed, offer background analysis
-        if not ticker and potential_tickers:
-            unanalyzed_ticker = potential_tickers[0]
-            chat_context['last_ticker'] = unanalyzed_ticker
+        # 6. If ticker found but not analyzed, offer background analysis
+        if ticker and ticker not in analysis_cache:
+            chat_context['last_ticker'] = ticker
             
-            answer = f'🔍 I can analyze **{unanalyzed_ticker}** for you!\n\nWould you like me to:\n\n1️⃣ **Analyze in background** - Quick, just answer your question\n2️⃣ **Full analysis** - Display complete analysis on screen\n\n*(Reply "background" or "full", or I\'ll do background analysis automatically)*'
-            store_chat_in_session(question, answer, unanalyzed_ticker)
+            answer = f'🔍 I can analyze **{ticker}** for you!\n\nWould you like me to:\n\n1️⃣ **Analyze in background** - Quick, just answer your question\n2️⃣ **Full analysis** - Display complete analysis on screen\n\n*(Reply "background" or "full", or I\'ll do background analysis automatically)*'
+            store_chat_in_session(question, answer, ticker)
             return jsonify({
                 'question': question,
                 'answer': answer,
-                'ticker': unanalyzed_ticker,
+                'ticker': ticker,
                 'success': True,
                 'needs_background_analysis': True,
-                'pending_ticker': unanalyzed_ticker
+                'pending_ticker': ticker
             })
         
-        # 6. No ticker found - check if it's a follow-up question
+        # 7. Check if user is responding to bot's offer to analyze
+        if not ticker and is_follow_up_response:
+            # Check if bot just offered to analyze a stock
+            if 'want me to analyze' in last_bot_message or 'demonstrate these concepts' in last_bot_message:
+                # User said "yes" - look for ticker in last conversation
+                if context_ticker:
+                    ticker = context_ticker
+                elif session.get('last_ticker'):
+                    ticker = session.get('last_ticker')
+                
+                if not ticker:
+                    # No ticker in context, offer a popular one
+                    answer = '📊 Which stock would you like me to analyze to demonstrate?\n\nPopular choices:\n• **AAPL** (Apple)\n• **MSFT** (Microsoft)\n• **GOOGL** (Google)\n• **TSLA** (Tesla)\n\nOr mention any ticker symbol!'
+                    store_chat_in_session(question, answer, '')
+                    return jsonify({
+                        'question': question,
+                        'answer': answer,
+                        'ticker': '',
+                        'success': True
+                    })
+        
+        # 8. No ticker found - check if it's a follow-up question
         if not ticker:
             # Check for follow-up question patterns
             follow_up_patterns = [
@@ -362,7 +431,7 @@ def chat():
                     ticker = last_ticker
                     # Continue to normal processing below
             
-            # 7. Still no ticker - provide helpful guidance
+            # 9. Still no ticker - provide helpful guidance
             if not ticker:
                 # Log this as potentially unanswered if it's a substantive question
                 if len(question.split()) > 3 and not any(word in question_lower for word in ['help', 'hello', 'hi', 'hey', 'thanks', 'thank you']):
