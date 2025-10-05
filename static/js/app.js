@@ -321,15 +321,15 @@ function updateSavedTickersList() {
     const container = document.getElementById('savedTickersList');
     
     if (portfolioTickers.length === 0) {
-        container.innerHTML = '';
+        container.innerHTML = '<p class="text-muted mb-0">No tickers saved yet. Add some above!</p>';
         return;
     }
     
     container.innerHTML = portfolioTickers.map(ticker => `
-        <span class="ticker-chip">
+        <div class="ticker-chip">
             ${ticker}
-            <button class="ticker-chip-remove" onclick="removeFromPortfolio('${ticker}');">×</button>
-        </span>
+            <span class="remove" onclick="removeFromPortfolio('${ticker}')">×</span>
+        </div>
     `).join('');
 }
 
@@ -1203,20 +1203,36 @@ function addChatMessage(message, isUser = false) {
     contentDiv.className = 'message-content';
     
     // Format the message (convert markdown-style to HTML)
-    let formattedMessage = message
-        // Bold text: **text** -> <strong>text</strong>
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        // Bullet points: • text -> proper list item
-        .replace(/^• (.+)$/gm, '<li>$1</li>')
-        // Numbered lists: 1. text -> proper list item
-        .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
-        // Line breaks
-        .replace(/\n/g, '<br>');
+    // First, split by paragraphs (double newlines)
+    let paragraphs = message.split(/\n\n+/);
     
-    // Wrap list items in ul tags
-    if (formattedMessage.includes('<li>')) {
-        formattedMessage = formattedMessage.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-    }
+    let formattedMessage = paragraphs.map(para => {
+        para = para.trim();
+        if (!para) return '';
+        
+        // Bold text: **text** -> <strong>text</strong>
+        para = para.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        
+        // Check if paragraph contains list items
+        if (para.match(/^[•\-\*]\s/m) || para.match(/^\d+\.\s/m)) {
+            // Convert bullet points and numbered lists
+            para = para
+                .replace(/^[•\-\*]\s+(.+)$/gm, '<li>$1</li>')
+                .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
+            
+            // Wrap in ul tags
+            para = '<ul>' + para + '</ul>';
+        } else {
+            // Regular paragraph - single line breaks become spaces
+            para = para.replace(/\n/g, ' ');
+            para = '<p>' + para + '</p>';
+        }
+        
+        return para;
+    }).join('');
+    
+    // Clean up any empty paragraphs
+    formattedMessage = formattedMessage.replace(/<p>\s*<\/p>/g, '');
     
     contentDiv.innerHTML = formattedMessage;
     
@@ -1459,13 +1475,19 @@ function toggleChatPanel() {
     const toggleBtn = document.getElementById('chatToggleBtn');
     
     if (chatPanel.classList.contains('hidden')) {
+        // Show chat panel
         chatPanel.classList.remove('hidden');
         chatPanel.classList.add('show');
-        if (toggleBtn) toggleBtn.style.display = 'none';
+        if (toggleBtn) {
+            toggleBtn.style.display = 'none';
+        }
     } else {
+        // Hide chat panel
         chatPanel.classList.add('hidden');
         chatPanel.classList.remove('show');
-        if (toggleBtn) toggleBtn.style.display = 'block';
+        if (toggleBtn) {
+            toggleBtn.style.display = 'flex';
+        }
     }
 }
 
@@ -1554,11 +1576,47 @@ function showToast(message, type = 'info') {
 
 // ===== INITIALIZE ON PAGE LOAD =====
 
+// Load chat history from session on page load
+async function loadChatHistory() {
+    try {
+        const response = await fetch('/get-chat-history');
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        if (!data.success || !data.history || data.history.length === 0) return;
+        
+        const messagesContainer = document.getElementById('chatMessages');
+        if (!messagesContainer) return;
+        
+        // Clear existing messages
+        messagesContainer.innerHTML = '';
+        
+        // Load history
+        data.history.forEach(msg => {
+            const isUser = msg.role === 'user';
+            addChatMessage(msg.content, isUser);
+        });
+        
+        // Update conversation context
+        if (data.last_ticker && conversationContext) {
+            conversationContext.lastTicker = data.last_ticker;
+            if (!conversationContext.analyzedTickers.includes(data.last_ticker)) {
+                conversationContext.analyzedTickers.push(data.last_ticker);
+            }
+        }
+        
+        console.log('✅ Chat history loaded:', data.history.length, 'messages');
+    } catch (error) {
+        console.error('Failed to load chat history:', error);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 FinBERT Portfolio Analyzer - Modern UI Loaded');
     
     initializeTheme();
     loadSessionTickers();
+    loadChatHistory();  // Load previous conversation
     
     const settingsModal = document.getElementById('settingsModal');
     if (settingsModal) {
