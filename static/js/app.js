@@ -1252,12 +1252,13 @@ async function sendChatMessage() {
             // Not analyzed yet - trigger auto-analysis
             addChatMessage(`� I found **${extractedTicker}** in your question!\n\nLet me analyze it for you right away... ⏳`, false);
             
-            // Add to session tickers if not already there
-            if (!sessionTickers.includes(extractedTicker)) {
-                sessionTickers.push(extractedTicker);
-                saveSessionTickers();
-                updateTickerChips();
-            }
+            // DISABLED: Don't add to session tickers - chat analysis is separate
+            // User can manually add to portfolio if desired
+            // if (!sessionTickers.includes(extractedTicker)) {
+            //     sessionTickers.push(extractedTicker);
+            //     saveSessionTickers();
+            //     updateTickerChips();
+            // }
             
             // Show analyzing message
             addChatMessage(`📊 Analyzing **${extractedTicker}** only (not the whole portfolio)...`, false);
