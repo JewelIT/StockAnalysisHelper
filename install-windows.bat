@@ -63,7 +63,7 @@ if %errorlevel% equ 0 (
     echo [OK] Installation successful!
     echo.
     echo Starting application...
-    start /B python app.py
+    start /B python run.py
     timeout /t 5 /nobreak >nul
     start http://localhost:5000
 ) else (

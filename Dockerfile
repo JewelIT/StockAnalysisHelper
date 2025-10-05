@@ -39,7 +39,7 @@ RUN mkdir -p exports
 EXPOSE 5000
 
 # Set environment variables
-ENV FLASK_APP=app.py
+ENV FLASK_APP=run.py
 ENV FLASK_ENV=production
 ENV PYTHONUNBUFFERED=1
 
@@ -48,4 +48,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:5000/ || exit 1
 
 # Run the application
-CMD ["python3", "app.py"]
+CMD ["python3", "run.py"]

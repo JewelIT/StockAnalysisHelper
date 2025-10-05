@@ -337,7 +337,7 @@ body {
 }
 
 .stat-value {
-    font-size: 2rem;
+    font-size: 1.1rem;
     font-weight: 700;
     margin: 0.5rem 0;
     color: #333;
@@ -606,7 +606,7 @@ body {
 }
 
 .stock-ticker {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: #333;
 }
@@ -770,7 +770,7 @@ body {
 }
 
 .analysis-item-value {
-    font-size: 1.25rem;
+    font-size: 1rem;
     font-weight: 700;
     color: #333;
 }
@@ -818,7 +818,7 @@ body {
 }
 
 .metric-value {
-    font-size: 1.25rem;
+    font-size: 1rem;
     font-weight: 700;
     color: #333;
     display: block;
@@ -986,7 +986,7 @@ body {
     }
     
     .stat-value {
-        font-size: 1.5rem;
+        font-size: 1rem;
     }
     
     .stock-accordion-header {

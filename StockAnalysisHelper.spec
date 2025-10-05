@@ -4,10 +4,11 @@
 block_cipher = None
 
 a = Analysis(
-    ['app.py'],
+    ['run.py'],
     pathex=[],
     binaries=[],
     datas=[
+        ('app', 'app'),
         ('templates', 'templates'),
         ('static', 'static'),
         ('src', 'src'),

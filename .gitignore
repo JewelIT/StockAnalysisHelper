@@ -57,3 +57,6 @@ enhanced_script.py
 
 #local vars
 .env
+
+# Archive and development notes
+docs/.archive/
