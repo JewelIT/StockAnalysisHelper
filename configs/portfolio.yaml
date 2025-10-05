@@ -1,0 +1,34 @@
+# Stock Analysis Helper - Portfolio Configuration
+# Configure your stocks, cryptocurrencies, and watchlist here
+
+stocks:
+  - symbol: AAPL
+    shares: 10
+    purchase_price: 150.00
+  
+  - symbol: MSFT
+    shares: 5
+    purchase_price: 300.00
+  
+  - symbol: GOOGL
+    shares: 3
+    purchase_price: 120.00
+
+crypto:
+  - symbol: BTC
+    amount: 0.5
+    purchase_price: 40000.00
+  
+  - symbol: ETH
+    amount: 2.0
+    purchase_price: 2500.00
+
+watchlist:
+  - symbol: TSLA
+    type: stock
+  
+  - symbol: NVDA
+    type: stock
+  
+  - symbol: SOL
+    type: crypto

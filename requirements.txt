@@ -1,0 +1,38 @@
+# Core dependencies
+pandas>=2.0.0
+numpy>=1.24.0
+requests>=2.31.0
+
+# Market data
+yfinance>=0.2.28
+
+# Sentiment analysis
+transformers>=4.30.0
+torch>=2.0.0
+vaderSentiment>=3.3.2
+
+# News
+feedparser>=6.0.10
+newspaper3k>=0.2.8
+
+# Charting
+matplotlib>=3.7.0
+mplfinance>=0.12.9
+plotly>=5.14.0
+
+# AI/Chatbot
+openai>=1.0.0
+langchain>=0.1.0
+tiktoken>=0.5.0
+
+# Configuration
+pyyaml>=6.0
+python-dotenv>=1.0.0
+
+# CLI
+click>=8.1.0
+rich>=13.0.0
+
+# Utilities
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
