@@ -32,6 +32,10 @@ exports/
 portfolio_report_*.html
 *.png
 
+# Logs - contains security events and user interactions
+logs/
+*.log
+
 # Models cache
 .cache/
 transformers_cache/
