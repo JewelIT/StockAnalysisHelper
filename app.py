@@ -1,7 +1,7 @@
 """
 Flask Web Application for Portfolio Analysis
 """
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, session
 from datetime import datetime
 import json
 import os
@@ -15,6 +15,9 @@ logger = setup_logging()
 
 app = Flask(__name__)
 app.config['EXPORTS_FOLDER'] = 'exports'
+app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 # Initialize analyzer (will load model on first request)
 analyzer = None
@@ -24,8 +27,21 @@ analysis_cache = {}
 
 @app.route('/')
 def index():
-    """Main page"""
+    """Main page - Modern Bootstrap UI"""
+    return render_template('index-modern.html')
+
+@app.route('/legacy')
+def legacy():
+    """Legacy page for fallback"""
     return render_template('index.html')
+
+@app.route('/clear-chat', methods=['POST'])
+def clear_chat():
+    """Clear conversation history"""
+    session.pop('conversation_history', None)
+    session.pop('last_ticker', None)
+    session.pop('conversation_tickers', None)
+    return jsonify({'success': True, 'message': 'Conversation history cleared'})
 
 def get_analyzer():
     global analyzer

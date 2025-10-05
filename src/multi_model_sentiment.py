@@ -102,6 +102,11 @@ class MultiModelSentimentAnalyzer:
             
             # Get full probability distribution
             inputs = self.tokenizer(text, return_tensors="pt", truncation=True, max_length=max_length)
+            
+            # Move inputs to same device as model
+            if torch.cuda.is_available() and next(self.model.parameters()).is_cuda:
+                inputs = {k: v.cuda() for k, v in inputs.items()}
+            
             with torch.no_grad():
                 outputs = self.model(**inputs)
                 probs = torch.nn.functional.softmax(outputs.logits, dim=-1)

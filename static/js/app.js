@@ -761,32 +761,43 @@ function displayDetailedAnalysis(results) {
     const html = results.map((r, index) => `
         <div class="stock-accordion" id="card_${r.ticker}">
             <div class="stock-accordion-header" onclick="toggleStockDetails('${r.ticker}', ${index})" 
-                 style="border-left: 4px solid ${r.color}">
+                 style="border-left-color: ${r.color}">
                 <div class="accordion-header-content">
                     <div class="accordion-header-main">
-                        <h4 class="stock-title">
-                            ${r.ticker} - ${r.name || r.ticker}
+                        <div class="stock-title">
+                            <div class="stock-title-text">
+                                <span class="stock-ticker">${r.ticker}</span>
+                                <span class="stock-name">${r.name || r.ticker}</span>
+                            </div>
                             <span class="recommendation-badge" style="background: ${r.color}">
                                 ${r.recommendation}
                             </span>
-                        </h4>
+                        </div>
                         <div class="accordion-header-metrics">
-                            <span class="metric-badge">Price: ${formatPrice(r.current_price, r.ticker)}</span>
-                            <span class="metric-badge ${r.price_change >= 0 ? 'positive' : 'negative'}">
-                                ${r.price_change >= 0 ? '↑' : '↓'} ${Math.abs(r.price_change).toFixed(2)}%
+                            <span class="metric-badge">
+                                <i class="bi bi-currency-dollar"></i> ${formatPrice(r.current_price, r.ticker)}
                             </span>
-                            <span class="metric-badge">Score: ${r.combined_score.toFixed(3)}</span>
+                            <span class="metric-badge ${r.price_change >= 0 ? 'positive' : 'negative'}">
+                                <i class="bi bi-graph-${r.price_change >= 0 ? 'up' : 'down'}-arrow"></i>
+                                ${r.price_change >= 0 ? '+' : ''}${r.price_change.toFixed(2)}%
+                            </span>
+                            <span class="metric-badge">
+                                <i class="bi bi-star-fill"></i> ${r.combined_score.toFixed(2)}
+                            </span>
                         </div>
                     </div>
                     <div class="accordion-toggle">
-                        <span class="toggle-icon" id="toggle_${r.ticker}">▼</span>
+                        <i class="bi bi-chevron-down toggle-icon" id="toggle_${r.ticker}"></i>
                     </div>
                 </div>
             </div>
             
             <div class="stock-accordion-body" id="body_${r.ticker}" style="display: none;">
                 <div class="loading-placeholder" id="loading_${r.ticker}">
-                    ⏳ Loading detailed analysis...
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Loading detailed analysis...</p>
                 </div>
             </div>
         </div>
@@ -808,7 +819,7 @@ function toggleStockDetails(ticker, resultIndex) {
     if (body.style.display === 'none') {
         // Opening - load content if not already loaded
         body.style.display = 'block';
-        toggle.textContent = '▲';
+        toggle.className = 'bi bi-chevron-up toggle-icon';
         
         // Check if content is already loaded
         if (loading && loading.style.display !== 'none') {
@@ -818,7 +829,7 @@ function toggleStockDetails(ticker, resultIndex) {
     } else {
         // Closing
         body.style.display = 'none';
-        toggle.textContent = '▼';
+        toggle.className = 'bi bi-chevron-down toggle-icon';
     }
 }
 
@@ -1092,6 +1103,7 @@ function toggleChat() {
 
 function updateChatTickers() {
     const chatTicker = document.getElementById('chatTicker');
+    if (!chatTicker) return;
     const currentValue = chatTicker.value;
     
     // Clear and rebuild options
@@ -1219,7 +1231,7 @@ async function sendChatMessage() {
     const input = document.getElementById('chatInput');
     const tickerSelect = document.getElementById('chatTicker');
     const question = input.value.trim();
-    const ticker = tickerSelect.value;
+    const ticker = tickerSelect ? tickerSelect.value : '';
     
     if (!question) {
         return;
@@ -1243,7 +1255,9 @@ async function sendChatMessage() {
                 );
                 if (foundResult) {
                     // Auto-select and answer
-                    tickerSelect.value = foundResult.ticker;
+                    if (tickerSelect) {
+                        tickerSelect.value = foundResult.ticker;
+                    }
                     sendChatWithTicker(question, foundResult.ticker);
                     return;
                 }
@@ -1398,3 +1412,170 @@ async function sendChatWithTicker(question, ticker) {
         addChatMessage('❌ Sorry, there was an error processing your question.', false);
     }
 }
+
+// ===== THEME MANAGEMENT =====
+
+function changeTheme(theme) {
+    const html = document.documentElement;
+    
+    if (theme === 'auto') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        html.setAttribute('data-bs-theme', prefersDark ? 'dark' : 'light');
+        localStorage.setItem('theme', 'auto');
+    } else {
+        html.setAttribute('data-bs-theme', theme);
+        localStorage.setItem('theme', theme);
+    }
+    
+    console.log(`Theme changed to: ${theme}`);
+}
+
+function initializeTheme() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    const themeSelect = document.getElementById('themeSelect');
+    
+    if (themeSelect) {
+        themeSelect.value = savedTheme;
+    }
+    
+    if (savedTheme === 'auto') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.setAttribute('data-bs-theme', prefersDark ? 'dark' : 'light');
+        
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (localStorage.getItem('theme') === 'auto') {
+                document.documentElement.setAttribute('data-bs-theme', e.matches ? 'dark' : 'light');
+            }
+        });
+    } else {
+        document.documentElement.setAttribute('data-bs-theme', savedTheme);
+    }
+}
+
+// ===== CHAT PANEL TOGGLE =====
+
+function toggleChatPanel() {
+    const chatPanel = document.getElementById('chatPanel');
+    const toggleBtn = document.getElementById('chatToggleBtn');
+    
+    if (chatPanel.classList.contains('hidden')) {
+        chatPanel.classList.remove('hidden');
+        chatPanel.classList.add('show');
+        if (toggleBtn) toggleBtn.style.display = 'none';
+    } else {
+        chatPanel.classList.add('hidden');
+        chatPanel.classList.remove('show');
+        if (toggleBtn) toggleBtn.style.display = 'block';
+    }
+}
+
+// ===== CLEAR CHAT HISTORY =====
+
+function clearChatHistory() {
+    if (!confirm('Clear entire conversation history?')) {
+        return;
+    }
+    
+    fetch('/clear-chat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const messagesContainer = document.getElementById('chatMessages');
+            messagesContainer.innerHTML = `
+                <div class="chat-message assistant-message mb-3">
+                    <div class="message-avatar bg-primary text-white">
+                        <i class="bi bi-robot"></i>
+                    </div>
+                    <div class="message-content">
+                        <div class="message-text">
+                            <strong>👋 Welcome back!</strong> Conversation cleared. How can I help you?
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            if (conversationContext) {
+                conversationContext.lastTicker = null;
+                conversationContext.lastQuestion = null;
+            }
+            
+            showToast('Conversation cleared', 'success');
+        }
+    })
+    .catch(error => {
+        console.error('Error clearing chat:', error);
+        showToast('Failed to clear conversation', 'danger');
+    });
+}
+
+// ===== TOAST NOTIFICATIONS =====
+
+function showToast(message, type = 'info') {
+    const toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) return;
+    
+    const toastId = 'toast_' + Date.now();
+    const iconMap = {
+        success: 'check-circle-fill',
+        danger: 'exclamation-triangle-fill',
+        warning: 'exclamation-circle-fill',
+        info: 'info-circle-fill'
+    };
+    
+    const toast = document.createElement('div');
+    toast.id = toastId;
+    toast.className = 'toast';
+    toast.setAttribute('role', 'alert');
+    toast.innerHTML = `
+        <div class="toast-header bg-${type} text-white">
+            <i class="bi bi-${iconMap[type]} me-2"></i>
+            <strong class="me-auto">Notification</strong>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body">
+            ${message}
+        </div>
+    `;
+    
+    toastContainer.appendChild(toast);
+    
+    const bsToast = new bootstrap.Toast(toast, { delay: 3000 });
+    bsToast.show();
+    
+    toast.addEventListener('hidden.bs.toast', () => {
+        toast.remove();
+    });
+}
+
+// ===== INITIALIZE ON PAGE LOAD =====
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 FinBERT Portfolio Analyzer - Modern UI Loaded');
+    
+    initializeTheme();
+    loadSessionTickers();
+    
+    const settingsModal = document.getElementById('settingsModal');
+    if (settingsModal) {
+        settingsModal.addEventListener('shown.bs.modal', function() {
+            updateSavedTickersList();
+        });
+    }
+    
+    const chatInput = document.getElementById('chatInput');
+    if (chatInput) {
+        chatInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChatMessage();
+            }
+        });
+    }
+    
+    console.log('✅ Theme, portfolio, and chat initialized');
+});

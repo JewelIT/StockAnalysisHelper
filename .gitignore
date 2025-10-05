@@ -54,3 +54,6 @@ Thumbs.db
 # Legacy scripts output (keep source files)
 script.py
 enhanced_script.py
+
+#local vars
+.env
