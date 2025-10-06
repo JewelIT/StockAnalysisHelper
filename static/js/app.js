@@ -481,9 +481,6 @@ async function analyzeSingleTicker(ticker) {
             // Add new result
             window.analysisResults.push(...data.results);
             
-            // Update chat ticker dropdown
-            updateChatTickerSelect();
-            
             return data.results[0];
         } else {
             throw new Error(`No analysis data received for ${ticker}`);
