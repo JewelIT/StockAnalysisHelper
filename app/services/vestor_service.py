@@ -114,6 +114,15 @@ class VestorService:
         """Detect ticker symbols and company names in question"""
         mentioned = []
         
+        # Common words to exclude from ticker detection
+        excluded_words = {
+            'HELLO', 'HI', 'HEY', 'THANKS', 'THANK', 'YOU', 'YES', 'NO', 'OK', 'OKAY',
+            'BYE', 'GOODBYE', 'PLEASE', 'SORRY', 'THE', 'AND', 'FOR', 'BUT', 'NOT',
+            'WITH', 'FROM', 'ABOUT', 'WHAT', 'WHERE', 'WHEN', 'WHY', 'HOW', 'WHO',
+            'WHICH', 'THIS', 'THAT', 'THESE', 'THOSE', 'CAN', 'COULD', 'WOULD',
+            'SHOULD', 'WILL', 'SHALL', 'MAY', 'MIGHT', 'MUST'
+        }
+        
         # Check for company names
         for company, ticker in self.company_to_ticker.items():
             if company in question_lower:
@@ -124,7 +133,7 @@ class VestorService:
         ticker_pattern = r'\b([A-Z]{2,5}(?:[-][A-Z]{2,4})?)\b'
         potential_tickers = re.findall(ticker_pattern, question)
         for t in potential_tickers:
-            if t not in mentioned:
+            if t not in mentioned and t not in excluded_words:
                 mentioned.append(t)
                 print(f"📊 Detected ticker: {t}")
         
