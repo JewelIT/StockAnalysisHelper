@@ -33,15 +33,28 @@ class PortfolioAnalyzer:
         self.data_fetcher = DataFetcher()
         self.chart_generator = ChartGenerator()
     
-    def analyze_stock(self, ticker, max_news=5, chart_type='candlestick', timeframe='3mo'):
+    def analyze_stock(self, ticker, max_news=5, chart_type='candlestick', timeframe='3mo',
+                     max_social=5, news_sort='relevance', social_sort='relevance'):
         """Comprehensive analysis of a single stock
         
         Args:
             ticker: Stock ticker symbol
-            max_news: Maximum number of news articles to fetch
+            max_news: Maximum number of news articles to fetch (default: 5)
             chart_type: Type of chart ('candlestick', 'line', 'ohlc', 'area')
             timeframe: Chart timeframe (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max)
+            max_social: Maximum number of social media posts to fetch (default: 5)
+            news_sort: How to sort news ('relevance', 'date_desc', 'date_asc')
+            social_sort: How to sort social media ('relevance', 'date_desc', 'date_asc')
         """
+        # Input validation for security
+        max_news = max(0, min(int(max_news), 100))
+        max_social = max(0, min(int(max_social), 100))
+        valid_sort_options = {'relevance', 'date_desc', 'date_asc'}
+        if news_sort not in valid_sort_options:
+            news_sort = 'relevance'
+        if social_sort not in valid_sort_options:
+            social_sort = 'relevance'
+        
         print(f"\nAnalyzing {ticker} ({timeframe})...")
         
         result = {
@@ -90,7 +103,7 @@ class PortfolioAnalyzer:
             if self.enable_social_media and self.social_sentiment_analyzer:
                 try:
                     print(f"  💬 Fetching social media sentiment...")
-                    social_posts = self.social_media_fetcher.fetch_all_social_media(ticker, max_per_source=15)
+                    social_posts = self.social_media_fetcher.fetch_all_social_media(ticker, max_per_source=max_social)
                     
                     if social_posts:
                         print(f"  🧠 Analyzing {len(social_posts)} social media posts...")
