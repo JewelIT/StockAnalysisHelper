@@ -183,6 +183,50 @@ class VestorService:
     
     def _handle_conversation(self, question, prompt, mentioned_tickers):
         """Handle pure conversational response (no stock analysis)"""
+        question_lower = question.lower().strip()
+        
+        # Handle greetings with friendly responses
+        greetings = ['hi', 'hello', 'hey', 'good morning', 'good afternoon', 'good evening', 'greetings']
+        if any(question_lower == greeting or question_lower.startswith(greeting + ' ') for greeting in greetings):
+            return {
+                'answer': """👋 Hello! I'm **Vestor**, your AI financial advisor and investment mentor.
+
+I'm here to help you with:
+
+📊 **Stock & Crypto Analysis** - Just mention any ticker (e.g., "What about AAPL?" or "Tell me about Bitcoin")
+📚 **Investment Education** - Ask me about investing strategies, risk management, or financial concepts
+💼 **Portfolio Guidance** - Get insights on diversification and investment decisions
+
+**What would you like to explore today?**
+
+*Remember: All advice is for educational purposes. Always do your own research and consider consulting a licensed financial advisor.*""",
+                'ticker': None,
+                'vestor_mode': 'conversation',
+                'is_conversational': True,
+                'suggested_tickers': None,
+                'success': True
+            }
+        
+        # Handle thank you messages
+        if any(word in question_lower for word in ['thanks', 'thank you', 'appreciate']):
+            return {
+                'answer': """You're very welcome! 😊
+
+I'm always here to help with your investment journey. Feel free to ask me:
+- About any stock or cryptocurrency
+- Investment strategies and education
+- Risk management tips
+- Or anything else finance-related!
+
+**What else would you like to know?**""",
+                'ticker': None,
+                'vestor_mode': 'conversation',
+                'is_conversational': True,
+                'suggested_tickers': None,
+                'success': True
+            }
+        
+        # For other conversational questions, use the AI assistant
         try:
             assistant = self._get_chat_assistant()
             response = assistant.answer_question(
@@ -191,11 +235,14 @@ class VestorService:
                 ticker=""
             )
             
+            # Extract the answer string from the response dict
+            answer_text = response.get('answer', '') if isinstance(response, dict) else str(response)
+            
             # Check if Vestor mentioned any tickers
-            suggested = [t for t in mentioned_tickers[:3] if t.upper() in response.upper()]
+            suggested = [t for t in mentioned_tickers[:3] if t.upper() in answer_text.upper()]
             
             return {
-                'answer': response,
+                'answer': answer_text,
                 'ticker': None,
                 'vestor_mode': 'conversation',
                 'is_conversational': True,
@@ -253,8 +300,11 @@ Key Reasons:
                 ticker=ticker
             )
             
+            # Extract the answer string from the response dict
+            answer_text = response.get('answer', '') if isinstance(response, dict) else str(response)
+            
             return {
-                'answer': response,
+                'answer': answer_text,
                 'ticker': ticker,
                 'vestor_mode': 'stock_advice',
                 'success': True
