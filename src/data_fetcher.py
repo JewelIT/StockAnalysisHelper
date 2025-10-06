@@ -8,9 +8,14 @@ from .coingecko_fetcher import CoinGeckoFetcher
 class DataFetcher:
     def __init__(self):
         self.coingecko = CoinGeckoFetcher()
-    def fetch_news(self, ticker, max_articles=5):
+    def fetch_news(self, ticker, max_articles=5, days=3):
         """
         Fetch latest news from Yahoo Finance or CoinGecko (for crypto)
+        
+        Args:
+            ticker: Stock ticker symbol
+            max_articles: Maximum number of articles to return
+            days: Maximum age of articles in days (default: 3)
         
         Returns:
             List of dicts with 'title', 'link', 'publisher', 'published'
@@ -23,7 +28,8 @@ class DataFetcher:
         # Otherwise use Yahoo Finance
         stock = yf.Ticker(ticker)
         try:
-            news_list = stock.news[:max_articles] if hasattr(stock, 'news') and stock.news else []
+            # Fetch more articles than needed to allow for filtering
+            news_list = stock.news if hasattr(stock, 'news') and stock.news else []
         except:
             return []
         
@@ -90,7 +96,59 @@ class DataFetcher:
                 
                 articles.append(article_data)
         
-        return articles
+        # Filter articles by age
+        from datetime import datetime, timedelta, timezone
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        
+        filtered_articles = []
+        for article in articles:
+            pub_time = article.get('published', '')
+            if pub_time:
+                try:
+                    # Handle multiple timestamp formats
+                    if isinstance(pub_time, (int, float)):
+                        # Unix timestamp (seconds since epoch)
+                        article_date = datetime.fromtimestamp(pub_time, tz=timezone.utc)
+                    elif isinstance(pub_time, str):
+                        # Try ISO format first (most common)
+                        if 'T' in pub_time or '+' in pub_time or pub_time.endswith('Z'):
+                            article_date = datetime.fromisoformat(pub_time.replace('Z', '+00:00'))
+                            # Ensure timezone-aware
+                            if article_date.tzinfo is None:
+                                article_date = article_date.replace(tzinfo=timezone.utc)
+                        else:
+                            # Try other common formats
+                            for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y']:
+                                try:
+                                    article_date = datetime.strptime(pub_time, fmt).replace(tzinfo=timezone.utc)
+                                    break
+                                except ValueError:
+                                    continue
+                            else:
+                                # No format worked, log it
+                                logger.warning(f"Unrecognized date format for news article: '{pub_time}' (type: {type(pub_time).__name__})")
+                                filtered_articles.append(article)
+                                continue
+                    else:
+                        logger.warning(f"Unexpected timestamp type for news article: {type(pub_time).__name__} = {pub_time}")
+                        filtered_articles.append(article)
+                        continue
+                    
+                    if article_date >= cutoff_date:
+                        filtered_articles.append(article)
+                except (ValueError, TypeError, OSError) as e:
+                    # If date parsing fails, log and include the article
+                    logger.warning(f"Failed to parse news date '{pub_time}': {str(e)}")
+                    filtered_articles.append(article)
+            else:
+                # Include articles without timestamp
+                filtered_articles.append(article)
+        
+        # Return up to max_articles after filtering
+        return filtered_articles[:max_articles]
     
     def fetch_historical_data(self, ticker, period="3mo"):
         """Fetch historical stock/crypto price data"""

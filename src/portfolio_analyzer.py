@@ -34,7 +34,8 @@ class PortfolioAnalyzer:
         self.chart_generator = ChartGenerator()
     
     def analyze_stock(self, ticker, max_news=5, chart_type='candlestick', timeframe='3mo',
-                     max_social=5, news_sort='relevance', social_sort='relevance'):
+                     max_social=5, news_sort='relevance', social_sort='relevance',
+                     news_days=3, social_days=7):
         """Comprehensive analysis of a single stock
         
         Args:
@@ -45,10 +46,14 @@ class PortfolioAnalyzer:
             max_social: Maximum number of social media posts to fetch (default: 5)
             news_sort: How to sort news ('relevance', 'date_desc', 'date_asc')
             social_sort: How to sort social media ('relevance', 'date_desc', 'date_asc')
+            news_days: Maximum age of news articles in days (default: 3)
+            social_days: Maximum age of social media posts in days (default: 7)
         """
         # Input validation for security
         max_news = max(0, min(int(max_news), 100))
         max_social = max(0, min(int(max_social), 100))
+        news_days = max(1, min(int(news_days), 30))
+        social_days = max(1, min(int(social_days), 30))
         valid_sort_options = {'relevance', 'date_desc', 'date_asc'}
         if news_sort not in valid_sort_options:
             news_sort = 'relevance'
@@ -76,7 +81,7 @@ class PortfolioAnalyzer:
             result['industry'] = stock_info['industry']
             
             # News Sentiment Analysis (using FinBERT)
-            news_articles = self.data_fetcher.fetch_news(ticker, max_news)
+            news_articles = self.data_fetcher.fetch_news(ticker, max_news, days=news_days)
             news_sentiment_results = []
             
             if news_articles:
@@ -103,7 +108,7 @@ class PortfolioAnalyzer:
             if self.enable_social_media and self.social_sentiment_analyzer:
                 try:
                     print(f"  💬 Fetching social media sentiment...")
-                    social_posts = self.social_media_fetcher.fetch_all_social_media(ticker, max_per_source=max_social)
+                    social_posts = self.social_media_fetcher.fetch_all_social_media(ticker, max_per_source=max_social, days=social_days)
                     
                     if social_posts:
                         print(f"  🧠 Analyzing {len(social_posts)} social media posts...")
@@ -190,17 +195,28 @@ class PortfolioAnalyzer:
         
         return result
     
-    def analyze_portfolio(self, tickers, chart_type='candlestick', timeframe='3mo'):
+    def analyze_portfolio(self, tickers, chart_type='candlestick', timeframe='3mo',
+                         max_news=5, max_social=5, news_sort='relevance', social_sort='relevance',
+                         news_days=3, social_days=7):
         """Analyze multiple stocks
         
         Args:
             tickers: List of ticker symbols
             chart_type: Type of chart to generate
             timeframe: Chart timeframe
+            max_news: Maximum news articles to fetch
+            max_social: Maximum social media posts to fetch
+            news_sort: How to sort news
+            social_sort: How to sort social media
+            news_days: How many days back to fetch news
+            social_days: How many days back to fetch social media
         """
         results = []
         for ticker in tickers:
-            result = self.analyze_stock(ticker.strip().upper(), chart_type=chart_type, timeframe=timeframe)
+            result = self.analyze_stock(ticker.strip().upper(), chart_type=chart_type, timeframe=timeframe,
+                                       max_news=max_news, max_social=max_social, 
+                                       news_sort=news_sort, social_sort=social_sort,
+                                       news_days=news_days, social_days=social_days)
             if result['success']:
                 results.append(result)
         return results

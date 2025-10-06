@@ -21,6 +21,12 @@ def analyze():
     chart_type = data.get('chart_type', 'candlestick')
     timeframe = data.get('timeframe', '3mo')
     use_cache = data.get('use_cache', False)
+    max_news = data.get('max_news', 5)
+    max_social = data.get('max_social', 5)
+    news_sort = data.get('news_sort', 'relevance')
+    social_sort = data.get('social_sort', 'relevance')
+    news_days = data.get('news_days', 3)
+    social_days = data.get('social_days', 7)
     
     if not tickers:
         return jsonify({'error': 'No tickers provided'}), 400
@@ -39,7 +45,13 @@ def analyze():
         tickers=tickers,
         chart_type=chart_type,
         timeframe=timeframe,
-        use_cache=use_cache
+        use_cache=use_cache,
+        max_news=max_news,
+        max_social=max_social,
+        news_sort=news_sort,
+        social_sort=social_sort,
+        news_days=news_days,
+        social_days=social_days
     )
     
     # Save results

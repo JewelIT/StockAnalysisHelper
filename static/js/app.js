@@ -9,7 +9,13 @@ let portfolioTickers = [];    // Saved portfolio tickers (persistent)
 let appConfig = {              // App configuration
     currency: 'USD',           // USD, EUR, or 'native'
     defaultChartType: 'candlestick',
-    displayMode: 'accordion'   // accordion or tabs (for future)
+    displayMode: 'accordion',   // accordion or tabs (for future)
+    maxNews: 5,                // Maximum news articles to display
+    maxSocial: 5,              // Maximum social media posts to display
+    newsSort: 'relevance',     // How to sort news: relevance, date_desc, date_asc
+    socialSort: 'relevance',   // How to sort social media: relevance, date_desc, date_asc
+    newsDays: 3,               // How many days back for news
+    socialDays: 7              // How many days back for social media
 };
 
 // Conversation context for chat
@@ -25,6 +31,49 @@ let exchangeRates = {
     GBP: 0.79,  // 1 USD = 0.79 GBP
     USD: 1.0
 };
+
+// ===== TIMESTAMP FORMATTING =====
+
+function formatTimestamp(timestamp) {
+    if (!timestamp) return '';
+    
+    try {
+        let date;
+        
+        // Check if it's a Unix timestamp (number) or ISO string
+        if (typeof timestamp === 'number') {
+            // Unix timestamp (in seconds) - convert to milliseconds
+            date = new Date(timestamp * 1000);
+        } else if (typeof timestamp === 'string') {
+            // ISO date string or other format
+            date = new Date(timestamp);
+        } else {
+            return '';
+        }
+        
+        // Check if valid date
+        if (isNaN(date.getTime())) return '';
+        
+        const now = new Date();
+        const diffMs = now - date;
+        const diffSec = Math.floor(diffMs / 1000);
+        const diffMin = Math.floor(diffSec / 60);
+        const diffHour = Math.floor(diffMin / 60);
+        const diffDay = Math.floor(diffHour / 24);
+        
+        // Relative time for recent items
+        if (diffSec < 60) return 'Just now';
+        if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+        if (diffHour < 24) return `${diffHour} hour${diffHour === 1 ? '' : 's'} ago`;
+        if (diffDay < 7) return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
+        
+        // Absolute date for older items
+        const options = { year: 'numeric', month: 'short', day: 'numeric' };
+        return date.toLocaleDateString('en-US', options);
+    } catch (e) {
+        return '';
+    }
+}
 
 // ===== CURRENCY FORMATTING =====
 
@@ -288,9 +337,12 @@ function switchTab(tabName) {
     // Highlight selected tab button
     const tabButtons = document.querySelectorAll('.tab-btn');
     tabButtons.forEach(btn => {
-        if (btn.textContent.includes(tabName === 'display' ? 'Display' : tabName === 'portfolio' ? 'Portfolio' : 'About')) {
-            btn.classList.add('active');
-        }
+        const tabText = btn.textContent.trim().toLowerCase();
+        const targetText = tabName.toLowerCase();
+        if (tabText.includes('display') && targetText === 'display') btn.classList.add('active');
+        else if (tabText.includes('newsfeeds') && targetText === 'newsfeeds') btn.classList.add('active');
+        else if (tabText.includes('portfolio') && targetText === 'portfolio') btn.classList.add('active');
+        else if (tabText.includes('about') && targetText === 'about') btn.classList.add('active');
     });
 }
 
@@ -298,21 +350,81 @@ function switchTab(tabName) {
 function loadConfigToUI() {
     document.getElementById('configChartType').value = appConfig.defaultChartType;
     document.getElementById('configCurrency').value = appConfig.currency;
+    
+    // Load newsfeed settings if elements exist
+    const maxNewsEl = document.getElementById('configMaxNews');
+    const maxSocialEl = document.getElementById('configMaxSocial');
+    const newsSortEl = document.getElementById('configNewsSort');
+    const socialSortEl = document.getElementById('configSocialSort');
+    const newsDaysEl = document.getElementById('configNewsDays');
+    const socialDaysEl = document.getElementById('configSocialDays');
+    
+    if (maxNewsEl) {
+        maxNewsEl.value = appConfig.maxNews || 5;
+        updateNewsLimitDisplay(maxNewsEl.value);
+    }
+    if (maxSocialEl) {
+        maxSocialEl.value = appConfig.maxSocial || 5;
+        updateSocialLimitDisplay(maxSocialEl.value);
+    }
+    if (newsSortEl) newsSortEl.value = appConfig.newsSort || 'relevance';
+    if (socialSortEl) socialSortEl.value = appConfig.socialSort || 'relevance';
+    if (newsDaysEl) newsDaysEl.value = appConfig.newsDays || 3;
+    if (socialDaysEl) socialDaysEl.value = appConfig.socialDays || 7;
 }
 
-// Save config settings from UI
-function saveConfigSettings() {
+// Save all config settings from UI and close modal (called by Save & Close button)
+function saveAllConfigAndClose() {
     const oldCurrency = appConfig.currency;
+    
+    // Save display settings
     appConfig.defaultChartType = document.getElementById('configChartType').value;
     appConfig.currency = document.getElementById('configCurrency').value;
+    
+    // Save newsfeed settings if they exist
+    const maxNewsEl = document.getElementById('configMaxNews');
+    const maxSocialEl = document.getElementById('configMaxSocial');
+    const newsSortEl = document.getElementById('configNewsSort');
+    const socialSortEl = document.getElementById('configSocialSort');
+    const newsDaysEl = document.getElementById('configNewsDays');
+    const socialDaysEl = document.getElementById('configSocialDays');
+    
+    if (maxNewsEl) appConfig.maxNews = parseInt(maxNewsEl.value);
+    if (maxSocialEl) appConfig.maxSocial = parseInt(maxSocialEl.value);
+    if (newsSortEl) appConfig.newsSort = newsSortEl.value;
+    if (socialSortEl) appConfig.socialSort = socialSortEl.value;
+    if (newsDaysEl) appConfig.newsDays = parseInt(newsDaysEl.value);
+    if (socialDaysEl) appConfig.socialDays = parseInt(socialDaysEl.value);
+    
+    // Persist to localStorage
     saveAppConfig();
+    
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('settingsModal'));
+    if (modal) modal.hide();
+    
+    // Show success message
+    showToast('✅ Settings saved successfully', 'success');
     
     // If currency changed and we have results, re-render to update prices
     if (oldCurrency !== appConfig.currency && window.analysisResults && window.analysisResults.length > 0) {
         displayResults(window.analysisResults);
-        showToast(`Settings saved! Prices updated to ${appConfig.currency}`, 'success');
-    } else {
-        showToast('Settings saved successfully', 'success');
+    }
+}
+
+// Update news limit display label
+function updateNewsLimitDisplay(value) {
+    const display = document.getElementById('newsLimitDisplay');
+    if (display) {
+        display.textContent = value === '0' ? 'Disabled' : `${value} article${value === '1' ? '' : 's'}`;
+    }
+}
+
+// Update social media limit display label
+function updateSocialLimitDisplay(value) {
+    const display = document.getElementById('socialLimitDisplay');
+    if (display) {
+        display.textContent = value === '0' ? 'Disabled' : `${value} post${value === '1' ? '' : 's'}`;
     }
 }
 
@@ -461,7 +573,13 @@ async function analyzeSingleTicker(ticker) {
             },
             body: JSON.stringify({ 
                 tickers: [ticker],  // Only analyze this one ticker
-                chart_type: chartType
+                chart_type: chartType,
+                max_news: appConfig.maxNews,
+                max_social: appConfig.maxSocial,
+                news_sort: appConfig.newsSort,
+                social_sort: appConfig.socialSort,
+                news_days: appConfig.newsDays,
+                social_days: appConfig.socialDays
             })
         });
         
@@ -513,7 +631,13 @@ async function analyzePortfolio() {
             },
             body: JSON.stringify({ 
                 tickers: sessionTickers,
-                chart_type: chartType  // Initial chart type for all
+                chart_type: chartType,  // Initial chart type for all
+                max_news: appConfig.maxNews,
+                max_social: appConfig.maxSocial,
+                news_sort: appConfig.newsSort,
+                social_sort: appConfig.socialSort,
+                news_days: appConfig.newsDays,
+                social_days: appConfig.socialDays
             })
         });
         
@@ -894,6 +1018,7 @@ function renderStockDetails(ticker, resultIndex) {
                                 ${sent.publisher ? `<span class="news-publisher">- ${sent.publisher}</span>` : ''}
                                 ${sent.link ? `<a href="${sent.link}" target="_blank" rel="noopener" class="news-link-icon" title="Read full article">🔗</a>` : ''}
                             </div>
+                            ${sent.published ? `<div class="news-timestamp">📅 ${formatTimestamp(sent.published)}</div>` : ''}
                             <div class="news-sentiment">
                                 ${emoji} <strong>${sent.label.toUpperCase()}</strong> | 
                                 😊 ${posPercent}% · 😐 ${neuPercent}% · 😞 ${negPercent}%
@@ -916,6 +1041,7 @@ function renderStockDetails(ticker, resultIndex) {
                                 <strong>${sent.source || 'Social Media'}</strong>: ${textPreview}
                                 ${sent.link ? `<a href="${sent.link}" target="_blank" rel="noopener" class="news-link-icon" title="View post">🔗</a>` : ''}
                             </div>
+                            ${sent.created_at ? `<div class="news-timestamp">📅 ${formatTimestamp(sent.created_at)}</div>` : ''}
                             <div class="news-sentiment">
                                 ${emoji} <strong>${sent.label.toUpperCase()}</strong> | 
                                 😊 ${posPercent}% · 😐 ${neuPercent}% · 😞 ${negPercent}%
@@ -1051,7 +1177,13 @@ async function updateChart(ticker, resultIndex) {
                 tickers: [ticker],
                 chart_type: chartType,
                 timeframe: timeframe,
-                use_cache: false
+                use_cache: false,
+                max_news: appConfig.maxNews,
+                max_social: appConfig.maxSocial,
+                news_sort: appConfig.newsSort,
+                social_sort: appConfig.socialSort,
+                news_days: appConfig.newsDays,
+                social_days: appConfig.socialDays
             })
         });
         
@@ -1283,13 +1415,11 @@ async function sendChatMessage() {
             try {
                 await analyzeSingleTicker(extractedTicker);
                 
-                // After analysis completes, answer the original question
+                // After analysis completes, send question to backend WITHOUT re-analyzing
                 addChatMessage(`✅ Analysis complete! Now let me answer your question...`, false);
                 
-                // Wait a moment for analysis to be cached, then re-ask the question
-                setTimeout(async () => {
-                    await sendChatWithTicker(question, extractedTicker);
-                }, 1000);
+                // Send the question with ticker context (backend won't re-analyze)
+                await sendChatWithTicker(question, extractedTicker);
                 
             } catch (error) {
                 addChatMessage(`❌ Sorry, there was an error analyzing ${extractedTicker}. Please try again manually.`, false);
@@ -1356,29 +1486,35 @@ async function sendChatWithTicker(question, ticker) {
         if (data.needs_background_analysis && data.pending_ticker) {
             addChatMessage(data.answer, false);
             
-            // Auto-trigger background analysis after 3 seconds if no response
-            setTimeout(async () => {
-                addChatMessage(`⏳ Running background analysis for ${data.pending_ticker}...`, false);
-                
-                // Add to session without updating UI
-                if (!sessionTickers.includes(data.pending_ticker)) {
-                    sessionTickers.push(data.pending_ticker);
-                    saveSessionTickers();
-                }
-                
-                try {
-                    // Silent analysis - SINGLE TICKER ONLY
-                    await analyzeSingleTicker(data.pending_ticker);
-                    addChatMessage(`✅ Analysis complete! Now let me answer your question...`, false);
+            // SECURITY: Check if already analyzed to prevent infinite loop
+            const alreadyAnalyzed = window.analysisResults && 
+                window.analysisResults.some(r => r.ticker.toUpperCase() === data.pending_ticker.toUpperCase());
+            
+            if (!alreadyAnalyzed) {
+                // Auto-trigger background analysis after 2 seconds
+                setTimeout(async () => {
+                    addChatMessage(`⏳ Running background analysis for ${data.pending_ticker}...`, false);
                     
-                    // Re-ask the original question
-                    setTimeout(async () => {
-                        await sendChatWithTicker(question, data.pending_ticker);
-                    }, 500);
-                } catch (error) {
-                    addChatMessage(`❌ Sorry, I encountered an error. You can try analyzing ${data.pending_ticker} manually.`, false);
-                }
-            }, 3000);
+                    // Add to session without updating UI
+                    if (!sessionTickers.includes(data.pending_ticker)) {
+                        sessionTickers.push(data.pending_ticker);
+                        saveSessionTickers();
+                    }
+                    
+                    try {
+                        // Silent analysis - SINGLE TICKER ONLY
+                        await analyzeSingleTicker(data.pending_ticker);
+                        addChatMessage(`✅ Analysis complete for ${data.pending_ticker}! Feel free to ask more questions about it.`, false);
+                        
+                        // DON'T re-ask the question - this prevents infinite loop
+                        // User can ask follow-up questions manually
+                    } catch (error) {
+                        addChatMessage(`❌ Sorry, I encountered an error analyzing ${data.pending_ticker}.`, false);
+                    }
+                }, 2000);
+            } else {
+                addChatMessage(`ℹ️  ${data.pending_ticker} is already analyzed. You can ask me questions about it!`, false);
+            }
             return;
         }
         
@@ -1470,28 +1606,35 @@ function initializeTheme() {
 function toggleChatPanel() {
     const chatPanel = document.getElementById('chatPanel');
     const toggleBtn = document.getElementById('chatToggleBtn');
+    const body = document.body;
     
     if (chatPanel.classList.contains('hidden')) {
         // Show chat panel
         chatPanel.classList.remove('hidden');
         chatPanel.classList.add('show');
+        body.classList.remove('chat-collapsed');
         if (toggleBtn) {
             toggleBtn.style.display = 'none';
         }
+        // Save state
+        localStorage.setItem('chatPanelState', 'open');
     } else {
         // Hide chat panel
         chatPanel.classList.add('hidden');
         chatPanel.classList.remove('show');
+        body.classList.add('chat-collapsed');
         if (toggleBtn) {
             toggleBtn.style.display = 'flex';
         }
+        // Save state
+        localStorage.setItem('chatPanelState', 'collapsed');
     }
 }
 
-// ===== CLEAR CHAT HISTORY =====
+// ===== START NEW CHAT =====
 
 function clearChatHistory() {
-    if (!confirm('Clear entire conversation history?')) {
+    if (!confirm('Start a new conversation? This will clear your current chat history.')) {
         return;
     }
     
@@ -1612,6 +1755,7 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('🚀 FinBERT Portfolio Analyzer - Modern UI Loaded');
     
     initializeTheme();
+    initializeChatPanel();  // Initialize chat panel state
     loadSessionTickers();
     loadChatHistory();  // Load previous conversation
     
@@ -1634,3 +1778,31 @@ document.addEventListener('DOMContentLoaded', function() {
     
     console.log('✅ Theme, portfolio, and chat initialized');
 });
+
+// Initialize chat panel - start collapsed
+function initializeChatPanel() {
+    const chatPanel = document.getElementById('chatPanel');
+    const toggleBtn = document.getElementById('chatToggleBtn');
+    const body = document.body;
+    
+    // Check saved state or default to collapsed
+    const savedState = localStorage.getItem('chatPanelState') || 'collapsed';
+    
+    if (savedState === 'collapsed') {
+        chatPanel.classList.add('hidden');
+        chatPanel.classList.remove('show');
+        body.classList.add('chat-collapsed');
+        if (toggleBtn) {
+            toggleBtn.style.display = 'flex';
+        }
+    } else {
+        chatPanel.classList.remove('hidden');
+        chatPanel.classList.add('show');
+        body.classList.remove('chat-collapsed');
+        if (toggleBtn) {
+            toggleBtn.style.display = 'none';
+        }
+    }
+    
+    console.log(`💬 Chat panel initialized: ${savedState}`);
+}

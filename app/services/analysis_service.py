@@ -20,7 +20,9 @@ class AnalysisService:
             self.analyzer = PortfolioAnalyzer()
         return self.analyzer
     
-    def analyze(self, tickers, chart_type='candlestick', timeframe='3mo', use_cache=False):
+    def analyze(self, tickers, chart_type='candlestick', timeframe='3mo', use_cache=False,
+                max_news=5, max_social=5, news_sort='relevance', social_sort='relevance',
+                news_days=3, social_days=7):
         """
         Analyze stocks/portfolio
         
@@ -29,6 +31,12 @@ class AnalysisService:
             chart_type: Type of chart to generate
             timeframe: Historical data timeframe
             use_cache: Use cached data for chart regeneration only
+            max_news: Maximum news articles to fetch
+            max_social: Maximum social media posts to fetch
+            news_sort: How to sort news
+            social_sort: How to sort social media
+            news_days: How many days back to fetch news
+            social_days: How many days back to fetch social media
             
         Returns:
             List of analysis results
@@ -42,7 +50,13 @@ class AnalysisService:
         results = analyzer.analyze_portfolio(
             tickers, 
             chart_type=chart_type, 
-            timeframe=timeframe
+            timeframe=timeframe,
+            max_news=max_news,
+            max_social=max_social,
+            news_sort=news_sort,
+            social_sort=social_sort,
+            news_days=news_days,
+            social_days=social_days
         )
         
         # Cache results for later use

@@ -79,6 +79,9 @@ class SocialMediaFetcher:
                 print(f"✓ Fetched {len(messages)} StockTwits messages for {ticker}")
             else:
                 print(f"⚠️  StockTwits API returned status {response.status_code} for {ticker}")
+                if response.status_code == 403:
+                    print(f"   StockTwits API access denied (403). This is common with free tier.")
+                    print(f"   Using demo data instead.")
                 # Don't raise error, just return empty list
                 
         except Exception as e:
@@ -137,13 +140,14 @@ class SocialMediaFetcher:
         
         return posts
     
-    def fetch_all_social_media(self, ticker, max_per_source=20):
+    def fetch_all_social_media(self, ticker, max_per_source=20, days=7):
         """
         Fetch from all available social media sources
         
         Args:
             ticker: Stock ticker symbol
             max_per_source: Max messages per source
+            days: Maximum age of posts in days (default: 7)
             
         Returns:
             List of all social media posts/messages
@@ -158,12 +162,66 @@ class SocialMediaFetcher:
         reddit_posts = self.fetch_reddit_posts(ticker, max_per_source)
         all_posts.extend(reddit_posts)
         
-        # If no posts were fetched, return empty (graceful degradation)
+        # If no posts were fetched, use demo data for demonstration purposes
         if not all_posts:
-            print(f"ℹ️  No social media data available for {ticker}")
-            print(f"   To enable social media: Set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET")
+            print(f"ℹ️  No social media data available from APIs for {ticker}")
+            print(f"   Using demo data for demonstration.")
+            print(f"   To enable Reddit: Set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET environment variables")
+            print(f"   Note: StockTwits free API has rate limits and may return 403 errors")
+            all_posts = self.get_demo_posts(ticker)
         
-        return all_posts
+        # Filter posts by age
+        from datetime import datetime, timedelta, timezone
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
+        
+        filtered_posts = []
+        for post in all_posts:
+            created_at = post.get('created_at', '')
+            if created_at:
+                try:
+                    # Handle multiple timestamp formats
+                    if isinstance(created_at, (int, float)):
+                        # Unix timestamp
+                        post_date = datetime.fromtimestamp(created_at, tz=timezone.utc)
+                    elif isinstance(created_at, str):
+                        # Try ISO format first (most common for social media APIs)
+                        if 'T' in created_at or '+' in created_at or created_at.endswith('Z'):
+                            post_date = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                            # Ensure timezone-aware
+                            if post_date.tzinfo is None:
+                                post_date = post_date.replace(tzinfo=timezone.utc)
+                        else:
+                            # Try other common formats
+                            for fmt in ['%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%d/%m/%Y %H:%M:%S', '%m/%d/%Y %H:%M:%S']:
+                                try:
+                                    post_date = datetime.strptime(created_at, fmt).replace(tzinfo=timezone.utc)
+                                    break
+                                except ValueError:
+                                    continue
+                            else:
+                                # No format worked, log it
+                                logger.warning(f"Unrecognized date format for social media post: '{created_at}' (type: {type(created_at).__name__})")
+                                filtered_posts.append(post)
+                                continue
+                    else:
+                        logger.warning(f"Unexpected timestamp type for social media post: {type(created_at).__name__} = {created_at}")
+                        filtered_posts.append(post)
+                        continue
+                    
+                    if post_date >= cutoff_date:
+                        filtered_posts.append(post)
+                except (ValueError, TypeError, OSError) as e:
+                    # If date parsing fails, log and include the post
+                    logger.warning(f"Failed to parse social media date '{created_at}': {str(e)}")
+                    filtered_posts.append(post)
+            else:
+                # Include posts without timestamp
+                filtered_posts.append(post)
+        
+        return filtered_posts
     
     @staticmethod
     def get_demo_posts(ticker):
