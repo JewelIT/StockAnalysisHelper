@@ -7,12 +7,7 @@ bp = Blueprint('main', __name__)
 
 @bp.route('/')
 def index():
-    """Main page - Modern Bootstrap UI with Vestor"""
-    return render_template('index-modern.html')
-
-@bp.route('/legacy')
-def legacy():
-    """Legacy page for fallback"""
+    """Main page"""
     return render_template('index.html')
 
 @bp.route('/clear-chat', methods=['POST'])
