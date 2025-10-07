@@ -351,6 +351,13 @@ function loadConfigToUI() {
     document.getElementById('configChartType').value = appConfig.defaultChartType;
     document.getElementById('configCurrency').value = appConfig.currency;
     
+    // Load chat panel default state
+    const chatPanelDefaultEl = document.getElementById('chatPanelDefault');
+    if (chatPanelDefaultEl) {
+        const savedState = localStorage.getItem('chatPanelState') || 'collapsed';
+        chatPanelDefaultEl.value = savedState;
+    }
+    
     // Load newsfeed settings if elements exist
     const maxNewsEl = document.getElementById('configMaxNews');
     const maxSocialEl = document.getElementById('configMaxSocial');
@@ -380,6 +387,14 @@ function saveAllConfigAndClose() {
     // Save display settings
     appConfig.defaultChartType = document.getElementById('configChartType').value;
     appConfig.currency = document.getElementById('configCurrency').value;
+    
+    // Save chat panel default state
+    const chatPanelDefaultEl = document.getElementById('chatPanelDefault');
+    if (chatPanelDefaultEl) {
+        appConfig.chatPanelDefault = chatPanelDefaultEl.value;
+        // Update localStorage directly for chat panel state
+        localStorage.setItem('chatPanelState', chatPanelDefaultEl.value);
+    }
     
     // Save newsfeed settings if they exist
     const maxNewsEl = document.getElementById('configMaxNews');
@@ -843,7 +858,17 @@ function displaySummaryTable(results) {
                 <tr>
                     <th>Ticker</th>
                     <th>Name</th>
-                    <th>Recommendation</th>
+                    <th>
+                        Recommendation
+                        ${results.length > 0 && results[0].recommendation_explanation ? `
+                            <i class="bi bi-info-circle ms-1" 
+                               style="cursor: pointer; color: #6c757d; font-size: 0.85rem; opacity: 0.7;" 
+                               onclick="showRecommendationExplanation('${results[0].ticker}')" 
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top"
+                               title="How are recommendations calculated?"></i>
+                        ` : ''}
+                    </th>
                     <th>Combined Score</th>
                     <th>Current Price</th>
                     <th>Change (3mo)</th>
@@ -875,6 +900,9 @@ function displaySummaryTable(results) {
     `;
     
     document.getElementById('summaryTable').innerHTML = html;
+    
+    // Initialize Bootstrap tooltips
+    initializeTooltips();
 }
 
 // Display detailed analysis
@@ -928,6 +956,15 @@ function displayDetailedAnalysis(results) {
     
     // Store results globally
     window.analysisResults = results;
+    
+    // Initialize Bootstrap tooltips
+    initializeTooltips();
+}
+
+// Initialize Bootstrap tooltips
+function initializeTooltips() {
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
 }
 
 // ===== ACCORDION FUNCTIONS =====
@@ -1749,6 +1786,102 @@ async function loadChatHistory() {
     } catch (error) {
         console.error('Failed to load chat history:', error);
     }
+}
+
+// Show recommendation explanation modal
+function showRecommendationExplanation(ticker) {
+    const result = window.analysisResults.find(r => r.ticker === ticker);
+    if (!result || !result.recommendation_explanation) {
+        showToast('Recommendation explanation not available', 'info');
+        return;
+    }
+    
+    const exp = result.recommendation_explanation;
+    const sentComponents = exp.sentiment_components;
+    
+    // Build explanation HTML
+    let explanationHTML = `
+        <div style="text-align: left;">
+            <h5 class="mb-3">📊 How ${ticker}'s ${result.recommendation} Recommendation was Calculated</h5>
+            
+            <div class="alert alert-info mb-3">
+                <strong>Formula:</strong> ${exp.formula}
+            </div>
+            
+            <h6 class="mt-3 mb-2">🔢 Final Score: ${exp.final_score}</h6>
+            
+            <h6 class="mt-3 mb-2">📰 Sentiment Analysis (${exp.sentiment_weight} weight)</h6>
+            <ul>
+                <li><strong>News Sentiment:</strong> ${sentComponents.news_sentiment} (${sentComponents.news_weight})</li>
+                <li><strong>Social Media Sentiment:</strong> ${sentComponents.social_sentiment} (${sentComponents.social_weight})</li>
+                <li><strong>Combined Sentiment Score:</strong> ${result.sentiment_score.toFixed(2)}</li>
+            </ul>
+            
+            <h6 class="mt-3 mb-2">📈 Technical Analysis (${exp.technical_weight} weight)</h6>
+            <ul>
+                ${exp.technical_components.map(reason => `<li>${reason}</li>`).join('')}
+                <li><strong>Technical Score:</strong> ${result.technical_score.toFixed(2)}</li>
+            </ul>
+            
+            <h6 class="mt-3 mb-2">🎯 Recommendation Thresholds</h6>
+            <table class="table table-sm table-bordered">
+                <thead>
+                    <tr>
+                        <th>Recommendation</th>
+                        <th>Score Range</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${Object.entries(exp.thresholds).map(([rec, range]) => `
+                        <tr ${rec === result.recommendation ? 'class="table-success"' : ''}>
+                            <td><strong>${rec}</strong></td>
+                            <td>${range}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            
+            <div class="alert alert-warning mt-3">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Disclaimer:</strong> This recommendation is for educational purposes only. Always conduct your own research and consult with financial professionals before making investment decisions.
+            </div>
+        </div>
+    `;
+    
+    // Create and show modal (using Bootstrap if available, otherwise alert)
+    const modalId = 'recommendationExplanationModal';
+    let modal = document.getElementById(modalId);
+    
+    if (!modal) {
+        // Create modal
+        modal = document.createElement('div');
+        modal.id = modalId;
+        modal.className = 'modal fade';
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Recommendation Calculation</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" id="${modalId}Body">
+                        ${explanationHTML}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } else {
+        // Update existing modal
+        document.getElementById(`${modalId}Body`).innerHTML = explanationHTML;
+    }
+    
+    // Show modal
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
 }
 
 document.addEventListener('DOMContentLoaded', function() {

@@ -12,6 +12,9 @@ class SocialMediaFetcher:
         """Initialize social media API clients"""
         self.stocktwits_base_url = "https://api.stocktwits.com/api/2"
         
+        # Create a session for persistent connections
+        self.session = requests.Session()
+        
         # Reddit setup (optional - requires credentials)
         self.reddit = None
         try:
@@ -29,7 +32,9 @@ class SocialMediaFetcher:
     
     def fetch_stocktwits_messages(self, ticker, max_messages=30):
         """
-        Fetch recent messages from StockTwits (free, no auth required)
+        Fetch recent messages from StockTwits using public API (no auth required)
+        
+        Public API endpoint: https://api.stocktwits.com/api/2/streams/symbol/{TICKER}.json
         
         Args:
             ticker: Stock ticker symbol
@@ -43,14 +48,21 @@ class SocialMediaFetcher:
         try:
             url = f"{self.stocktwits_base_url}/streams/symbol/{ticker}.json"
             
-            # Add headers to mimic browser request
+            # Add headers to mimic browser request and avoid rate limiting
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/json',
-                'Referer': f'https://stocktwits.com/symbol/{ticker}'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Referer': f'https://stocktwits.com/symbol/{ticker}',
+                'Origin': 'https://stocktwits.com',
+                'Connection': 'keep-alive',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'same-site'
             }
             
-            response = requests.get(url, headers=headers, timeout=10)
+            response = self.session.get(url, headers=headers, timeout=15)
             
             if response.status_code == 200:
                 data = response.json()
@@ -80,9 +92,9 @@ class SocialMediaFetcher:
             else:
                 print(f"⚠️  StockTwits API returned status {response.status_code} for {ticker}")
                 if response.status_code == 403:
-                    print(f"   StockTwits API access denied (403). This is common with free tier.")
-                    print(f"   Using demo data instead.")
-                # Don't raise error, just return empty list
+                    print(f"   StockTwits may be rate limiting or blocking automated requests.")
+                    print(f"   Continuing with Reddit data only...")
+                # Don't raise error, just return empty list - NO DEMO DATA
                 
         except Exception as e:
             print(f"⚠️  Could not fetch StockTwits data for {ticker}: {e}")
@@ -162,13 +174,13 @@ class SocialMediaFetcher:
         reddit_posts = self.fetch_reddit_posts(ticker, max_per_source)
         all_posts.extend(reddit_posts)
         
-        # If no posts were fetched, use demo data for demonstration purposes
+        # If no posts were fetched, just return empty list - NO FAKE DATA
         if not all_posts:
-            print(f"ℹ️  No social media data available from APIs for {ticker}")
-            print(f"   Using demo data for demonstration.")
-            print(f"   To enable Reddit: Set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET environment variables")
-            print(f"   Note: StockTwits free API has rate limits and may return 403 errors")
-            all_posts = self.get_demo_posts(ticker)
+            print(f"ℹ️  No social media data available for {ticker}")
+            print(f"   To enable more sources:")
+            print(f"   - Reddit: Set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET environment variables")
+            print(f"   - StockTwits free API has rate limits and may return 403 errors")
+            return []  # Return empty list instead of demo data
         
         # Filter posts by age
         from datetime import datetime, timedelta, timezone

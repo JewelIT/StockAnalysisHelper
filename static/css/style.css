@@ -206,7 +206,7 @@ body:not(.chat-collapsed) #mainContent {
     height: 60px;
     border-radius: 50%;
     font-size: 1.5rem;
-    z-index: 999;
+    z-index: 1050; /* Higher than chat panel (1000) and navbar (1020) */
     display: none; /* Hidden by default, shown when chat panel is hidden */
     align-items: center;
     justify-content: center;
@@ -943,18 +943,16 @@ body:not(.chat-collapsed) #mainContent {
     }
 }
 
-/* Desktop - Chat panel always visible by default, but button shows when hidden */
-@media (min-width: 992px) {
-    /* Button will be shown/hidden by JavaScript based on panel state */
-    .chat-side-panel.hidden ~ .chat-toggle-btn {
-        display: flex !important;
-        align-items: center;
-        justify-content: center;
-    }
-    
-    .chat-side-panel:not(.hidden) ~ .chat-toggle-btn {
-        display: none !important;
-    }
+/* All screen sizes - Button visibility controlled by panel state */
+/* Button shows when panel is hidden, hidden when panel is visible */
+.chat-side-panel.hidden ~ .chat-toggle-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+
+.chat-side-panel:not(.hidden) ~ .chat-toggle-btn {
+    display: none !important;
 }
 
 /* Tablet and Mobile (< 992px) - Chat as overlay */
@@ -975,7 +973,8 @@ body:not(.chat-collapsed) #mainContent {
     }
     
     .chat-toggle-btn {
-        display: block !important;
+        display: flex !important;
+        z-index: 1050 !important;
     }
     
     /* Stack portfolio stats vertically on mobile */
@@ -1018,6 +1017,15 @@ body:not(.chat-collapsed) #mainContent {
     .accordion-header-metrics {
         flex-direction: column;
         gap: 0.5rem;
+    }
+    
+    /* Make chat toggle button more visible on small screens */
+    .chat-toggle-btn {
+        bottom: 15px;
+        right: 15px;
+        width: 56px;
+        height: 56px;
+        font-size: 1.3rem;
     }
 }
 

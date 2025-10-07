@@ -129,11 +129,21 @@ class PortfolioAnalyzer:
                     print(f"  ⚠️  Error fetching social media: {e}")
             
             # Combined sentiment (weighted average of news and social media)
-            if social_sentiment_results:
-                # Give more weight to news (60%) vs social media (40%)
+            # If we have both news and social, weight them appropriately
+            # If we only have one source, use that
+            # If we have neither, we'll rely purely on technical analysis
+            if news_sentiment_results and social_sentiment_results:
+                # Both available: news 60%, social 40%
                 avg_sentiment_score = (news_sentiment_score * 0.6 + social_sentiment_score * 0.4)
-            else:
+            elif news_sentiment_results:
+                # Only news available
                 avg_sentiment_score = news_sentiment_score
+            elif social_sentiment_results:
+                # Only social available
+                avg_sentiment_score = social_sentiment_score
+            else:
+                # No sentiment data available - use neutral
+                avg_sentiment_score = 0.5
             
             # Combine all sentiment results
             sentiment_results = news_sentiment_results + social_sentiment_results
@@ -143,7 +153,43 @@ class PortfolioAnalyzer:
             technical_signals = self.technical_analyzer.generate_signals(df, indicators)
             
             # Combined Recommendation
-            combined_score = (avg_sentiment_score * 0.4 + technical_signals['score'] * 0.6)
+            # If no sentiment data is available, rely more heavily on technical analysis
+            if not sentiment_results:
+                # No sentiment data: 100% technical analysis
+                combined_score = technical_signals['score']
+                sentiment_weight_used = '0%'
+                technical_weight_used = '100%'
+            else:
+                # Normal case: 40% sentiment, 60% technical
+                combined_score = (avg_sentiment_score * 0.4 + technical_signals['score'] * 0.6)
+                sentiment_weight_used = '40%'
+                technical_weight_used = '60%'
+            
+            # Build explanation of how recommendation was calculated
+            formula = f'Combined Score = (Sentiment Score × {sentiment_weight_used}) + (Technical Score × {technical_weight_used})'
+            if not sentiment_results:
+                formula = 'Combined Score = Technical Score (No sentiment data available)'
+            
+            recommendation_explanation = {
+                'formula': formula,
+                'sentiment_weight': sentiment_weight_used,
+                'technical_weight': technical_weight_used,
+                'sentiment_components': {
+                    'news_sentiment': f'{news_sentiment_score:.2f}' if news_sentiment_results else 'N/A',
+                    'social_sentiment': f'{social_sentiment_score:.2f}' if social_sentiment_results else 'N/A',
+                    'news_weight': '50% of sentiment',
+                    'social_weight': '50% of sentiment'
+                },
+                'technical_components': technical_signals.get('reasons', []),
+                'final_score': f'{combined_score:.2f}',
+                'thresholds': {
+                    'STRONG BUY': '> 0.65',
+                    'BUY': '0.55 - 0.65',
+                    'HOLD': '0.45 - 0.55',
+                    'SELL': '0.35 - 0.45',
+                    'STRONG SELL': '< 0.35'
+                }
+            }
             
             if combined_score > 0.65:
                 recommendation = 'STRONG BUY'
@@ -172,6 +218,7 @@ class PortfolioAnalyzer:
             result.update({
                 'success': True,
                 'recommendation': recommendation,
+                'recommendation_explanation': recommendation_explanation,
                 'color': color,
                 'combined_score': combined_score,
                 'sentiment_score': avg_sentiment_score,

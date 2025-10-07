@@ -29,13 +29,18 @@
                     <i class="bi bi-graph-up-arrow me-2"></i>
                     MyStock Analyzer
                 </a>
-                <div class="d-flex align-items-center gap-3">
+                <div class="d-flex align-items-center gap-2">
                     <span class="badge bg-light text-dark">
                         <i class="bi bi-robot me-1"></i>
                         AI-Powered
                     </span>
+                    <button class="btn btn-sm btn-outline-light" onclick="toggleChatPanel()" title="Toggle AI Chat">
+                        <i class="bi bi-chat-dots"></i>
+                        <span class="d-none d-md-inline ms-1">Chat</span>
+                    </button>
                     <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#settingsModal">
-                        <i class="bi bi-gear"></i> Settings
+                        <i class="bi bi-gear"></i>
+                        <span class="d-none d-md-inline ms-1">Settings</span>
                     </button>
                 </div>
             </div>
@@ -316,6 +321,18 @@
                                     <option value="auto">🔄 Auto (System)</option>
                                 </select>
                             </div>
+                            
+                            <div class="mb-3">
+                                <label for="chatPanelDefault" class="form-label">AI Chat Panel</label>
+                                <select class="form-select" id="chatPanelDefault">
+                                    <option value="collapsed">Hidden by default (click button to show)</option>
+                                    <option value="expanded">Visible by default</option>
+                                </select>
+                                <div class="form-text">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Changes will apply after page reload
+                                </div>
+                            </div>
                         </div>
                         
                         <!-- Newsfeeds Settings -->
@@ -459,6 +476,67 @@
                                 <li>💼 Portfolio management and tracking</li>
                                 <li>🔒 Security-first design with prompt injection protection</li>
                             </ul>
+                            
+                            <h6 class="mt-4 mb-3">📊 Technical Details: How We Calculate Recommendations</h6>
+                            <div class="alert alert-info">
+                                <p class="mb-2"><strong>Our recommendation system uses a weighted scoring model:</strong></p>
+                                <p class="mb-0"><code>Combined Score = (Sentiment Score × 40%) + (Technical Score × 60%)</code></p>
+                            </div>
+                            
+                            <h6 class="mt-3 mb-2">1️⃣ Sentiment Analysis (40% Weight)</h6>
+                            <ul class="small mb-3">
+                                <li><strong>News Sentiment (50%):</strong> Analyzed using FinBERT, a pre-trained NLP model specifically fine-tuned on financial news data</li>
+                                <li><strong>Social Media Sentiment (50%):</strong> Analyzed using Twitter-RoBERTa for social media posts from StockTwits, Reddit, and other sources</li>
+                                <li><strong>Sources:</strong> Yahoo Finance news, CoinGecko (crypto), social media APIs</li>
+                                <li><strong>Score Range:</strong> 0 (very negative) to 1 (very positive)</li>
+                            </ul>
+                            
+                            <h6 class="mt-3 mb-2">2️⃣ Technical Analysis (60% Weight)</h6>
+                            <ul class="small mb-3">
+                                <li><strong>RSI (Relative Strength Index):</strong> Measures momentum, identifies overbought (&gt;70) or oversold (&lt;30) conditions</li>
+                                <li><strong>MACD (Moving Average Convergence Divergence):</strong> Tracks trend direction and momentum shifts</li>
+                                <li><strong>Bollinger Bands:</strong> Identifies volatility and potential breakouts</li>
+                                <li><strong>Moving Averages:</strong> 20-day and 50-day trends for support/resistance levels</li>
+                                <li><strong>Score Range:</strong> 0 (strong sell signals) to 1 (strong buy signals)</li>
+                            </ul>
+                            
+                            <h6 class="mt-3 mb-2">3️⃣ Recommendation Thresholds</h6>
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Recommendation</th>
+                                        <th>Combined Score</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="table-success">
+                                        <td><strong>STRONG BUY</strong></td>
+                                        <td>&gt; 0.65</td>
+                                    </tr>
+                                    <tr class="table-success opacity-75">
+                                        <td><strong>BUY</strong></td>
+                                        <td>0.55 - 0.65</td>
+                                    </tr>
+                                    <tr class="table-warning">
+                                        <td><strong>HOLD</strong></td>
+                                        <td>0.45 - 0.55</td>
+                                    </tr>
+                                    <tr class="table-danger opacity-75">
+                                        <td><strong>SELL</strong></td>
+                                        <td>0.35 - 0.45</td>
+                                    </tr>
+                                    <tr class="table-danger">
+                                        <td><strong>STRONG SELL</strong></td>
+                                        <td>&lt; 0.35</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            
+                            <div class="alert alert-warning mt-3">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                <strong>Important Disclaimer:</strong> These recommendations are for educational purposes only and should not be considered as financial advice. Always conduct your own research (DYOR) and consult with licensed financial professionals before making investment decisions.
+                            </div>
+                            
                             <h6 class="mt-4">Version</h6>
                             <p>Version 2.0.0 - Modernized UI</p>
                             <h6 class="mt-4">Developer</h6>
