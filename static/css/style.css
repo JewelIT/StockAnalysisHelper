@@ -523,6 +523,16 @@ body {
     color: #adb5bd;
 }
 
+.news-timestamp {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+[data-bs-theme="dark"] .news-timestamp {
+    color: #adb5bd;
+}
+
 .news-link-icon {
     margin-left: 0.5rem;
     text-decoration: none;
