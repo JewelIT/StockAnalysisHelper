@@ -182,6 +182,10 @@ body {
     margin-top: 0.25rem;
 }
 
+[data-bs-theme="dark"] .message-timestamp {
+    color: #adb5bd;
+}
+
 /* Chat Input Area */
 .chat-input-area {
     background: white;
@@ -381,6 +385,10 @@ body {
     color: #dee2e6;
 }
 
+[data-bs-theme="dark"] .stat-label {
+    color: #adb5bd;
+}
+
 /* Summary Table */
 #summaryTable table {
     width: 100%;
@@ -509,6 +517,10 @@ body {
     color: #6c757d;
     font-weight: 400;
     font-size: 0.875rem;
+}
+
+[data-bs-theme="dark"] .news-publisher {
+    color: #adb5bd;
 }
 
 .news-link-icon {
