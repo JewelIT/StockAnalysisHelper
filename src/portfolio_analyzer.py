@@ -291,7 +291,7 @@ class PortfolioAnalyzer:
             price_change = ((df['Close'].iloc[-1] - df['Close'].iloc[0]) / df['Close'].iloc[0]) * 100
             
             # Generate chart data (JSON format for client-side rendering)
-            chart_fig = self.chart_generator.create_candlestick_chart(ticker, df, indicators, chart_type)
+            chart_fig = self.chart_generator.create_candlestick_chart(ticker, df, indicators, chart_type, timeframe)
             
             # Store data for later chart regeneration
             result.update({

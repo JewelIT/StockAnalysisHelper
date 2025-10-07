@@ -1131,116 +1131,110 @@ function renderStockDetails(ticker, resultIndex) {
                         </div>
                     </div>
                     
-                    <!-- Pre-Market Data (if available) -->
-                    ${r.pre_market_data && r.pre_market_data.has_data ? `
-                    <div class="card border-0 shadow-sm mb-3 border-start border-warning border-4">
-                        <div class="card-body p-3">
-                            <h6 class="card-title mb-2" style="font-size: 0.9rem;">
-                                <i class="bi bi-clock-history text-warning"></i> Pre-Market
-                            </h6>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <div class="h5 mb-0">${formatPrice(r.pre_market_data.price, r.ticker)}</div>
-                                    <small class="text-muted">${new Date(r.pre_market_data.time * 1000).toLocaleTimeString()}</small>
-                                </div>
-                                <div class="text-end">
-                                    <div class="fw-bold ${r.pre_market_data.change >= 0 ? 'text-success' : 'text-danger'}">
-                                        ${r.pre_market_data.change >= 0 ? '↗' : '↘'} ${formatPrice(Math.abs(r.pre_market_data.change), r.ticker)}
-                                    </div>
-                                    <small class="${r.pre_market_data.change_percent >= 0 ? 'text-success' : 'text-danger'}">
-                                        ${r.pre_market_data.change_percent >= 0 ? '+' : ''}${r.pre_market_data.change_percent.toFixed(2)}%
-                                    </small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    ` : ''}
-                    
-                    <!-- Current Price -->
+                    <!-- Price Information (Current + Pre-Market Side by Side) -->
                     <div class="card border-0 shadow-sm">
                         <div class="card-body p-3">
-                            <small class="text-muted d-block mb-1">Current Price</small>
-                            <div class="h4 mb-0">${formatPrice(r.current_price, r.ticker)}</div>
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <h6 class="mb-2" style="font-size: 0.85rem; color: #6c757d;">
+                                        <i class="bi bi-currency-dollar"></i> Current Price
+                                    </h6>
+                                    <div class="h4 mb-0">${formatPrice(r.current_price, r.ticker)}</div>
+                                    <small class="text-muted">Last traded</small>
+                                </div>
+                                ${r.pre_market_data && r.pre_market_data.has_data ? `
+                                <div class="col-6 border-start">
+                                    <h6 class="mb-2" style="font-size: 0.85rem; color: #ffc107;">
+                                        <i class="bi bi-clock-history"></i> Pre-Market
+                                    </h6>
+                                    <div class="h4 mb-0">${formatPrice(r.pre_market_data.price, r.ticker)}</div>
+                                    <small class="${r.pre_market_data.change >= 0 ? 'text-success' : 'text-danger'}">
+                                        ${r.pre_market_data.change >= 0 ? '↗ +' : '↘ '}${r.pre_market_data.change_percent.toFixed(2)}%
+                                    </small>
+                                </div>
+                                ` : `
+                                <div class="col-6 border-start text-center">
+                                    <div class="text-muted" style="padding-top: 20px;">
+                                        <i class="bi bi-moon" style="font-size: 1.5rem;"></i>
+                                        <small class="d-block mt-2">Market Closed</small>
+                                    </div>
+                                </div>
+                                `}
+                            </div>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Right Column: Analyst Gauge & Price Targets -->
-            
-            <!-- Market Analysis Section (Professional Analysts) -->
-            ${r.analyst_consensus ? `
-                <div class="section-title">� Market Analysis (Wall Street Consensus)</div>
-                <div class="alert alert-info" style="border-left: 4px solid #0d6efd;">
-                    <div class="d-flex justify-content-between align-items-start mb-3">
-                        <div>
-                            <span class="badge bg-primary" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">
-                                ${r.analyst_consensus.signal}
-                            </span>
-                            <small class="text-muted ms-2">
-                                ${r.analyst_consensus.num_analysts} professional analyst${r.analyst_consensus.num_analysts !== 1 ? 's' : ''}
-                            </small>
-                            ${r.analyst_coverage_level === 'limited' ? `
-                            <span class="badge bg-warning text-dark ms-2" title="Limited analyst coverage (2-4 analysts). Consider this data with caution." style="font-size: 0.75rem;">
-                                <i class="bi bi-exclamation-triangle"></i> Limited Coverage
-                            </span>
-                            ` : ''}
-                        </div>
-                        <div class="text-end">
-                            <small class="text-muted d-block">Consensus Rating</small>
-                            <strong style="font-size: 1.1rem;">${r.analyst_consensus.recommendation_mean.toFixed(2)}/5.0</strong>
-                            <small class="text-muted d-block" style="font-size: 0.75rem;">1=Strong Buy, 5=Strong Sell</small>
+                <div class="col-lg-6">
+                    ${r.analyst_consensus ? `
+                    <!-- Analyst Gauge Chart -->
+                    <div class="card border-0 shadow-sm mb-3">
+                        <div class="card-body p-3">
+                            <h6 class="card-title mb-2" style="font-size: 0.9rem;">
+                                📊 Wall Street Consensus
+                                ${r.analyst_coverage_level === 'limited' ? `
+                                <span class="badge bg-warning text-dark ms-2" title="Limited analyst coverage" style="font-size: 0.7rem;">
+                                    <i class="bi bi-exclamation-triangle"></i> Limited
+                                </span>
+                                ` : ''}
+                            </h6>
+                            <div id="analystGauge_${ticker}" style="display: flex; justify-content: center;"></div>
+                            <div class="text-center mt-2">
+                                <small class="text-muted">${r.analyst_consensus.num_analysts} analysts · Rating: ${r.analyst_consensus.recommendation_mean.toFixed(2)}/5.0</small>
+                            </div>
                         </div>
                     </div>
+                    
+                    <!-- Price Targets (Compact) -->
                     ${r.analyst_data && r.analyst_data.target_mean_price ? `
-                    <div class="row g-3 mt-2">
-                        <div class="col-md-4">
-                            <div class="p-2 bg-light rounded">
-                                <small class="text-muted d-block">Price Target</small>
-                                <strong style="font-size: 1.1rem;">$${r.analyst_data.target_mean_price.toFixed(2)}</strong>
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body p-3">
+                            <h6 class="card-title mb-3" style="font-size: 0.9rem;">
+                                <i class="bi bi-bullseye"></i> Price Targets
+                            </h6>
+                            <div class="row g-2 mb-2">
+                                <div class="col-4">
+                                    <div class="text-center p-2 bg-danger bg-opacity-10 rounded">
+                                        <small class="d-block text-danger" style="font-size: 0.7rem;">LOW</small>
+                                        <strong class="text-danger" style="font-size: 0.95rem;">${r.analyst_data.target_low_price ? '$' + r.analyst_data.target_low_price.toFixed(2) : 'N/A'}</strong>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-center p-2 bg-primary bg-opacity-10 rounded">
+                                        <small class="d-block text-primary" style="font-size: 0.7rem;">TARGET</small>
+                                        <strong class="text-primary" style="font-size: 0.95rem;">$${r.analyst_data.target_mean_price.toFixed(2)}</strong>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-center p-2 bg-success bg-opacity-10 rounded">
+                                        <small class="d-block text-success" style="font-size: 0.7rem;">HIGH</small>
+                                        <strong class="text-success" style="font-size: 0.95rem;">${r.analyst_data.target_high_price ? '$' + r.analyst_data.target_high_price.toFixed(2) : 'N/A'}</strong>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        ${r.analyst_data.target_high_price ? `
-                        <div class="col-md-4">
-                            <div class="p-2 bg-light rounded">
-                                <small class="text-muted d-block">High Target</small>
-                                <strong style="font-size: 1.1rem; color: #22c55e;">$${r.analyst_data.target_high_price.toFixed(2)}</strong>
-                            </div>
-                        </div>
-                        ` : ''}
-                        ${r.analyst_data.target_low_price ? `
-                        <div class="col-md-4">
-                            <div class="p-2 bg-light rounded">
-                                <small class="text-muted d-block">Low Target</small>
-                                <strong style="font-size: 1.1rem; color: #ef4444;">$${r.analyst_data.target_low_price.toFixed(2)}</strong>
-                            </div>
-                        </div>
-                        ` : ''}
-                    </div>
-                    ${r.analyst_data.current_price ? `
-                    <div class="mt-3 p-3 rounded" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <small class="d-block opacity-75">Projected Return</small>
-                                <strong style="font-size: 1.3rem;">
+                            ${r.analyst_data.current_price ? `
+                            <div class="mt-2 p-2 rounded bg-gradient text-white text-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                <small class="d-block opacity-75" style="font-size: 0.75rem;">Projected Return</small>
+                                <strong style="font-size: 1.2rem;">
                                     ${(((r.analyst_data.target_mean_price - r.analyst_data.current_price) / r.analyst_data.current_price) * 100) >= 0 ? '↗' : '↘'}
                                     ${Math.abs(((r.analyst_data.target_mean_price - r.analyst_data.current_price) / r.analyst_data.current_price) * 100).toFixed(1)}%
                                 </strong>
                             </div>
-                            <div class="text-end">
-                                <small class="d-block opacity-75">From Current Price</small>
-                                <span style="font-size: 1.1rem;">$${r.analyst_data.current_price.toFixed(2)}</span>
-                            </div>
+                            ` : ''}
                         </div>
                     </div>
                     ` : ''}
-                    ` : ''}
-                    <hr class="my-2">
-                    <small class="text-muted">
-                        <i class="bi bi-info-circle me-1"></i>
-                        Data from professional financial analysts tracked by Yahoo Finance
-                    </small>
+                    ` : `
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body p-4 text-center text-muted">
+                            <i class="bi bi-info-circle" style="font-size: 2rem;"></i>
+                            <p class="mt-2 mb-0" style="font-size: 0.9rem;">No analyst coverage available</p>
+                        </div>
+                    </div>
+                    `}
                 </div>
-            ` : ''}
+            </div>
             
             <!-- Our AI-Powered Analysis Section -->
             <div class="section-title" style="border-top: 2px solid #dee2e6; padding-top: 1.5rem; margin-top: 1.5rem;">
@@ -1335,9 +1329,68 @@ function renderStockDetails(ticker, resultIndex) {
                         <option value="max">All Time</option>
                     </select>
                     
+                    <button class="btn-small btn-secondary" onclick="toggleIndicators('${r.ticker}')" 
+                            style="margin-left: 15px;" title="Show/Hide Indicators">
+                        <i class="bi bi-sliders"></i> Indicators
+                    </button>
+                    
                     <button class="btn-small btn-refresh" id="refreshBtn_${r.ticker}" onclick="refreshChart('${r.ticker}', ${resultIndex})">
                         🔄 Refresh
                     </button>
+                </div>
+                
+                <!-- Indicator Controls (Hidden by default) -->
+                <div id="indicatorControls_${r.ticker}" class="indicator-controls" style="display: none; margin-top: 10px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <h6 style="font-size: 0.9rem; margin-bottom: 10px;">
+                                <i class="bi bi-graph-up"></i> Moving Averages
+                            </h6>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showSMA20_${r.ticker}" checked>
+                                <label class="form-check-label" for="showSMA20_${r.ticker}">
+                                    SMA(20) - Orange line
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showSMA50_${r.ticker}" checked>
+                                <label class="form-check-label" for="showSMA50_${r.ticker}">
+                                    SMA(50) - Blue line
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showBB_${r.ticker}" checked>
+                                <label class="form-check-label" for="showBB_${r.ticker}">
+                                    Bollinger Bands - Gray bands
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 style="font-size: 0.9rem; margin-bottom: 10px;">
+                                <i class="bi bi-activity"></i> Oscillators
+                            </h6>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showMACD_${r.ticker}" checked>
+                                <label class="form-check-label" for="showMACD_${r.ticker}">
+                                    MACD - Momentum indicator
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showRSI_${r.ticker}" checked>
+                                <label class="form-check-label" for="showRSI_${r.ticker}">
+                                    RSI - Overbought/Oversold
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-center">
+                        <button class="btn-small btn-primary" onclick="applyIndicatorSettings('${r.ticker}', ${resultIndex})">
+                            <i class="bi bi-check-lg"></i> Apply Settings
+                        </button>
+                        <button class="btn-small btn-secondary" onclick="toggleIndicators('${r.ticker}')">
+                            Cancel
+                        </button>
+                    </div>
                 </div>
                 <div class="chart-container" id="chart_${r.ticker}"></div>
             ` : ''}
@@ -1426,9 +1479,23 @@ async function updateChart(ticker, resultIndex) {
     const timeframe = document.getElementById(`timeframe_${ticker}`).value;
     console.log(`Updating ${ticker} to ${chartType} chart with ${timeframe} timeframe`);
     
-    // Show loading on this specific chart
+    // Show loading placeholder with spinner (preserve layout)
     const chartDiv = document.getElementById(`chart_${ticker}`);
-    chartDiv.innerHTML = '<div class="chart-loading">⏳ Regenerating chart...</div>';
+    const currentHeight = chartDiv.offsetHeight || 800;
+    chartDiv.innerHTML = `
+        <div class="chart-loading-placeholder" style="height: ${currentHeight}px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.02); border-radius: 8px; position: relative;">
+            <div style="filter: blur(8px); opacity: 0.3; position: absolute; width: 100%; height: 100%; background: linear-gradient(180deg, rgba(33,150,243,0.1) 0%, rgba(156,39,176,0.1) 100%);"></div>
+            <div style="position: relative; z-index: 1; text-align: center;">
+                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3 text-muted" style="font-size: 1.1rem;">
+                    <i class="bi bi-graph-up-arrow"></i> Regenerating ${chartType} chart...
+                </p>
+                <small class="text-muted">Timeframe: ${timeframe}</small>
+            </div>
+        </div>
+    `;
     
     try {
         const response = await fetch('/analyze', {
@@ -1484,6 +1551,57 @@ function refreshChart(ticker, resultIndex) {
             refreshBtn.disabled = false;
         }
     }, 1000);
+}
+
+// Toggle indicator controls visibility
+function toggleIndicators(ticker) {
+    const controlsDiv = document.getElementById(`indicatorControls_${ticker}`);
+    if (controlsDiv) {
+        controlsDiv.style.display = controlsDiv.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+// Apply indicator settings (currently just refreshes chart with selected indicators)
+// TODO: Implement selective indicator rendering
+function applyIndicatorSettings(ticker, resultIndex) {
+    const settings = {
+        showSMA20: document.getElementById(`showSMA20_${ticker}`)?.checked ?? true,
+        showSMA50: document.getElementById(`showSMA50_${ticker}`)?.checked ?? true,
+        showBB: document.getElementById(`showBB_${ticker}`)?.checked ?? true,
+        showMACD: document.getElementById(`showMACD_${ticker}`)?.checked ?? true,
+        showRSI: document.getElementById(`showRSI_${ticker}`)?.checked ?? true
+    };
+    
+    console.log(`Applying indicator settings for ${ticker}:`, settings);
+    
+    // Store settings for future use
+    if (!window.indicatorSettings) {
+        window.indicatorSettings = {};
+    }
+    window.indicatorSettings[ticker] = settings;
+    
+    // Hide controls
+    toggleIndicators(ticker);
+    
+    // Show info message that this feature is coming soon
+    const controlsDiv = document.getElementById(`indicatorControls_${ticker}`);
+    if (controlsDiv) {
+        const originalHTML = controlsDiv.innerHTML;
+        controlsDiv.innerHTML = `
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Coming Soon!</strong> Selective indicator display is being implemented. 
+                Currently, all available indicators are shown based on data availability.
+            </div>
+        `;
+        
+        setTimeout(() => {
+            controlsDiv.innerHTML = originalHTML;
+        }, 3000);
+    }
+    
+    // For now, just refresh the chart
+    // refreshChart(ticker, resultIndex);
 }
 
 // ===== AI CHAT FUNCTIONS =====

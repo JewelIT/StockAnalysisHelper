@@ -151,16 +151,27 @@ class DataFetcher:
         return filtered_articles[:max_articles]
     
     def fetch_historical_data(self, ticker, period="3mo"):
-        """Fetch historical stock/crypto price data"""
+        """Fetch historical stock/crypto price data with appropriate interval"""
         # Check if it's a cryptocurrency
         if CoinGeckoFetcher.is_crypto_ticker(ticker):
             print(f"  💰 Using CoinGecko for crypto: {ticker}")
             return self.coingecko.fetch_historical_data(ticker, period)
         
+        # Determine appropriate interval based on period
+        # For intraday (1d), use hourly intervals
+        # For short periods (1wk), use hourly to get more granular data
+        # For longer periods, use daily
+        if period == "1d":
+            interval = "30m"  # 30-minute intervals for 1 day
+        elif period == "1wk":
+            interval = "1h"   # Hourly intervals for 1 week
+        else:
+            interval = "1d"   # Daily intervals for longer periods
+        
         # Otherwise use Yahoo Finance
         stock = yf.Ticker(ticker)
         try:
-            hist = stock.history(period=period)
+            hist = stock.history(period=period, interval=interval)
             return hist if not hist.empty else None
         except:
             return None
