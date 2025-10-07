@@ -11,7 +11,6 @@
 StockAnalysisHelper/
 │
 ├── run.py                          # 🚀 APPLICATION ENTRY POINT
-├── logging_config.py               # 📝 Centralized logging configuration
 ├── requirements.txt                # 📦 Python dependencies
 ├── README.md                       # 📖 Main documentation
 ├── DISTRIBUTION.md                 # 📦 Packaging & deployment guide
@@ -41,11 +40,15 @@ StockAnalysisHelper/
 │
 ├── src/                            # 🧠 CORE ANALYSIS MODULES
 │   ├── __init__.py
+│   ├── config.py                  # ⚙️ Configuration constants & settings
+│   ├── utils.py                   # 🔧 Utility functions (formatting, validation)
+│   ├── logging_config.py          # 📝 Centralized logging configuration
 │   ├── portfolio_analyzer.py      # Main portfolio analysis orchestration
 │   ├── stock_chat.py              # StockChatAssistant (AI chat core)
 │   ├── sentiment_analyzer.py      # FinBERT & Twitter-RoBERTa sentiment
 │   ├── multi_model_sentiment.py   # Multi-model sentiment aggregation
 │   ├── technical_analyzer.py      # RSI, MACD, indicators
+│   ├── analyst_consensus.py       # Analyst recommendations & price targets
 │   ├── data_fetcher.py            # Yahoo Finance data fetching
 │   ├── coingecko_fetcher.py       # Cryptocurrency data (CoinGecko API)
 │   ├── social_media_fetcher.py    # Reddit/Twitter data (optional)
@@ -62,11 +65,12 @@ StockAnalysisHelper/
 │       └── app.js                # Main frontend application logic
 │
 ├── docs/                           # 📚 DOCUMENTATION
+│   ├── README.md                  # Documentation index
+│   ├── ARCHITECTURE.md            # This file - system architecture
+│   ├── HARDENING_PASS.md          # Code quality improvements
+│   ├── SECURITY_AUDIT.md          # Security audit & fixes
+│   ├── *_IMPLEMENTATION.md        # Feature implementation guides
 │   └── .archive/                  # 🗄️ Archived dev notes (git ignored)
-│       ├── app.py                 # Old monolithic app
-│       ├── vestor_chat.py         # Old chat logic
-│       ├── *.md                   # Old planning documents
-│       └── ...
 │
 ├── logs/                           # 📝 APPLICATION LOGS (git ignored)
 │   ├── flask.log                  # Main application log
@@ -77,6 +81,14 @@ StockAnalysisHelper/
 │
 ├── exports/                        # 💾 ANALYSIS EXPORTS (git ignored)
 │   └── analysis_*.json            # Generated analysis files
+│
+├── tests/                          # 🧪 TEST SUITE
+│   ├── __init__.py
+│   ├── test_integration.py        # Integration tests
+│   ├── test_vestor_service.py     # Vestor AI tests
+│   ├── test_analyst_integration.py # Analyst data tests
+│   ├── test_ticker_lookup.py      # Ticker lookup tests
+│   └── ...                        # Additional test files
 │
 └── __pycache__/                    # 🗑️ Python bytecode (git ignored)
 ```
@@ -170,27 +182,73 @@ routes/chat.py → services/vestor_service.py → src/stock_chat.py
 
 ### 5. Core Modules (`src/`)
 
+#### `config.py` ⚙️
+- **Purpose**: Centralized configuration
+- **Contents**:
+  - Data fetching intervals (30m, 1h, 1d)
+  - Technical indicator windows
+  - Adaptive window calculation functions
+  - Analyst consensus thresholds
+  - Recommendation weights
+  - Chart dimensions and colors
+- **Benefits**: Single source of truth for constants, easy tuning
+
+#### `utils.py` 🔧
+- **Purpose**: Reusable utility functions
+- **Functions**:
+  - `format_timeframe_display()` - Convert timedelta to readable format
+  - `format_price()` - Smart decimal formatting
+  - `validate_ticker()` - Input validation
+  - `sanitize_user_input()` - Security sanitization
+  - `calculate_percentage_change()` - Safe calculations
+  - `safe_divide()` - Division with zero check
+- **Benefits**: DRY principle, consistent formatting across app
+
+#### `logging_config.py` 📝
+- **Purpose**: Centralized logging setup
+- **Features**: Structured logging, security event tracking, chat logging
+- **Log files**: flask.log, security.log, chat.log, analysis.log
+
 #### `stock_chat.py`
 - **Class**: `StockChatAssistant`
 - **AI Models**: DistilBERT for conversational Q&A
 - **Purpose**: Natural language understanding
+- **Security**: Prompt injection detection
 
 #### `sentiment_analyzer.py`
 - **Models**: FinBERT, Twitter-RoBERTa
-- **Purpose**: News and social media sentiment
+- **Purpose**: News and social media sentiment analysis
 
 #### `technical_analyzer.py`
 - **Indicators**: RSI, MACD, SMA, EMA, Bollinger Bands
 - **Purpose**: Technical analysis signals
+- **Uses**: `config.py` for adaptive windows (5-50 data points)
+
+#### `analyst_consensus.py`
+- **Purpose**: Fetch analyst recommendations & price targets
+- **Source**: Yahoo Finance analyst data
+- **Metrics**: Buy/Hold/Sell ratings, price targets, coverage
+
+#### `data_fetcher.py`
+- **Purpose**: Fetch stock/crypto data
+- **Sources**: Yahoo Finance (yfinance), CoinGecko
+- **Uses**: `config.py` for interval selection
+
+#### `chart_generator.py`
+- **Purpose**: Generate interactive Plotly charts
+- **Chart types**: Candlestick, line, area, volume
+- **Uses**: `utils.py` for time formatting
 
 #### `portfolio_analyzer.py`
 - **Purpose**: Orchestrate analysis pipeline
+- **Uses**: `config.py` for recommendation weights
 - **Workflow**:
   1. Fetch data (data_fetcher, coingecko_fetcher)
   2. Sentiment analysis
   3. Technical analysis
-  4. Score combination
-  5. Recommendation generation
+  4. Analyst consensus (if available)
+  5. Score combination (weighted)
+  6. Recommendation generation
 
 ---
 

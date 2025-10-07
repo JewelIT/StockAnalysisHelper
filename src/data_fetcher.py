@@ -4,6 +4,7 @@ Handles both traditional stocks (yfinance) and cryptocurrencies (CoinGecko)
 """
 import yfinance as yf
 from .coingecko_fetcher import CoinGeckoFetcher
+from .config import Config
 
 class DataFetcher:
     def __init__(self):
@@ -157,16 +158,8 @@ class DataFetcher:
             print(f"  💰 Using CoinGecko for crypto: {ticker}")
             return self.coingecko.fetch_historical_data(ticker, period)
         
-        # Determine appropriate interval based on period
-        # For intraday (1d), use hourly intervals
-        # For short periods (1wk), use hourly to get more granular data
-        # For longer periods, use daily
-        if period == "1d":
-            interval = "30m"  # 30-minute intervals for 1 day
-        elif period == "1wk":
-            interval = "1h"   # Hourly intervals for 1 week
-        else:
-            interval = "1d"   # Daily intervals for longer periods
+        # Determine appropriate interval based on period (from config)
+        interval = Config.get_interval_for_period(period)
         
         # Otherwise use Yahoo Finance
         stock = yf.Ticker(ticker)

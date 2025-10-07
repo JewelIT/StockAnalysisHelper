@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify, session
 from datetime import datetime
 
 from app.services.vestor_service import VestorService
-from logging_config import log_chat_interaction
+from src.logging_config import log_chat_interaction
 
 bp = Blueprint('chat', __name__)
 

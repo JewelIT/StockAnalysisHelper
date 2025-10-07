@@ -368,7 +368,7 @@ and always emphasize risk management and due diligence.
     
     def _answer_recommendation_question(self, question, data, ticker):
         """Answer investment recommendation questions"""
-        ticker_str = ticker or "this asset"
+        ticker_str = ticker.upper() if ticker else "this asset"
         rec = data.get('recommendation', 'HOLD')
         score = data.get('score', 0.5)
         sentiment = data.get('sentiment', 'Neutral')
@@ -407,7 +407,7 @@ and always emphasize risk management and due diligence.
     
     def _answer_why_question(self, question, data, ticker):
         """Answer 'why' questions with detailed reasoning"""
-        ticker_str = ticker or "this asset"
+        ticker_str = ticker.upper() if ticker else "this asset"
         rec = data.get('recommendation', 'HOLD')
         sentiment = data.get('sentiment', 'Neutral')
         
@@ -454,7 +454,7 @@ and always emphasize risk management and due diligence.
     
     def _answer_sentiment_question(self, question, data, ticker):
         """Answer sentiment-related questions"""
-        ticker_str = ticker or "this asset"
+        ticker_str = ticker.upper() if ticker else "this asset"
         sentiment = data.get('sentiment', 'Neutral')
         
         response = f"## 🎭 Market Sentiment Analysis for {ticker_str.upper()}\n\n"
@@ -496,7 +496,7 @@ and always emphasize risk management and due diligence.
     
     def _answer_technical_question(self, question, data, ticker):
         """Answer technical analysis questions"""
-        ticker_str = ticker or "this asset"
+        ticker_str = ticker.upper() if ticker else "this asset"
         rsi = data.get('rsi')
         macd = data.get('macd')
         
@@ -550,7 +550,7 @@ and always emphasize risk management and due diligence.
     
     def _answer_price_question(self, question, data, ticker):
         """Answer price-related questions"""
-        ticker_str = ticker or "this asset"
+        ticker_str = ticker.upper() if ticker else "this asset"
         price = data.get('price')
         
         response = f"## 💰 Price Analysis for {ticker_str.upper()}\n\n"
@@ -585,7 +585,7 @@ and always emphasize risk management and due diligence.
     
     def _answer_risk_question(self, question, data, ticker):
         """Answer risk-related questions"""
-        ticker_str = ticker or "this asset"
+        ticker_str = ticker.upper() if ticker else "this asset"
         
         response = f"## ⚠️ Risk Assessment for {ticker_str.upper()}\n\n"
         response += f"Let's talk about risk management—the most important skill in investing.\n\n"
@@ -638,7 +638,7 @@ and always emphasize risk management and due diligence.
     
     def _answer_performance_question(self, question, data, ticker):
         """Answer performance/change questions"""
-        ticker_str = ticker or "this asset"
+        ticker_str = ticker.upper() if ticker else "this asset"
         
         response = f"## 📊 Performance Analysis for {ticker_str.upper()}\n\n"
         
@@ -698,7 +698,7 @@ and always emphasize risk management and due diligence.
     
     def _answer_general_question(self, question, data, ticker):
         """Answer general questions about a stock"""
-        ticker_str = ticker or "this asset"
+        ticker_str = ticker.upper() if ticker else "this asset"
         rec = data.get('recommendation', 'being analyzed')
         sentiment = data.get('sentiment', 'being assessed')
         

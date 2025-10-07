@@ -3,6 +3,7 @@ Chart Generator Module
 """
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from .utils import format_timeframe_display
 
 class ChartGenerator:
     @staticmethod
@@ -24,15 +25,8 @@ class ChartGenerator:
         end_date = df.index[-1].strftime('%Y-%m-%d')
         time_delta = df.index[-1] - df.index[0]
         
-        # Format timeframe display
-        if time_delta.days < 7:
-            time_display = f"{time_delta.days} days"
-        elif time_delta.days < 30:
-            time_display = f"{time_delta.days // 7} weeks"
-        elif time_delta.days < 365:
-            time_display = f"{time_delta.days // 30} months"
-        else:
-            time_display = f"{time_delta.days // 365} years"
+        # Format timeframe display (using utils)
+        time_display = format_timeframe_display(time_delta)
         
         chart_title = f"{ticker} - {time_display} ({start_date} to {end_date})"
         

@@ -8,6 +8,7 @@ from src.data_fetcher import DataFetcher
 from src.social_media_fetcher import SocialMediaFetcher
 from src.chart_generator import ChartGenerator
 from src.analyst_consensus import AnalystConsensusFetcher
+from src.config import Config
 
 class PortfolioAnalyzer:
     def __init__(self, enable_social_media=True):
@@ -197,20 +198,21 @@ class PortfolioAnalyzer:
             else:
                 print(f"  ⚠️  No analyst coverage available")
             
-            # Combined Recommendation
-            # Three-way weighting when analyst data is available
+            # Combined Recommendation (using Config weights)
+            weights = Config.get_recommendation_weights(
+                has_analyst_data=analyst_score is not None
+            )
+            
             if analyst_score is not None:
-                # With analyst data: Professional analysts get priority
-                # 20% sentiment, 30% technical, 50% analyst consensus
-                # Rationale: Professional analysts have done deep research and have significant upside/downside targets
+                # Three-way weighting with analyst data
                 combined_score = (
-                    avg_sentiment_score * 0.20 + 
-                    technical_signals['score'] * 0.30 + 
-                    analyst_score * 0.50
+                    avg_sentiment_score * weights['sentiment'] + 
+                    technical_signals['score'] * weights['technical'] + 
+                    analyst_score * weights['analyst']
                 )
-                sentiment_weight_used = '20%'
-                technical_weight_used = '30%'
-                analyst_weight_used = '50%'
+                sentiment_weight_used = f"{int(weights['sentiment']*100)}%"
+                technical_weight_used = f"{int(weights['technical']*100)}%"
+                analyst_weight_used = f"{int(weights['analyst']*100)}%"
                 
                 formula = f'Combined Score = (Sentiment × {sentiment_weight_used}) + (Technical × {technical_weight_used}) + (Analyst Consensus × {analyst_weight_used})'
             elif not sentiment_results:
@@ -220,10 +222,13 @@ class PortfolioAnalyzer:
                 technical_weight_used = '100%'
                 formula = 'Combined Score = Technical Score (No sentiment or analyst data available)'
             else:
-                # No analyst data: 40% sentiment, 60% technical (original formula)
-                combined_score = (avg_sentiment_score * 0.4 + technical_signals['score'] * 0.6)
-                sentiment_weight_used = '40%'
-                technical_weight_used = '60%'
+                # No analyst data: sentiment + technical
+                combined_score = (
+                    avg_sentiment_score * weights['sentiment'] + 
+                    technical_signals['score'] * weights['technical']
+                )
+                sentiment_weight_used = f"{int(weights['sentiment']*100)}%"
+                technical_weight_used = f"{int(weights['technical']*100)}%"
                 formula = f'Combined Score = (Sentiment Score × {sentiment_weight_used}) + (Technical Score × {technical_weight_used})'
             
             # Build explanation of how recommendation was calculated

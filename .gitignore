@@ -71,3 +71,15 @@ enhanced_script.py
 
 # Archive and development notes
 docs/.archive/
+docs/summaries/
+
+# Test scripts (belong in tests/)
+test_*.py
+!tests/test_*.py
+
+# Temporary development files in root
+*.tmp
+*.temp
+debug_*.py
+*_summary.md
+*_SUMMARY.md

@@ -16,12 +16,47 @@ class VestorService:
         
         # Company to ticker mapping
         self.company_to_ticker = {
+            # Tech Giants
             'apple': 'AAPL', 'microsoft': 'MSFT', 'tesla': 'TSLA', 'amazon': 'AMZN',
             'google': 'GOOGL', 'alphabet': 'GOOGL', 'meta': 'META', 'facebook': 'META',
-            'nvidia': 'NVDA', 'netflix': 'NFLX', 'disney': 'DIS', 'amd': 'AMD',
-            'intel': 'INTC', 'bitcoin': 'BTC-USD', 'ethereum': 'ETH-USD',
+            'nvidia': 'NVDA', 'netflix': 'NFLX', 'amd': 'AMD', 'intel': 'INTC',
+            
+            # Aerospace & Defense
+            'boeing': 'BA', 'lockheed': 'LMT', 'lockheed martin': 'LMT',
+            'northrop': 'NOC', 'northrop grumman': 'NOC', 'raytheon': 'RTX',
+            
+            # Finance
+            'jpmorgan': 'JPM', 'jp morgan': 'JPM', 'bank of america': 'BAC',
+            'wells fargo': 'WFC', 'goldman': 'GS', 'goldman sachs': 'GS',
+            'morgan stanley': 'MS', 'citigroup': 'C', 'visa': 'V', 'mastercard': 'MA',
+            
+            # Retail & Consumer
+            'walmart': 'WMT', 'target': 'TGT', 'costco': 'COST', 'home depot': 'HD',
+            'mcdonalds': 'MCD', "mcdonald's": 'MCD', 'starbucks': 'SBUX',
+            'coca cola': 'KO', 'coca-cola': 'KO', 'pepsi': 'PEP', 'pepsico': 'PEP',
+            'nike': 'NKE', 'procter': 'PG', 'procter & gamble': 'PG',
+            
+            # Healthcare & Pharma
+            'johnson': 'JNJ', 'johnson & johnson': 'JNJ', 'pfizer': 'PFE',
+            'moderna': 'MRNA', 'merck': 'MRK', 'abbvie': 'ABBV',
+            'unitedhealth': 'UNH', 'united health': 'UNH',
+            
+            # Energy
+            'exxon': 'XOM', 'exxonmobil': 'XOM', 'chevron': 'CVX',
+            'conocophillips': 'COP', 'shell': 'SHEL',
+            
+            # Entertainment & Media
+            'disney': 'DIS', 'warner': 'WBD', 'comcast': 'CMCSA',
+            'paramount': 'PARA', 'sony': 'SONY',
+            
+            # Automotive
+            'ford': 'F', 'gm': 'GM', 'general motors': 'GM',
+            
+            # Cryptocurrency
+            'bitcoin': 'BTC-USD', 'ethereum': 'ETH-USD',
             'ripple': 'XRP-USD', 'xrp': 'XRP-USD', 'cardano': 'ADA-USD', 
-            'dogecoin': 'DOGE-USD', 'solana': 'SOL-USD'
+            'dogecoin': 'DOGE-USD', 'solana': 'SOL-USD', 'bnb': 'BNB-USD',
+            'binance coin': 'BNB-USD', 'polkadot': 'DOT-USD'
         }
     
     def _get_chat_assistant(self):
@@ -31,6 +66,159 @@ class VestorService:
             self.chat_assistant.load_model()
             print("✅ Vestor AI loaded successfully")
         return self.chat_assistant
+    
+    def _handle_ticker_lookup(self, question, question_lower):
+        """
+        Handle questions asking for ticker symbols
+        Returns response dict if it's a ticker lookup question, None otherwise
+        """
+        # Patterns that indicate ticker lookup questions
+        ticker_lookup_patterns = [
+            r"what(?:'s| is) the ticker (?:for|of|symbol for)\s+(.+?)(?:\?|$)",
+            r"what ticker (?:is|for)\s+(.+?)(?:\?|$)",
+            r"ticker (?:for|of|symbol for)\s+(.+?)(?:\?|$)",
+            r"(?:what|give me|tell me) (?:the )?ticker\s+(?:for|of)\s+(.+?)(?:\?|$)",
+            r"(?:do you know|what's) (?:the )?(?:stock )?symbol (?:for|of)\s+(.+?)(?:\?|$)",
+        ]
+        
+        for pattern in ticker_lookup_patterns:
+            match = re.search(pattern, question_lower)
+            if match:
+                company_name = match.group(1).strip()
+                
+                # Clean up common words
+                company_name = re.sub(r'\b(stock|company|corp|corporation|inc|limited|ltd)\b', '', company_name).strip()
+                
+                # Look up in our mapping
+                ticker = self.company_to_ticker.get(company_name.lower())
+                
+                if ticker:
+                    # Success - found the ticker
+                    print(f"🎯 Ticker lookup: '{company_name}' → {ticker}")
+                    
+                    return {
+                        'answer': f"""📊 **{company_name.title()}** trades under the ticker symbol **{ticker}**.
+
+Would you like me to analyze {ticker} for you? I can provide:
+- Current price and performance
+- Technical indicators (RSI, MACD)
+- Market sentiment analysis
+- Investment recommendation
+
+Just say "analyze {ticker}" or "what do you think about {ticker}?" and I'll dive right in! 🚀""",
+                        'ticker': ticker,
+                        'vestor_mode': 'ticker_lookup',
+                        'is_conversational': True,
+                        'success': True
+                    }
+                else:
+                    # Company not in our database - provide helpful response
+                    print(f"❓ Unknown company: '{company_name}'")
+                    
+                    # Try to extract potential ticker if it looks like one (2-5 capital letters)
+                    potential_ticker_match = re.search(r'\b([A-Z]{2,5})\b', question)
+                    if potential_ticker_match:
+                        potential_ticker = potential_ticker_match.group(1)
+                        return {
+                            'answer': f"""I don't have **{company_name}** in my database yet, but if you know the ticker symbol, you can just tell me!
+
+💡 **Try one of these:**
+- If the ticker is **{potential_ticker}**, just say "analyze {potential_ticker}"
+- Search for the company on [Yahoo Finance](https://finance.yahoo.com) or [Google Finance](https://www.google.com/finance)
+- Tell me the ticker directly: "What do you think about [TICKER]?"
+
+**Popular tickers I know:**
+🏢 Tech: AAPL (Apple), MSFT (Microsoft), GOOGL (Google), META (Facebook), NVDA (Nvidia)
+✈️ Aerospace: BA (Boeing), LMT (Lockheed Martin), RTX (Raytheon)
+🏦 Finance: JPM (JPMorgan), BAC (Bank of America), V (Visa)
+🛒 Retail: WMT (Walmart), COST (Costco), HD (Home Depot)
+💊 Healthcare: JNJ (Johnson & Johnson), PFE (Pfizer)
+
+Once you have the ticker, I can analyze it for you! 📈""",
+                            'ticker': None,
+                            'vestor_mode': 'ticker_lookup_not_found',
+                            'is_conversational': True,
+                            'success': True
+                        }
+                    
+                    return {
+                        'answer': f"""I don't have **{company_name}** in my database yet. 
+
+💡 **Here's what you can do:**
+1. Search for the company on [Yahoo Finance](https://finance.yahoo.com) or [Google Finance](https://www.google.com/finance) to find its ticker
+2. Once you have the ticker symbol (usually 1-5 letters), tell me: "analyze [TICKER]"
+3. Or ask me about companies I know!
+
+**Popular companies I can help with:**
+- 🏢 Tech: Apple, Microsoft, Google, Meta, Nvidia, Tesla, Amazon
+- ✈️ Aerospace: Boeing, Lockheed Martin, Raytheon
+- 🏦 Finance: JPMorgan, Bank of America, Goldman Sachs
+- 🛒 Retail: Walmart, Costco, Target, Home Depot
+- 💊 Healthcare: Johnson & Johnson, Pfizer, Moderna
+- 🪙 Crypto: Bitcoin, Ethereum, Solana
+
+Just say the company name and I'll look it up for you! 📊""",
+                        'ticker': None,
+                        'vestor_mode': 'ticker_lookup_not_found',
+                        'is_conversational': True,
+                        'success': True
+                    }
+        
+        return None
+    
+    def _handle_list_companies(self, question_lower):
+        """Handle questions asking for list of supported companies"""
+        list_patterns = [
+            'what companies', 'which companies', 'list companies', 'list of companies',
+            'what tickers', 'which tickers', 'list tickers', 'list the tickers', 'what stocks',
+            'which stocks', 'what can you analyze', 'what do you support', 'tickers you support',
+            'companies you know', 'tickers you know', 'stocks you know', 'companies do you know'
+        ]
+        
+        if any(pattern in question_lower for pattern in list_patterns):
+            print("📋 Listing supported companies")
+            
+            # Organize by category
+            categories = {
+                '🏢 Tech Giants': ['apple', 'microsoft', 'google', 'meta', 'nvidia', 'amazon', 'tesla', 'netflix'],
+                '✈️ Aerospace & Defense': ['boeing', 'lockheed martin', 'northrop grumman', 'raytheon'],
+                '🏦 Finance & Banking': ['jpmorgan', 'bank of america', 'goldman sachs', 'morgan stanley', 'visa', 'mastercard'],
+                '🛒 Retail & Consumer': ['walmart', 'costco', 'target', 'home depot', 'starbucks', 'nike'],
+                '💊 Healthcare & Pharma': ['johnson & johnson', 'pfizer', 'moderna', 'unitedhealth'],
+                '⚡ Energy': ['exxonmobil', 'chevron', 'conocophillips'],
+                '🎬 Entertainment': ['disney', 'sony', 'comcast'],
+                '🚗 Automotive': ['ford', 'general motors'],
+                '🪙 Cryptocurrencies': ['bitcoin', 'ethereum', 'solana', 'cardano', 'dogecoin']
+            }
+            
+            response = "📊 **Here are the companies and tickers I can analyze:**\n\n"
+            
+            for category, companies in categories.items():
+                response += f"**{category}**\n"
+                for company in companies:
+                    ticker = self.company_to_ticker.get(company, '')
+                    if ticker:
+                        response += f"• {company.title()} → **{ticker}**\n"
+                response += "\n"
+            
+            response += """💡 **How to use:**
+- Just mention the company name: "What about Apple?"
+- Or use the ticker: "Analyze AAPL"
+- Or ask for the ticker: "What's the ticker for Boeing?"
+
+**Don't see a company?** You can still analyze any stock by using its ticker symbol directly! Just say "analyze [TICKER]" and I'll get the data for you.
+
+**What would you like to explore?** 🚀"""
+            
+            return {
+                'answer': response,
+                'ticker': None,
+                'vestor_mode': 'company_list',
+                'is_conversational': True,
+                'success': True
+            }
+        
+        return None
     
     def process_chat(self, question, ticker, context_ticker, conversation_history):
         """
@@ -52,6 +240,16 @@ class VestorService:
         
         assistant = self._get_chat_assistant()
         question_lower = question.lower()
+        
+        # Check if this is a ticker lookup question FIRST
+        ticker_lookup_response = self._handle_ticker_lookup(question, question_lower)
+        if ticker_lookup_response:
+            return ticker_lookup_response
+        
+        # Check if asking for list of supported companies
+        list_companies_response = self._handle_list_companies(question_lower)
+        if list_companies_response:
+            return list_companies_response
         
         # Build conversation context
         conversation_context = self._build_conversation_context(conversation_history)
@@ -75,7 +273,8 @@ class VestorService:
         vestor_prompt = self._build_vestor_prompt(conversation_context)
         
         # Determine conversation mode
-        needs_analysis = bool(final_ticker and mentioned_tickers)
+        # If we have a final_ticker (either mentioned or from context), we need stock analysis
+        needs_analysis = bool(final_ticker)
         
         print(f"🤖 Vestor Mode: {'Stock Analysis' if needs_analysis else 'Conversation'}")
         print("="*80 + "\n")
@@ -303,11 +502,13 @@ Key Reasons:
             full_context = prompt + "\n\n" + analysis_context
             
             assistant = self._get_chat_assistant()
+            print(f"🤖 Calling AI with ticker='{ticker}'")
             response = assistant.answer_question(
                 question=question,
                 context=full_context,
                 ticker=ticker
             )
+            print(f"✅ AI Response received")
             
             # Extract the answer string from the response dict
             answer_text = response.get('answer', '') if isinstance(response, dict) else str(response)

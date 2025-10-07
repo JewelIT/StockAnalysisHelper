@@ -3,24 +3,25 @@ Technical Analysis Module
 """
 import pandas as pd
 import ta
+from .config import Config
 
 class TechnicalAnalyzer:
     @staticmethod
     def calculate_indicators(df):
         """Calculate technical indicators with adaptive windows based on data length"""
-        if df.empty or len(df) < 5:
+        if df.empty or len(df) < Config.MIN_DATA_POINTS:
             return None
         
         indicators = {}
         data_points = len(df)
         
-        # Adaptive window sizes based on available data
-        sma_short_window = min(20, max(5, data_points // 3))
-        sma_long_window = min(50, max(10, data_points // 2))
-        rsi_window = min(14, max(5, data_points // 4))
-        macd_fast = min(12, max(3, data_points // 5))
-        macd_slow = min(26, max(6, data_points // 3))
-        macd_signal = min(9, max(3, data_points // 6))
+        # Adaptive window sizes based on available data (from config)
+        sma_short_window = Config.adaptive_sma_short(data_points)
+        sma_long_window = Config.adaptive_sma_long(data_points)
+        rsi_window = Config.adaptive_rsi(data_points)
+        macd_fast = Config.adaptive_macd_fast(data_points)
+        macd_slow = Config.adaptive_macd_slow(data_points)
+        macd_signal = Config.adaptive_macd_signal(data_points)
         
         # Moving Averages
         indicators['SMA_20'] = ta.trend.sma_indicator(df['Close'], window=sma_short_window)
@@ -43,7 +44,7 @@ class TechnicalAnalyzer:
             indicators['MACD_diff'] = df['Close'] * 0
         
         # Bollinger Bands
-        bb_window = min(20, max(5, data_points // 3))
+        bb_window = Config.adaptive_bb_window(data_points)
         try:
             bollinger = ta.volatility.BollingerBands(df['Close'], window=bb_window)
             indicators['BB_high'] = bollinger.bollinger_hband()
