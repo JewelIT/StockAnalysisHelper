@@ -37,6 +37,16 @@ logs/
 *.log
 nohup.out
 
+# Backup files
+*.backup
+*.bak
+
+# Test output
+.pytest_cache/
+htmlcov/
+.coverage
+*.cover
+
 # Models cache
 .cache/
 transformers_cache/
