@@ -2,13 +2,16 @@
 Main routes - Home page and utility endpoints
 """
 from flask import Blueprint, render_template, jsonify, session
+import time
 
 bp = Blueprint('main', __name__)
 
 @bp.route('/')
 def index():
     """Main page"""
-    return render_template('index.html')
+    # Cache busting parameter based on current time
+    cache_bust = int(time.time())
+    return render_template('index.html', cache_bust=cache_bust)
 
 @bp.route('/clear-chat', methods=['POST'])
 def clear_chat():

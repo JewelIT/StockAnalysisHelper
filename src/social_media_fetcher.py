@@ -6,6 +6,20 @@ import requests
 from datetime import datetime, timedelta
 import praw
 import os
+import json
+
+# Optional: Selenium for bypassing Cloudflare (if installed)
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.common.exceptions import TimeoutException, WebDriverException
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    SELENIUM_AVAILABLE = False
 
 class SocialMediaFetcher:
     def __init__(self):
@@ -92,12 +106,109 @@ class SocialMediaFetcher:
             else:
                 print(f"⚠️  StockTwits API returned status {response.status_code} for {ticker}")
                 if response.status_code == 403:
-                    print(f"   StockTwits may be rate limiting or blocking automated requests.")
-                    print(f"   Continuing with Reddit data only...")
+                    print(f"   StockTwits is blocking automated requests with Cloudflare.")
+                    if SELENIUM_AVAILABLE:
+                        print(f"   Trying headless browser method...")
+                        return self.fetch_stocktwits_with_selenium(ticker, max_messages)
+                    else:
+                        print(f"   Install Selenium + Chrome to bypass Cloudflare: pip install selenium")
+                        print(f"   Continuing with Reddit data only...")
                 # Don't raise error, just return empty list - NO DEMO DATA
                 
         except Exception as e:
             print(f"⚠️  Could not fetch StockTwits data for {ticker}: {e}")
+        
+        return messages
+    
+    def fetch_stocktwits_with_selenium(self, ticker, max_messages=30):
+        """
+        Fetch StockTwits messages using Selenium headless browser to bypass Cloudflare
+        
+        Args:
+            ticker: Stock ticker symbol
+            max_messages: Maximum number of messages to fetch
+            
+        Returns:
+            List of dicts with 'text', 'created_at', 'sentiment' (if available)
+        """
+        if not SELENIUM_AVAILABLE:
+            print("⚠️  Selenium not available. Install with: pip install selenium")
+            return []
+        
+        messages = []
+        driver = None
+        
+        try:
+            # Setup Chrome options for headless mode
+            chrome_options = Options()
+            chrome_options.add_argument('--headless')
+            chrome_options.add_argument('--no-sandbox')
+            chrome_options.add_argument('--disable-dev-shm-usage')
+            chrome_options.add_argument('--disable-gpu')
+            chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
+            chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36')
+            
+            # Initialize the driver
+            driver = webdriver.Chrome(options=chrome_options)
+            
+            # Navigate to the API endpoint
+            url = f"{self.stocktwits_base_url}/streams/symbol/{ticker}.json"
+            driver.get(url)
+            
+            # Wait for the page to load and get the JSON response
+            wait = WebDriverWait(driver, 30)
+            
+            # The response will be in a <pre> tag or the page body
+            try:
+                # Wait for JSON to load (either in <pre> tag or body)
+                wait.until(lambda d: d.find_element(By.TAG_NAME, "body").text.strip() != "")
+                
+                # Get the page source
+                page_text = driver.find_element(By.TAG_NAME, "body").text
+                
+                # Try to parse as JSON
+                data = json.loads(page_text)
+                
+                if 'messages' in data:
+                    for msg in data['messages'][:max_messages]:
+                        message_id = msg.get('id', '')
+                        message_data = {
+                            'text': msg.get('body', ''),
+                            'created_at': msg.get('created_at', ''),
+                            'source': 'StockTwits',
+                            'user': msg.get('user', {}).get('username', 'Unknown'),
+                            'link': f'https://stocktwits.com/message/{message_id}' if message_id else ''
+                        }
+                        
+                        # StockTwits sometimes includes user sentiment tags
+                        if 'entities' in msg and 'sentiment' in msg['entities']:
+                            sentiment = msg['entities']['sentiment']
+                            if sentiment:
+                                message_data['user_sentiment'] = sentiment.get('basic', 'Unknown')
+                        
+                        messages.append(message_data)
+                    
+                    print(f"✓ Fetched {len(messages)} StockTwits messages for {ticker} (via Selenium)")
+                else:
+                    print(f"⚠️  No messages found in StockTwits response for {ticker}")
+                    
+            except TimeoutException:
+                print(f"⚠️  Timeout waiting for StockTwits to load for {ticker}")
+            except json.JSONDecodeError as je:
+                print(f"⚠️  Could not parse StockTwits JSON for {ticker}: {je}")
+                # Cloudflare might still be blocking even with Selenium
+                print(f"   Page content preview: {driver.find_element(By.TAG_NAME, 'body').text[:200]}")
+                
+        except WebDriverException as e:
+            print(f"⚠️  Selenium WebDriver error for {ticker}: {e}")
+            print(f"   Make sure Chrome/Chromium is installed: sudo apt install chromium-browser")
+        except Exception as e:
+            print(f"⚠️  Error fetching StockTwits with Selenium for {ticker}: {e}")
+        finally:
+            if driver:
+                driver.quit()
         
         return messages
     
