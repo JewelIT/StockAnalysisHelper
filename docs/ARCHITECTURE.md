@@ -52,12 +52,11 @@ StockAnalysisHelper/
 │   └── chart_generator.py         # Plotly chart generation
 │
 ├── templates/                      # 🎨 JINJA2 HTML TEMPLATES
-│   ├── index-modern.html          # Main modern UI
-│   └── index-legacy.html          # Legacy UI (for reference)
+│   └── index.html                 # Main web interface
 │
 ├── static/                         # 🖼️ FRONTEND ASSETS
 │   ├── css/
-│   │   ├── modern.css            # Modern theme (Bootstrap 5.3)
+│   │   ├── style.css              # Main styles (Bootstrap 5.3)
 │   │   └── style.css             # Legacy styles
 │   └── js/
 │       └── app.js                # Main frontend application logic

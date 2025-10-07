@@ -230,11 +230,9 @@ StockAnalysisHelper/│   ├── services/          # Business logic layer###
 
 ├── templates/                 # Jinja2 HTML templates
 
-│   ├── index-modern.html     # Main web interface├── static/                # CSS, JS, assets- **Accordion View** - Expandable stock details with lazy-loaded charts
+│   └── index.html            # Main web interface
 
-│   └── index-legacy.html     # Legacy interface
-
-│├── docs/                  # Documentation- **Configuration Panel** - Manage portfolio, chart preferences, currency settings
+├── docs/                      # Documentation
 
 ├── static/                    # Frontend assets
 
