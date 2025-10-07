@@ -182,3 +182,33 @@ class DataFetcher:
             }
         except:
             return {'name': ticker, 'sector': 'N/A', 'industry': 'N/A'}
+    
+    def get_pre_market_data(self, ticker):
+        """Get pre-market trading data if available"""
+        # Cryptos trade 24/7, no pre-market
+        if CoinGeckoFetcher.is_crypto_ticker(ticker):
+            return {'has_data': False, 'reason': '24/7 trading'}
+        
+        try:
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            
+            # Check if pre/post market data is available
+            if not info.get('hasPrePostMarketData', False):
+                return {'has_data': False, 'reason': 'Not available'}
+            
+            # Get pre-market data
+            pre_market_price = info.get('preMarketPrice')
+            if pre_market_price is None:
+                return {'has_data': False, 'reason': 'Market hours or no activity'}
+            
+            return {
+                'has_data': True,
+                'price': pre_market_price,
+                'change': info.get('preMarketChange', 0),
+                'change_percent': info.get('preMarketChangePercent', 0),
+                'time': info.get('preMarketTime', 0),
+                'market_state': info.get('marketState', 'UNKNOWN')
+            }
+        except Exception as e:
+            return {'has_data': False, 'reason': f'Error: {str(e)}'}

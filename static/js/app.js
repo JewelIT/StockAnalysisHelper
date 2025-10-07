@@ -991,6 +991,60 @@ function toggleStockDetails(ticker, resultIndex) {
     }
 }
 
+// Generate gauge chart for analyst recommendation
+function generateAnalystGauge(recommendationMean, containerId) {
+    // Convert 1-5 scale to 0-100 for display (inverted: 1=best, 5=worst)
+    const value = ((5 - recommendationMean) / 4) * 100;
+    
+    const data = [{
+        type: "indicator",
+        mode: "gauge+number+delta",
+        value: value,
+        number: { 
+            suffix: "%", 
+            font: { size: 24 }
+        },
+        gauge: {
+            axis: { 
+                range: [0, 100],
+                tickwidth: 1,
+                tickcolor: "darkgray"
+            },
+            bar: { color: "rgba(0,0,0,0)" },
+            bgcolor: "white",
+            borderwidth: 2,
+            bordercolor: "gray",
+            steps: [
+                { range: [0, 20], color: "#ef4444" },    // Strong Sell - Red
+                { range: [20, 40], color: "#fb923c" },   // Sell - Orange  
+                { range: [40, 60], color: "#fbbf24" },   // Hold - Yellow
+                { range: [60, 80], color: "#86efac" },   // Buy - Light Green
+                { range: [80, 100], color: "#22c55e" }   // Strong Buy - Green
+            ],
+            threshold: {
+                line: { color: "#1e40af", width: 4 },
+                thickness: 0.75,
+                value: value
+            }
+        }
+    }];
+    
+    const layout = {
+        width: 280,
+        height: 180,
+        margin: { t: 10, r: 10, b: 10, l: 10 },
+        paper_bgcolor: "rgba(0,0,0,0)",
+        font: { color: "darkgray", family: "Arial" }
+    };
+    
+    const config = {
+        displayModeBar: false,
+        responsive: true
+    };
+    
+    Plotly.newPlot(containerId, data, layout, config);
+}
+
 function renderStockDetails(ticker, resultIndex) {
     const r = window.analysisResults[resultIndex];
     const body = document.getElementById(`body_${ticker}`);
@@ -998,7 +1052,7 @@ function renderStockDetails(ticker, resultIndex) {
     
     const html = `
         <div class="stock-details-content">
-            <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
                 ${!isInPortfolio ? `
                     <button onclick="addToPortfolioFromAnalysis('${ticker}')" class="btn-small btn-primary" style="display: flex; align-items: center; gap: 5px;">
                         ⭐ Add to Portfolio
@@ -1008,65 +1062,110 @@ function renderStockDetails(ticker, resultIndex) {
                 `}
             </div>
             
-            <!-- Recommendation Comparison -->
-            ${r.analyst_consensus ? `
-            <div class="alert alert-light border" style="margin-bottom: 1.5rem;">
-                <div class="row align-items-center">
-                    <div class="col-md-6 text-center border-end">
-                        <small class="text-muted d-block mb-2">📊 Wall Street Consensus</small>
-                        <span class="badge" style="font-size: 1.1rem; padding: 0.5rem 1rem; background: #0d6efd; color: white;">
-                            ${r.analyst_consensus.signal}
-                        </span>
-                        <small class="d-block mt-2 text-muted">${r.analyst_consensus.num_analysts} analysts</small>
+            <!-- Compact Dashboard Layout -->
+            <div class="row g-3">
+                <!-- Left Column: Key Metrics & Recommendation -->
+                <div class="col-lg-6">
+                    <!-- Recommendation Comparison (Compact) -->
+                    ${r.analyst_consensus ? `
+                    <div class="card border-0 shadow-sm mb-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <div class="card-body p-3">
+                            <div class="row align-items-center text-white">
+                                <div class="col-6 border-end border-white border-opacity-25">
+                                    <small class="d-block opacity-75 mb-1">📊 Wall Street</small>
+                                    <strong style="font-size: 1.1rem;">${r.analyst_consensus.signal}</strong>
+                                    <small class="d-block opacity-75 mt-1">${r.analyst_consensus.num_analysts} analysts</small>
+                                </div>
+                                <div class="col-6">
+                                    <small class="d-block opacity-75 mb-1">🤖 AI Powered</small>
+                                    <strong style="font-size: 1.1rem;">${r.recommendation}</strong>
+                                    <small class="d-block opacity-75 mt-1">Score: ${r.combined_score.toFixed(2)}</small>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-6 text-center">
-                        <small class="text-muted d-block mb-2">🤖 Our AI Recommendation</small>
-                        <span class="badge" style="font-size: 1.1rem; padding: 0.5rem 1rem; background: ${r.color}; color: white;">
-                            ${r.recommendation}
-                        </span>
-                        <small class="d-block mt-2 text-muted">Score: ${r.combined_score.toFixed(2)}</small>
+                    ` : `
+                    <div class="card border-0 shadow-sm mb-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <div class="card-body p-3 text-center text-white">
+                            <small class="d-block opacity-75 mb-1">🤖 AI Recommendation</small>
+                            <strong style="font-size: 1.3rem;">${r.recommendation}</strong>
+                            <small class="d-block opacity-75 mt-1">Score: ${r.combined_score.toFixed(2)}</small>
+                        </div>
+                    </div>
+                    `}
+                    
+                    <!-- Compact Score Metrics -->
+                    <div class="card border-0 shadow-sm mb-3">
+                        <div class="card-body p-3">
+                            <h6 class="card-title mb-3" style="font-size: 0.9rem; color: #6c757d;">
+                                <i class="bi bi-speedometer2"></i> Analysis Scores
+                            </h6>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <div class="p-2 bg-light rounded text-center">
+                                        <small class="d-block text-muted" style="font-size: 0.75rem;">Sentiment</small>
+                                        <strong style="font-size: 1rem;">${r.sentiment_score.toFixed(2)}</strong>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="p-2 bg-light rounded text-center">
+                                        <small class="d-block text-muted" style="font-size: 0.75rem;">Technical</small>
+                                        <strong style="font-size: 1rem;">${r.technical_score.toFixed(2)}</strong>
+                                    </div>
+                                </div>
+                                ${r.analyst_score !== null && r.analyst_score !== undefined ? `
+                                <div class="col-6">
+                                    <div class="p-2 bg-light rounded text-center">
+                                        <small class="d-block text-muted" style="font-size: 0.75rem;">Analyst</small>
+                                        <strong style="font-size: 1rem;">${r.analyst_score.toFixed(2)}</strong>
+                                    </div>
+                                </div>
+                                ` : ''}
+                                <div class="col-6">
+                                    <div class="p-2 bg-primary bg-opacity-10 rounded text-center">
+                                        <small class="d-block text-primary" style="font-size: 0.75rem;">Combined</small>
+                                        <strong class="text-primary" style="font-size: 1rem;">${r.combined_score.toFixed(2)}</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Pre-Market Data (if available) -->
+                    ${r.pre_market_data && r.pre_market_data.has_data ? `
+                    <div class="card border-0 shadow-sm mb-3 border-start border-warning border-4">
+                        <div class="card-body p-3">
+                            <h6 class="card-title mb-2" style="font-size: 0.9rem;">
+                                <i class="bi bi-clock-history text-warning"></i> Pre-Market
+                            </h6>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="h5 mb-0">${formatPrice(r.pre_market_data.price, r.ticker)}</div>
+                                    <small class="text-muted">${new Date(r.pre_market_data.time * 1000).toLocaleTimeString()}</small>
+                                </div>
+                                <div class="text-end">
+                                    <div class="fw-bold ${r.pre_market_data.change >= 0 ? 'text-success' : 'text-danger'}">
+                                        ${r.pre_market_data.change >= 0 ? '↗' : '↘'} ${formatPrice(Math.abs(r.pre_market_data.change), r.ticker)}
+                                    </div>
+                                    <small class="${r.pre_market_data.change_percent >= 0 ? 'text-success' : 'text-danger'}">
+                                        ${r.pre_market_data.change_percent >= 0 ? '+' : ''}${r.pre_market_data.change_percent.toFixed(2)}%
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    ` : ''}
+                    
+                    <!-- Current Price -->
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body p-3">
+                            <small class="text-muted d-block mb-1">Current Price</small>
+                            <div class="h4 mb-0">${formatPrice(r.current_price, r.ticker)}</div>
+                        </div>
                     </div>
                 </div>
-                <hr class="my-2">
-                <small class="text-muted">
-                    <i class="bi bi-info-circle me-1"></i>
-                    Our recommendation combines analyst consensus (50%), technical indicators (30%), and sentiment analysis (20%)
-                </small>
-            </div>
-            ` : ''}
-            
-            <div class="metrics-grid">
-                <div class="metric-box">
-                    <div class="metric-label">Combined Score</div>
-                    <div class="metric-value">${r.combined_score.toFixed(3)}</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label">Overall Sentiment</div>
-                    <div class="metric-value">${r.sentiment_score.toFixed(3)}</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label">News Sentiment</div>
-                    <div class="metric-value">${r.news_sentiment_score ? r.news_sentiment_score.toFixed(3) : 'N/A'}</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label">Social Sentiment</div>
-                    <div class="metric-value">${r.social_sentiment_score ? r.social_sentiment_score.toFixed(3) : 'N/A'}</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label">Technical Score</div>
-                    <div class="metric-value">${r.technical_score.toFixed(3)}</div>
-                </div>
-                ${r.analyst_score !== null && r.analyst_score !== undefined ? `
-                <div class="metric-box">
-                    <div class="metric-label">Analyst Score</div>
-                    <div class="metric-value">${r.analyst_score.toFixed(3)}</div>
-                </div>
-                ` : ''}
-                <div class="metric-box">
-                    <div class="metric-label">Current Price</div>
-                    <div class="metric-value">${formatPrice(r.current_price, r.ticker)}</div>
-                </div>
-            </div>
+                
+                <!-- Right Column: Analyst Gauge & Price Targets -->
             
             <!-- Market Analysis Section (Professional Analysts) -->
             ${r.analyst_consensus ? `
@@ -1246,6 +1345,13 @@ function renderStockDetails(ticker, resultIndex) {
     `;
     
     body.innerHTML = html;
+    
+    // Render analyst gauge if available
+    if (r.analyst_consensus) {
+        setTimeout(() => {
+            generateAnalystGauge(r.analyst_consensus.recommendation_mean, `analystGauge_${ticker}`);
+        }, 100);
+    }
     
     // Render chart if available and mark button as "Refresh" after first render
     if (r.chart_data) {

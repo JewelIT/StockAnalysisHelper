@@ -82,6 +82,10 @@ class PortfolioAnalyzer:
             result['sector'] = stock_info['sector']
             result['industry'] = stock_info['industry']
             
+            # Pre-Market Data (if available)
+            pre_market_data = self.data_fetcher.get_pre_market_data(ticker)
+            result['pre_market_data'] = pre_market_data
+            
             # News Sentiment Analysis (using FinBERT)
             news_articles = self.data_fetcher.fetch_news(ticker, max_news, days=news_days)
             news_sentiment_results = []
