@@ -1080,6 +1080,11 @@ function renderStockDetails(ticker, resultIndex) {
                             <small class="text-muted ms-2">
                                 ${r.analyst_consensus.num_analysts} professional analyst${r.analyst_consensus.num_analysts !== 1 ? 's' : ''}
                             </small>
+                            ${r.analyst_coverage_level === 'limited' ? `
+                            <span class="badge bg-warning text-dark ms-2" title="Limited analyst coverage (2-4 analysts). Consider this data with caution." style="font-size: 0.75rem;">
+                                <i class="bi bi-exclamation-triangle"></i> Limited Coverage
+                            </span>
+                            ` : ''}
                         </div>
                         <div class="text-end">
                             <small class="text-muted d-block">Consensus Rating</small>

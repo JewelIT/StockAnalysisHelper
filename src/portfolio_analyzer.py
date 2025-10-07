@@ -160,9 +160,10 @@ class PortfolioAnalyzer:
             analyst_score = None
             analyst_consensus = None
             analyst_weight_used = '0%'
+            analyst_coverage_level = 'none'  # none, limited, standard, strong
             
-            if analyst_data.get('has_data', False) and analyst_data.get('number_of_analysts', 0) >= 3:
-                # Calculate analyst scores
+            if analyst_data.get('has_data', False) and analyst_data.get('number_of_analysts', 0) >= 2:
+                # Calculate analyst scores (now accepts 2+ analysts, was 3+)
                 recommendation_score = self.analyst_fetcher.calculate_analyst_score(analyst_data)
                 target_score = self.analyst_fetcher.calculate_price_target_score(analyst_data)
                 
@@ -177,9 +178,20 @@ class PortfolioAnalyzer:
                 
                 # Get human-readable consensus
                 analyst_consensus = self.analyst_fetcher.get_analyst_consensus_signal(analyst_data)
-                print(f"  ✓ Analyst Consensus: {analyst_consensus['signal']} ({analyst_data['number_of_analysts']} analysts)")
+                
+                # Determine coverage level
+                num_analysts = analyst_data.get('number_of_analysts', 0)
+                if num_analysts >= 10:
+                    analyst_coverage_level = 'strong'
+                    print(f"  ✓ Analyst Consensus: {analyst_consensus['signal']} ({num_analysts} analysts - Strong Coverage)")
+                elif num_analysts >= 5:
+                    analyst_coverage_level = 'standard'
+                    print(f"  ✓ Analyst Consensus: {analyst_consensus['signal']} ({num_analysts} analysts)")
+                else:
+                    analyst_coverage_level = 'limited'
+                    print(f"  ⚠️  Analyst Consensus: {analyst_consensus['signal']} ({num_analysts} analysts - Limited Coverage)")
             else:
-                print(f"  ⚠️  Insufficient analyst coverage (need at least 3 analysts)")
+                print(f"  ⚠️  No analyst coverage available")
             
             # Combined Recommendation
             # Three-way weighting when analyst data is available
@@ -293,6 +305,7 @@ class PortfolioAnalyzer:
                 'analyst_score': analyst_score,
                 'analyst_consensus': analyst_consensus,
                 'analyst_data': analyst_data if analyst_data.get('has_data', False) else None,
+                'analyst_coverage_level': analyst_coverage_level,
                 'current_price': current_price,
                 'price_change': price_change,
                 'news_count': len(news_sentiment_results),
