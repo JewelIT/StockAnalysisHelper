@@ -7,6 +7,7 @@ from src.technical_analyzer import TechnicalAnalyzer
 from src.data_fetcher import DataFetcher
 from src.social_media_fetcher import SocialMediaFetcher
 from src.chart_generator import ChartGenerator
+from src.analyst_consensus import AnalystConsensusFetcher
 
 class PortfolioAnalyzer:
     def __init__(self, enable_social_media=True):
@@ -32,6 +33,7 @@ class PortfolioAnalyzer:
         self.technical_analyzer = TechnicalAnalyzer()
         self.data_fetcher = DataFetcher()
         self.chart_generator = ChartGenerator()
+        self.analyst_fetcher = AnalystConsensusFetcher()
     
     def analyze_stock(self, ticker, max_news=5, chart_type='candlestick', timeframe='3mo',
                      max_social=5, news_sort='relevance', social_sort='relevance',
@@ -152,35 +154,74 @@ class PortfolioAnalyzer:
             indicators = self.technical_analyzer.calculate_indicators(df)
             technical_signals = self.technical_analyzer.generate_signals(df, indicators)
             
+            # Analyst Consensus Analysis
+            print(f"  📊 Fetching analyst consensus...")
+            analyst_data = self.analyst_fetcher.fetch_analyst_data(ticker)
+            analyst_score = None
+            analyst_consensus = None
+            analyst_weight_used = '0%'
+            
+            if analyst_data.get('has_data', False) and analyst_data.get('number_of_analysts', 0) >= 3:
+                # Calculate analyst scores
+                recommendation_score = self.analyst_fetcher.calculate_analyst_score(analyst_data)
+                target_score = self.analyst_fetcher.calculate_price_target_score(analyst_data)
+                
+                # Combine analyst recommendation and price target
+                # Weight recommendation more heavily (70%) than price target (30%)
+                if recommendation_score is not None and target_score is not None:
+                    analyst_score = recommendation_score * 0.7 + target_score * 0.3
+                elif recommendation_score is not None:
+                    analyst_score = recommendation_score
+                elif target_score is not None:
+                    analyst_score = target_score
+                
+                # Get human-readable consensus
+                analyst_consensus = self.analyst_fetcher.get_analyst_consensus_signal(analyst_data)
+                print(f"  ✓ Analyst Consensus: {analyst_consensus['signal']} ({analyst_data['number_of_analysts']} analysts)")
+            else:
+                print(f"  ⚠️  Insufficient analyst coverage (need at least 3 analysts)")
+            
             # Combined Recommendation
-            # If no sentiment data is available, rely more heavily on technical analysis
-            if not sentiment_results:
+            # Three-way weighting when analyst data is available
+            if analyst_score is not None:
+                # With analyst data: 25% sentiment, 45% technical, 30% analyst
+                combined_score = (
+                    avg_sentiment_score * 0.25 + 
+                    technical_signals['score'] * 0.45 + 
+                    analyst_score * 0.30
+                )
+                sentiment_weight_used = '25%'
+                technical_weight_used = '45%'
+                analyst_weight_used = '30%'
+                
+                formula = f'Combined Score = (Sentiment × {sentiment_weight_used}) + (Technical × {technical_weight_used}) + (Analyst Consensus × {analyst_weight_used})'
+            elif not sentiment_results:
                 # No sentiment data: 100% technical analysis
                 combined_score = technical_signals['score']
                 sentiment_weight_used = '0%'
                 technical_weight_used = '100%'
+                formula = 'Combined Score = Technical Score (No sentiment or analyst data available)'
             else:
-                # Normal case: 40% sentiment, 60% technical
+                # No analyst data: 40% sentiment, 60% technical (original formula)
                 combined_score = (avg_sentiment_score * 0.4 + technical_signals['score'] * 0.6)
                 sentiment_weight_used = '40%'
                 technical_weight_used = '60%'
+                formula = f'Combined Score = (Sentiment Score × {sentiment_weight_used}) + (Technical Score × {technical_weight_used})'
             
             # Build explanation of how recommendation was calculated
-            formula = f'Combined Score = (Sentiment Score × {sentiment_weight_used}) + (Technical Score × {technical_weight_used})'
-            if not sentiment_results:
-                formula = 'Combined Score = Technical Score (No sentiment data available)'
-            
             recommendation_explanation = {
                 'formula': formula,
                 'sentiment_weight': sentiment_weight_used,
                 'technical_weight': technical_weight_used,
+                'analyst_weight': analyst_weight_used,
                 'sentiment_components': {
                     'news_sentiment': f'{news_sentiment_score:.2f}' if news_sentiment_results else 'N/A',
                     'social_sentiment': f'{social_sentiment_score:.2f}' if social_sentiment_results else 'N/A',
-                    'news_weight': '50% of sentiment',
-                    'social_weight': '50% of sentiment'
+                    'news_weight': '60% of sentiment',
+                    'social_weight': '40% of sentiment'
                 },
                 'technical_components': technical_signals.get('reasons', []),
+                'analyst_components': None,
                 'final_score': f'{combined_score:.2f}',
                 'thresholds': {
                     'STRONG BUY': '> 0.65',
@@ -190,6 +231,26 @@ class PortfolioAnalyzer:
                     'STRONG SELL': '< 0.35'
                 }
             }
+            
+            # Add analyst components to explanation if available
+            if analyst_score is not None and analyst_consensus:
+                target_mean = analyst_data.get('target_mean_price')
+                current = analyst_data.get('current_price')
+                upside_pct = None
+                if target_mean and current and current > 0:
+                    upside_pct = ((target_mean - current) / current) * 100
+                
+                recommendation_explanation['analyst_components'] = {
+                    'consensus': analyst_consensus['signal'],
+                    'num_analysts': analyst_consensus['num_analysts'],
+                    'recommendation_mean': f"{analyst_consensus['recommendation_mean']:.2f}",
+                    'analyst_score': f'{analyst_score:.2f}',
+                    'target_price': f'${target_mean:.2f}' if target_mean else 'N/A',
+                    'current_price': f'${current:.2f}' if current else 'N/A',
+                    'upside': f'{upside_pct:+.1f}%' if upside_pct is not None else 'N/A',
+                    'recommendation_weight': '70% of analyst score',
+                    'target_weight': '30% of analyst score'
+                }
             
             if combined_score > 0.65:
                 recommendation = 'STRONG BUY'
@@ -227,6 +288,9 @@ class PortfolioAnalyzer:
                 'technical_score': technical_signals['score'],
                 'technical_signal': technical_signals['signal'],
                 'technical_reasons': technical_signals['reasons'],
+                'analyst_score': analyst_score,
+                'analyst_consensus': analyst_consensus,
+                'analyst_data': analyst_data if analyst_data.get('has_data', False) else None,
                 'current_price': current_price,
                 'price_change': price_change,
                 'news_count': len(news_sentiment_results),

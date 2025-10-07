@@ -1028,11 +1028,52 @@ function renderStockDetails(ticker, resultIndex) {
                     <div class="metric-label">Technical Score</div>
                     <div class="metric-value">${r.technical_score.toFixed(3)}</div>
                 </div>
+                ${r.analyst_score !== null && r.analyst_score !== undefined ? `
+                <div class="metric-box">
+                    <div class="metric-label">Analyst Score</div>
+                    <div class="metric-value">${r.analyst_score.toFixed(3)}</div>
+                </div>
+                ` : ''}
                 <div class="metric-box">
                     <div class="metric-label">Current Price</div>
                     <div class="metric-value">${formatPrice(r.current_price, r.ticker)}</div>
                 </div>
             </div>
+            
+            ${r.analyst_consensus ? `
+                <div class="section-title">👔 Analyst Consensus</div>
+                <div class="alert alert-info">
+                    <div style="display: flex; justify-content: space-between; align-items: start; gap: 15px;">
+                        <div style="flex: 1;">
+                            <div style="margin-bottom: 8px;">
+                                <strong style="font-size: 1.1em;">${r.analyst_consensus.signal}</strong>
+                                <span style="color: #6c757d;"> - ${r.analyst_consensus.num_analysts} analyst${r.analyst_consensus.num_analysts !== 1 ? 's' : ''}</span>
+                            </div>
+                            ${r.analyst_data && r.analyst_data.target_mean_price ? `
+                            <div style="font-size: 0.95em; color: #495057;">
+                                <div>
+                                    <span style="opacity: 0.8;">Price Target:</span> 
+                                    <strong>$${r.analyst_data.target_mean_price.toFixed(2)}</strong>
+                                    ${r.analyst_data.target_high_price ? ` (High: $${r.analyst_data.target_high_price.toFixed(2)})` : ''}
+                                </div>
+                                ${r.analyst_data.current_price ? `
+                                <div style="margin-top: 5px;">
+                                    <span style="opacity: 0.8;">Upside Potential:</span>
+                                    <strong style="color: ${((r.analyst_data.target_mean_price - r.analyst_data.current_price) / r.analyst_data.current_price) >= 0 ? '#22c55e' : '#ef4444'};">
+                                        ${(((r.analyst_data.target_mean_price - r.analyst_data.current_price) / r.analyst_data.current_price) * 100).toFixed(1)}%
+                                    </strong>
+                                </div>
+                                ` : ''}
+                            </div>
+                            ` : ''}
+                        </div>
+                        <div style="text-align: right; font-size: 0.9em; color: #6c757d;">
+                            <div>Rec. Mean: ${r.analyst_consensus.recommendation_mean.toFixed(2)}</div>
+                            <div style="font-size: 0.85em; opacity: 0.8;">(1=Strong Buy, 5=Strong Sell)</div>
+                        </div>
+                    </div>
+                </div>
+            ` : ''}
             
             <div class="section-title">🔍 Technical Indicators</div>
             <p><strong>Signal:</strong> ${r.technical_signal}</p>
@@ -1798,6 +1839,7 @@ function showRecommendationExplanation(ticker) {
     
     const exp = result.recommendation_explanation;
     const sentComponents = exp.sentiment_components;
+    const analystComponents = exp.analyst_components;
     
     // Build explanation HTML
     let explanationHTML = `
@@ -1822,6 +1864,25 @@ function showRecommendationExplanation(ticker) {
                 ${exp.technical_components.map(reason => `<li>${reason}</li>`).join('')}
                 <li><strong>Technical Score:</strong> ${result.technical_score.toFixed(2)}</li>
             </ul>
+            
+            ${analystComponents ? `
+            <h6 class="mt-3 mb-2">👔 Analyst Consensus (${exp.analyst_weight} weight)</h6>
+            <ul>
+                <li><strong>Consensus:</strong> ${analystComponents.consensus} (${analystComponents.num_analysts} analyst${analystComponents.num_analysts !== 1 ? 's' : ''})</li>
+                <li><strong>Recommendation Mean:</strong> ${analystComponents.recommendation_mean} (1=Strong Buy, 5=Strong Sell)</li>
+                <li><strong>Price Target:</strong> ${analystComponents.target_price} (Current: ${analystComponents.current_price})</li>
+                <li><strong>Upside Potential:</strong> ${analystComponents.upside}</li>
+                <li><strong>Analyst Score:</strong> ${analystComponents.analyst_score}</li>
+                <li style="font-size: 0.9em; color: #6c757d;">
+                    Note: Analyst score is ${analystComponents.recommendation_weight} from consensus ratings, ${analystComponents.target_weight} from price targets
+                </li>
+            </ul>
+            ` : `
+            <div class="alert alert-warning mt-3">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Note:</strong> No analyst coverage available for this stock (requires at least 3 analysts). Recommendation based on sentiment and technical analysis only.
+            </div>
+            `}
             
             <h6 class="mt-3 mb-2">🎯 Recommendation Thresholds</h6>
             <table class="table table-sm table-bordered">
