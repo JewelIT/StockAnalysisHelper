@@ -184,15 +184,17 @@ class PortfolioAnalyzer:
             # Combined Recommendation
             # Three-way weighting when analyst data is available
             if analyst_score is not None:
-                # With analyst data: 25% sentiment, 45% technical, 30% analyst
+                # With analyst data: Professional analysts get priority
+                # 20% sentiment, 30% technical, 50% analyst consensus
+                # Rationale: Professional analysts have done deep research and have significant upside/downside targets
                 combined_score = (
-                    avg_sentiment_score * 0.25 + 
-                    technical_signals['score'] * 0.45 + 
-                    analyst_score * 0.30
+                    avg_sentiment_score * 0.20 + 
+                    technical_signals['score'] * 0.30 + 
+                    analyst_score * 0.50
                 )
-                sentiment_weight_used = '25%'
-                technical_weight_used = '45%'
-                analyst_weight_used = '30%'
+                sentiment_weight_used = '20%'
+                technical_weight_used = '30%'
+                analyst_weight_used = '50%'
                 
                 formula = f'Combined Score = (Sentiment × {sentiment_weight_used}) + (Technical × {technical_weight_used}) + (Analyst Consensus × {analyst_weight_used})'
             elif not sentiment_results:

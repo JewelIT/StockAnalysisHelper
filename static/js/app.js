@@ -1007,6 +1007,34 @@ function renderStockDetails(ticker, resultIndex) {
                     <span style="color: #22c55e; font-weight: 600;">⭐ In Portfolio</span>
                 `}
             </div>
+            
+            <!-- Recommendation Comparison -->
+            ${r.analyst_consensus ? `
+            <div class="alert alert-light border" style="margin-bottom: 1.5rem;">
+                <div class="row align-items-center">
+                    <div class="col-md-6 text-center border-end">
+                        <small class="text-muted d-block mb-2">📊 Wall Street Consensus</small>
+                        <span class="badge" style="font-size: 1.1rem; padding: 0.5rem 1rem; background: #0d6efd; color: white;">
+                            ${r.analyst_consensus.signal}
+                        </span>
+                        <small class="d-block mt-2 text-muted">${r.analyst_consensus.num_analysts} analysts</small>
+                    </div>
+                    <div class="col-md-6 text-center">
+                        <small class="text-muted d-block mb-2">🤖 Our AI Recommendation</small>
+                        <span class="badge" style="font-size: 1.1rem; padding: 0.5rem 1rem; background: ${r.color}; color: white;">
+                            ${r.recommendation}
+                        </span>
+                        <small class="d-block mt-2 text-muted">Score: ${r.combined_score.toFixed(2)}</small>
+                    </div>
+                </div>
+                <hr class="my-2">
+                <small class="text-muted">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Our recommendation combines analyst consensus (50%), technical indicators (30%), and sentiment analysis (20%)
+                </small>
+            </div>
+            ` : ''}
+            
             <div class="metrics-grid">
                 <div class="metric-box">
                     <div class="metric-label">Combined Score</div>
@@ -1040,40 +1068,86 @@ function renderStockDetails(ticker, resultIndex) {
                 </div>
             </div>
             
+            <!-- Market Analysis Section (Professional Analysts) -->
             ${r.analyst_consensus ? `
-                <div class="section-title">👔 Analyst Consensus</div>
-                <div class="alert alert-info">
-                    <div style="display: flex; justify-content: space-between; align-items: start; gap: 15px;">
-                        <div style="flex: 1;">
-                            <div style="margin-bottom: 8px;">
-                                <strong style="font-size: 1.1em;">${r.analyst_consensus.signal}</strong>
-                                <span style="color: #6c757d;"> - ${r.analyst_consensus.num_analysts} analyst${r.analyst_consensus.num_analysts !== 1 ? 's' : ''}</span>
-                            </div>
-                            ${r.analyst_data && r.analyst_data.target_mean_price ? `
-                            <div style="font-size: 0.95em; color: #495057;">
-                                <div>
-                                    <span style="opacity: 0.8;">Price Target:</span> 
-                                    <strong>$${r.analyst_data.target_mean_price.toFixed(2)}</strong>
-                                    ${r.analyst_data.target_high_price ? ` (High: $${r.analyst_data.target_high_price.toFixed(2)})` : ''}
-                                </div>
-                                ${r.analyst_data.current_price ? `
-                                <div style="margin-top: 5px;">
-                                    <span style="opacity: 0.8;">Upside Potential:</span>
-                                    <strong style="color: ${((r.analyst_data.target_mean_price - r.analyst_data.current_price) / r.analyst_data.current_price) >= 0 ? '#22c55e' : '#ef4444'};">
-                                        ${(((r.analyst_data.target_mean_price - r.analyst_data.current_price) / r.analyst_data.current_price) * 100).toFixed(1)}%
-                                    </strong>
-                                </div>
-                                ` : ''}
-                            </div>
-                            ` : ''}
+                <div class="section-title">� Market Analysis (Wall Street Consensus)</div>
+                <div class="alert alert-info" style="border-left: 4px solid #0d6efd;">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <span class="badge bg-primary" style="font-size: 0.9rem; padding: 0.4rem 0.8rem;">
+                                ${r.analyst_consensus.signal}
+                            </span>
+                            <small class="text-muted ms-2">
+                                ${r.analyst_consensus.num_analysts} professional analyst${r.analyst_consensus.num_analysts !== 1 ? 's' : ''}
+                            </small>
                         </div>
-                        <div style="text-align: right; font-size: 0.9em; color: #6c757d;">
-                            <div>Rec. Mean: ${r.analyst_consensus.recommendation_mean.toFixed(2)}</div>
-                            <div style="font-size: 0.85em; opacity: 0.8;">(1=Strong Buy, 5=Strong Sell)</div>
+                        <div class="text-end">
+                            <small class="text-muted d-block">Consensus Rating</small>
+                            <strong style="font-size: 1.1rem;">${r.analyst_consensus.recommendation_mean.toFixed(2)}/5.0</strong>
+                            <small class="text-muted d-block" style="font-size: 0.75rem;">1=Strong Buy, 5=Strong Sell</small>
                         </div>
                     </div>
+                    ${r.analyst_data && r.analyst_data.target_mean_price ? `
+                    <div class="row g-3 mt-2">
+                        <div class="col-md-4">
+                            <div class="p-2 bg-light rounded">
+                                <small class="text-muted d-block">Price Target</small>
+                                <strong style="font-size: 1.1rem;">$${r.analyst_data.target_mean_price.toFixed(2)}</strong>
+                            </div>
+                        </div>
+                        ${r.analyst_data.target_high_price ? `
+                        <div class="col-md-4">
+                            <div class="p-2 bg-light rounded">
+                                <small class="text-muted d-block">High Target</small>
+                                <strong style="font-size: 1.1rem; color: #22c55e;">$${r.analyst_data.target_high_price.toFixed(2)}</strong>
+                            </div>
+                        </div>
+                        ` : ''}
+                        ${r.analyst_data.target_low_price ? `
+                        <div class="col-md-4">
+                            <div class="p-2 bg-light rounded">
+                                <small class="text-muted d-block">Low Target</small>
+                                <strong style="font-size: 1.1rem; color: #ef4444;">$${r.analyst_data.target_low_price.toFixed(2)}</strong>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                    ${r.analyst_data.current_price ? `
+                    <div class="mt-3 p-3 rounded" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <small class="d-block opacity-75">Projected Return</small>
+                                <strong style="font-size: 1.3rem;">
+                                    ${(((r.analyst_data.target_mean_price - r.analyst_data.current_price) / r.analyst_data.current_price) * 100) >= 0 ? '↗' : '↘'}
+                                    ${Math.abs(((r.analyst_data.target_mean_price - r.analyst_data.current_price) / r.analyst_data.current_price) * 100).toFixed(1)}%
+                                </strong>
+                            </div>
+                            <div class="text-end">
+                                <small class="d-block opacity-75">From Current Price</small>
+                                <span style="font-size: 1.1rem;">$${r.analyst_data.current_price.toFixed(2)}</span>
+                            </div>
+                        </div>
+                    </div>
+                    ` : ''}
+                    ` : ''}
+                    <hr class="my-2">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Data from professional financial analysts tracked by Yahoo Finance
+                    </small>
                 </div>
             ` : ''}
+            
+            <!-- Our AI-Powered Analysis Section -->
+            <div class="section-title" style="border-top: 2px solid #dee2e6; padding-top: 1.5rem; margin-top: 1.5rem;">
+                🤖 Our AI-Powered Analysis
+            </div>
+            <div class="alert alert-secondary" style="border-left: 4px solid #6c757d;">
+                <small class="text-muted">
+                    <i class="bi bi-cpu me-1"></i>
+                    Based on FinBERT sentiment analysis, social media trends, and technical indicators
+                </small>
+            </div>
             
             <div class="section-title">🔍 Technical Indicators</div>
             <p><strong>Signal:</strong> ${r.technical_signal}</p>
