@@ -32,7 +32,7 @@ body {
     flex-shrink: 0;
     background: #f8f9fa;
     border-left: 1px solid #dee2e6;
-    transition: transform var(--transition-speed) ease-in-out, opacity var(--transition-speed) ease-in-out;
+    transition: all var(--transition-speed) ease-in-out;
     z-index: 1000;
     position: relative;
 }
@@ -42,9 +42,14 @@ body {
     border-left-color: #495057;
 }
 
+/* When hidden, remove from layout completely */
 .chat-side-panel.hidden {
-    transform: translateX(100%);
+    width: 0;
+    min-width: 0;
+    max-width: 0;
     opacity: 0;
+    overflow: hidden;
+    border-left-width: 0;
     pointer-events: none;
 }
 
@@ -963,9 +968,19 @@ body {
         top: 0;
         bottom: 0;
         width: 100%;
+        min-width: 100%;
         max-width: 100%;
         z-index: 1050;
         transform: translateX(100%);
+    }
+    
+    /* On mobile, when hidden use transform instead of width:0 */
+    .chat-side-panel.hidden {
+        width: 100%;
+        min-width: 100%;
+        max-width: 100%;
+        transform: translateX(100%);
+        opacity: 1;
     }
     
     .chat-side-panel.show {
