@@ -27,8 +27,9 @@ body {
 /* Chat Side Panel */
 .chat-side-panel {
     width: var(--chat-width);
-    min-width: 320px;
-    max-width: 480px;
+    min-width: var(--chat-width);
+    max-width: var(--chat-width);
+    flex-shrink: 0;
     background: #f8f9fa;
     border-left: 1px solid #dee2e6;
     transition: transform var(--transition-speed) ease-in-out, opacity var(--transition-speed) ease-in-out;
@@ -47,19 +48,13 @@ body {
     pointer-events: none;
 }
 
-/* Main content centering when chat is hidden */
+/* Main content - always uses maximum available width */
 #mainContent {
-    transition: margin var(--transition-speed) ease-in-out, max-width var(--transition-speed) ease-in-out;
-}
-
-body.chat-collapsed #mainContent {
-    margin: 0 auto;
-    max-width: 1400px;
-}
-
-body:not(.chat-collapsed) #mainContent {
-    margin: 0;
+    transition: all var(--transition-speed) ease-in-out;
+    width: 100%;
     max-width: none;
+    margin: 0;
+    flex: 1 1 auto;
 }
 
 /* Chat Header */
@@ -928,6 +923,9 @@ body:not(.chat-collapsed) #mainContent {
 @media (min-width: 1400px) {
     .chat-side-panel {
         width: 420px;
+        min-width: 420px;
+        max-width: 420px;
+        flex-shrink: 0;
     }
 }
 
@@ -936,6 +934,8 @@ body:not(.chat-collapsed) #mainContent {
     .chat-side-panel {
         width: 360px;
         min-width: 360px;
+        max-width: 360px;
+        flex-shrink: 0;
     }
     
     #chatToggleBtn {
