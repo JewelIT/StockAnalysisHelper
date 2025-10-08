@@ -162,6 +162,15 @@ and always emphasize risk management and due diligence.
                 'success': True
             }
         
+        # Check if this is a ticker lookup question
+        ticker_lookup_answer = self._handle_ticker_lookup_question(question)
+        if ticker_lookup_answer:
+            return {
+                'answer': ticker_lookup_answer,
+                'confidence': 0.9,
+                'success': True
+            }
+        
         try:
             # Parse the context data to build a comprehensive answer
             answer = self._generate_advisor_response(question, context, ticker)
@@ -201,6 +210,56 @@ and always emphasize risk management and due diligence.
         has_financial = any(keyword in question_lower for keyword in financial_keywords)
         
         return has_non_financial and not has_financial
+    
+    def _handle_ticker_lookup_question(self, question):
+        """
+        Handle questions asking for ticker symbols for any company
+        Returns answer string if it's a ticker lookup question, None otherwise
+        """
+        question_lower = question.lower()
+        
+        # Patterns that indicate ticker lookup questions
+        ticker_patterns = [
+            'what is the ticker', 'what\'s the ticker', 'ticker for', 'ticker of',
+            'ticker symbol for', 'ticker symbol of', 'stock symbol for', 'stock symbol of',
+            'symbol for', 'what ticker', 'tell me the ticker', 'give me the ticker'
+        ]
+        
+        # Check if this is a ticker lookup question
+        is_ticker_lookup = any(pattern in question_lower for pattern in ticker_patterns)
+        
+        if is_ticker_lookup:
+            return """I understand you're looking for a ticker symbol! 🔍
+
+**Here's how to find any company's ticker:**
+
+1. **Yahoo Finance** 📊
+   - Go to [finance.yahoo.com](https://finance.yahoo.com)
+   - Search for the company name
+   - The ticker symbol will be shown prominently (usually 1-5 letters)
+
+2. **Google Search** 🔎
+   - Search: "[Company Name] stock ticker"
+   - Google will show the ticker in a stock card at the top
+
+3. **Company Website** 🌐
+   - Most public companies list their ticker symbol in the investor relations section
+
+**Once you have the ticker, I can help you analyze it!** Just say:
+- "Analyze [TICKER]"
+- "What do you think about [TICKER]?"
+- "Should I invest in [TICKER]?"
+
+**Examples:**
+- Apple → AAPL
+- Microsoft → MSFT
+- Tesla → TSLA
+- Amazon → AMZN
+- Google → GOOGL
+
+*Note: I don't have a built-in database of all tickers, but once you find it, I can provide comprehensive analysis, technical indicators, and investment insights!* 📈"""
+        
+        return None
     
     def _detect_prompt_injection(self, question):
         """

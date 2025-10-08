@@ -241,16 +241,6 @@ Just say the company name and I'll look it up for you! 📊""",
         assistant = self._get_chat_assistant()
         question_lower = question.lower()
         
-        # Check if this is a ticker lookup question FIRST
-        ticker_lookup_response = self._handle_ticker_lookup(question, question_lower)
-        if ticker_lookup_response:
-            return ticker_lookup_response
-        
-        # Check if asking for list of supported companies
-        list_companies_response = self._handle_list_companies(question_lower)
-        if list_companies_response:
-            return list_companies_response
-        
         # Build conversation context
         conversation_context = self._build_conversation_context(conversation_history)
         
