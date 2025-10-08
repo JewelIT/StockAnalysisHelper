@@ -20,7 +20,7 @@ class AnalysisService:
             self.analyzer = PortfolioAnalyzer()
         return self.analyzer
     
-    def analyze(self, tickers, chart_type='candlestick', timeframe='3mo', use_cache=False,
+    def analyze(self, tickers, chart_type='candlestick', timeframe='3mo', theme='dark', use_cache=False,
                 max_news=5, max_social=5, news_sort='relevance', social_sort='relevance',
                 news_days=3, social_days=7):
         """
@@ -30,6 +30,7 @@ class AnalysisService:
             tickers: List of ticker symbols
             chart_type: Type of chart to generate
             timeframe: Historical data timeframe
+            theme: Chart theme ('dark' or 'light')
             use_cache: Use cached data for chart regeneration only
             max_news: Maximum news articles to fetch
             max_social: Maximum social media posts to fetch
@@ -43,7 +44,7 @@ class AnalysisService:
         """
         # Handle cache-based chart regeneration
         if use_cache and len(tickers) == 1 and tickers[0] in self.cache:
-            return self._regenerate_chart(tickers[0], chart_type)
+            return self._regenerate_chart(tickers[0], chart_type, theme)
         
         # Fresh analysis
         analyzer = self._get_analyzer()
@@ -51,6 +52,7 @@ class AnalysisService:
             tickers, 
             chart_type=chart_type, 
             timeframe=timeframe,
+            theme=theme,
             max_news=max_news,
             max_social=max_social,
             news_sort=news_sort,
@@ -64,7 +66,7 @@ class AnalysisService:
         
         return results
     
-    def _regenerate_chart(self, ticker, chart_type):
+    def _regenerate_chart(self, ticker, chart_type, theme='dark'):
         """Regenerate chart from cached data"""
         cached = self.cache[ticker]
         chart_gen = ChartGenerator()
@@ -73,7 +75,9 @@ class AnalysisService:
             ticker,
             cached['df'],
             cached['indicators'],
-            chart_type
+            chart_type,
+            cached.get('timeframe', '3mo'),
+            theme
         )
         
         result = cached['result'].copy()

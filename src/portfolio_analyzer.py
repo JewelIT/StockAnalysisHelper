@@ -36,7 +36,7 @@ class PortfolioAnalyzer:
         self.chart_generator = ChartGenerator()
         self.analyst_fetcher = AnalystConsensusFetcher()
     
-    def analyze_stock(self, ticker, max_news=5, chart_type='candlestick', timeframe='3mo',
+    def analyze_stock(self, ticker, max_news=5, chart_type='candlestick', timeframe='3mo', theme='dark',
                      max_social=5, news_sort='relevance', social_sort='relevance',
                      news_days=3, social_days=7):
         """Comprehensive analysis of a single stock
@@ -46,6 +46,7 @@ class PortfolioAnalyzer:
             max_news: Maximum number of news articles to fetch (default: 5)
             chart_type: Type of chart ('candlestick', 'line', 'ohlc', 'area')
             timeframe: Chart timeframe (1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, max)
+            theme: Chart theme ('dark' or 'light')
             max_social: Maximum number of social media posts to fetch (default: 5)
             news_sort: How to sort news ('relevance', 'date_desc', 'date_asc')
             social_sort: How to sort social media ('relevance', 'date_desc', 'date_asc')
@@ -63,7 +64,7 @@ class PortfolioAnalyzer:
         if social_sort not in valid_sort_options:
             social_sort = 'relevance'
         
-        print(f"\nAnalyzing {ticker} ({timeframe})...")
+        print(f"\nAnalyzing {ticker} ({timeframe}, theme: {theme})...")
         
         result = {
             'ticker': ticker,
@@ -296,7 +297,7 @@ class PortfolioAnalyzer:
             price_change = ((df['Close'].iloc[-1] - df['Close'].iloc[0]) / df['Close'].iloc[0]) * 100
             
             # Generate chart data (JSON format for client-side rendering)
-            chart_fig = self.chart_generator.create_candlestick_chart(ticker, df, indicators, chart_type, timeframe)
+            chart_fig = self.chart_generator.create_candlestick_chart(ticker, df, indicators, chart_type, timeframe, theme)
             
             # Store data for later chart regeneration
             result.update({
@@ -321,7 +322,8 @@ class PortfolioAnalyzer:
                 'social_count': len(social_sentiment_results),
                 'sentiment_results': sentiment_results,
                 'chart_data': chart_fig.to_json() if chart_fig else None,
-                'chart_type_used': chart_type  # Track what chart type was used
+                'chart_type_used': chart_type,  # Track what chart type was used
+                'timeframe_used': timeframe  # Track what timeframe was used
             })
             
         except Exception as e:
@@ -330,7 +332,7 @@ class PortfolioAnalyzer:
         
         return result
     
-    def analyze_portfolio(self, tickers, chart_type='candlestick', timeframe='3mo',
+    def analyze_portfolio(self, tickers, chart_type='candlestick', timeframe='3mo', theme='dark',
                          max_news=5, max_social=5, news_sort='relevance', social_sort='relevance',
                          news_days=3, social_days=7):
         """Analyze multiple stocks
@@ -339,6 +341,7 @@ class PortfolioAnalyzer:
             tickers: List of ticker symbols
             chart_type: Type of chart to generate
             timeframe: Chart timeframe
+            theme: Chart theme ('dark' or 'light')
             max_news: Maximum news articles to fetch
             max_social: Maximum social media posts to fetch
             news_sort: How to sort news
@@ -349,7 +352,7 @@ class PortfolioAnalyzer:
         results = []
         for ticker in tickers:
             result = self.analyze_stock(ticker.strip().upper(), chart_type=chart_type, timeframe=timeframe,
-                                       max_news=max_news, max_social=max_social, 
+                                       theme=theme, max_news=max_news, max_social=max_social, 
                                        news_sort=news_sort, social_sort=social_sort,
                                        news_days=news_days, social_days=social_days)
             if result['success']:

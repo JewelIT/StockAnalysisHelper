@@ -61,17 +61,48 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <!-- Input Group -->
-                        <div class="input-group mb-3">
-                            <span class="input-group-text">
-                                <i class="bi bi-search"></i>
-                            </span>
-                            <input type="text" class="form-control" id="tickerInput" 
-                                   placeholder="Enter ticker symbol (e.g., AAPL, MSFT, BTC-USD)" 
-                                   aria-label="Ticker symbol">
-                            <button class="btn btn-primary" type="button" onclick="addTicker()">
-                                <i class="bi bi-plus-circle me-1"></i> Add
-                            </button>
+                        <!-- Compact Input Row -->
+                        <div class="row g-2 mb-3 align-items-end">
+                            <!-- Ticker Input with Autocomplete -->
+                            <div class="col-auto flex-grow-1">
+                                <label for="tickerInput" class="form-label small mb-1">
+                                    <i class="bi bi-search me-1"></i> Stock Ticker or Company
+                                </label>
+                                <div style="position: relative;">
+                                    <input type="text" class="form-control form-control-sm" id="tickerInput" 
+                                           placeholder="e.g., AAPL or Apple" 
+                                           aria-label="Ticker symbol"
+                                           autocomplete="off">
+                                    <!-- Autocomplete dropdown -->
+                                    <div id="tickerAutocomplete" class="autocomplete-dropdown" style="display: none;"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Timeframe Selector -->
+                            <div class="col-auto" style="min-width: 120px;">
+                                <label for="timeframeSelect" class="form-label small mb-1">
+                                    <i class="bi bi-calendar-range me-1"></i> Timeframe
+                                </label>
+                                <select class="form-select form-select-sm" id="timeframeSelect" aria-label="Select analysis timeframe">
+                                    <option value="1d">1 Day</option>
+                                    <option value="5d">5 Days</option>
+                                    <option value="1wk">1 Week</option>
+                                    <option value="1mo">1 Month</option>
+                                    <option value="3mo" selected>3 Months</option>
+                                    <option value="6mo">6 Months</option>
+                                    <option value="1y">1 Year</option>
+                                    <option value="2y">2 Years</option>
+                                    <option value="5y">5 Years</option>
+                                    <option value="max">Max</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Add Button -->
+                            <div class="col-auto">
+                                <button class="btn btn-primary btn-sm" type="button" onclick="addTicker()" style="white-space: nowrap;">
+                                    <i class="bi bi-plus-circle me-1"></i> Add
+                                </button>
+                            </div>
                         </div>
                         
                         <!-- Ticker Chips -->

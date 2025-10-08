@@ -262,6 +262,20 @@ body {
     border-bottom-color: #495057;
 }
 
+/* Fix bg-light in dark theme for score boxes */
+[data-bs-theme="dark"] .bg-light {
+    background-color: #343a40 !important;
+    color: #dee2e6 !important;
+}
+
+[data-bs-theme="dark"] .bg-light .text-muted {
+    color: #adb5bd !important;
+}
+
+[data-bs-theme="dark"] .text-muted {
+    color: #adb5bd !important;
+}
+
 /* Ticker Chips */
 #tickerChips {
     display: flex;
@@ -917,6 +931,25 @@ body {
     overflow: hidden;
 }
 
+/* Indicator Controls */
+.indicator-controls {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+[data-bs-theme="dark"] .indicator-controls {
+    background: #2b3035;
+    border-color: #495057;
+}
+
+.indicator-controls h6 {
+    color: inherit;
+}
+
+.indicator-controls .form-check-label {
+    color: inherit;
+}
+
 /* Buttons */
 .btn {
     border-radius: var(--border-radius);
@@ -936,6 +969,105 @@ body {
 /* Loading Spinner */
 #loadingIndicator .spinner-border {
     animation: spinner-border 0.75s linear infinite;
+}
+
+/* Autocomplete Dropdown */
+.autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border: 1px solid #dee2e6;
+    border-top: none;
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+[data-bs-theme="dark"] .autocomplete-dropdown {
+    background: #2b3035;
+    border-color: #495057;
+}
+
+.autocomplete-item {
+    padding: 10px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #dee2e6;
+    transition: background-color 0.2s ease;
+    background: #ffffff;
+}
+
+[data-bs-theme="dark"] .autocomplete-item {
+    border-bottom-color: #495057;
+    background: #2b3035;
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.active {
+    background-color: #f8f9fa;
+}
+
+[data-bs-theme="dark"] .autocomplete-item:hover,
+[data-bs-theme="dark"] .autocomplete-item.active {
+    background-color: #343a40;
+}
+
+.autocomplete-ticker {
+    font-weight: 600;
+    color: var(--primary-color);
+    font-size: 0.95rem;
+}
+
+.autocomplete-name {
+    color: #6c757d;
+    font-size: 0.85rem;
+    margin-left: 8px;
+}
+
+[data-bs-theme="dark"] .autocomplete-name {
+    color: #adb5bd;
+}
+
+.autocomplete-exchange {
+    color: #6c757d;
+    font-size: 0.75rem;
+    float: right;
+}
+
+[data-bs-theme="dark"] .autocomplete-exchange {
+    color: #868e96;
+}
+
+.autocomplete-loading {
+    padding: 12px;
+    text-align: center;
+    color: #6c757d;
+    background: #ffffff;
+}
+
+[data-bs-theme="dark"] .autocomplete-loading {
+    color: #adb5bd;
+    background: #2b3035;
+}
+
+.autocomplete-no-results {
+    padding: 12px;
+    text-align: center;
+    color: #868e96;
+    font-style: italic;
+    background: #ffffff;
+}
+
+[data-bs-theme="dark"] .autocomplete-no-results {
+    color: #6c757d;
+    background: #2b3035;
 }
 
 /* Toast Notifications */

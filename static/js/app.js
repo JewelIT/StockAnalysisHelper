@@ -162,11 +162,15 @@ document.addEventListener('DOMContentLoaded', function() {
     loadSessionTickers();
     updateTickerChips();
     updateChatTickers();  // Populate chat with portfolio tickers
+    initTickerAutocomplete();  // Initialize autocomplete
     
-    // Enter key support for analysis
+    // Enter key support for analysis (handled in autocomplete now, but keep as fallback)
     document.getElementById('tickerInput').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
-            addTicker();
+            const dropdown = document.getElementById('tickerAutocomplete');
+            if (dropdown.style.display === 'none') {
+                addTicker();
+            }
         }
     });
 });
@@ -206,9 +210,132 @@ function saveSessionTickers() {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionTickers));
 }
 
+// Ticker autocomplete functionality
+let autocompleteTimeout = null;
+let selectedAutocompleteIndex = -1;
+
+function initTickerAutocomplete() {
+    const input = document.getElementById('tickerInput');
+    const dropdown = document.getElementById('tickerAutocomplete');
+    
+    if (!input || !dropdown) return;
+    
+    // Handle input changes
+    input.addEventListener('input', function() {
+        const query = this.value.trim();
+        
+        // Clear existing timeout
+        if (autocompleteTimeout) {
+            clearTimeout(autocompleteTimeout);
+        }
+        
+        // Hide dropdown if query too short
+        if (query.length < 1) {
+            dropdown.style.display = 'none';
+            return;
+        }
+        
+        // Debounce search
+        autocompleteTimeout = setTimeout(() => {
+            searchTickers(query);
+        }, 300);
+    });
+    
+    // Handle keyboard navigation
+    input.addEventListener('keydown', function(e) {
+        const items = dropdown.querySelectorAll('.autocomplete-item');
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedAutocompleteIndex = Math.min(selectedAutocompleteIndex + 1, items.length - 1);
+            updateAutocompleteSelection(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedAutocompleteIndex = Math.max(selectedAutocompleteIndex - 1, -1);
+            updateAutocompleteSelection(items);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (selectedAutocompleteIndex >= 0 && items[selectedAutocompleteIndex]) {
+                const ticker = items[selectedAutocompleteIndex].dataset.ticker;
+                selectTicker(ticker);
+            } else {
+                addTicker();
+            }
+        } else if (e.key === 'Escape') {
+            dropdown.style.display = 'none';
+            selectedAutocompleteIndex = -1;
+        }
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.style.display = 'none';
+            selectedAutocompleteIndex = -1;
+        }
+    });
+}
+
+async function searchTickers(query) {
+    const dropdown = document.getElementById('tickerAutocomplete');
+    
+    try {
+        dropdown.innerHTML = '<div class="autocomplete-loading"><i class="bi bi-search"></i> Searching...</div>';
+        dropdown.style.display = 'block';
+        
+        const response = await fetch(`/search_ticker?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        if (data.results && data.results.length > 0) {
+            dropdown.innerHTML = data.results.map(item => `
+                <div class="autocomplete-item" data-ticker="${item.ticker}" onclick="selectTicker('${item.ticker}')">
+                    <span class="autocomplete-ticker">${item.ticker}</span>
+                    <span class="autocomplete-name">${item.name || ''}</span>
+                    ${item.exchange ? `<span class="autocomplete-exchange">${item.exchange}</span>` : ''}
+                </div>
+            `).join('');
+        } else {
+            dropdown.innerHTML = `
+                <div class="autocomplete-no-results">
+                    No results found. Try entering the exact ticker symbol.
+                </div>
+            `;
+        }
+        
+        selectedAutocompleteIndex = -1;
+    } catch (error) {
+        console.error('Ticker search error:', error);
+        dropdown.innerHTML = '<div class="autocomplete-no-results">Search unavailable. Enter ticker directly.</div>';
+    }
+}
+
+function updateAutocompleteSelection(items) {
+    items.forEach((item, index) => {
+        if (index === selectedAutocompleteIndex) {
+            item.classList.add('active');
+            item.scrollIntoView({ block: 'nearest' });
+        } else {
+            item.classList.remove('active');
+        }
+    });
+}
+
+function selectTicker(ticker) {
+    const input = document.getElementById('tickerInput');
+    const dropdown = document.getElementById('tickerAutocomplete');
+    
+    input.value = ticker;
+    dropdown.style.display = 'none';
+    selectedAutocompleteIndex = -1;
+    
+    // Automatically add the ticker
+    addTicker();
+}
+
 // Add ticker to analysis session
 function addTicker() {
     const input = document.getElementById('tickerInput');
+    const dropdown = document.getElementById('tickerAutocomplete');
     const ticker = input.value.trim().toUpperCase();
     
     if (!ticker) {
@@ -218,11 +345,14 @@ function addTicker() {
     
     if (sessionTickers.includes(ticker)) {
         showToast(`${ticker} is already in your analysis session`, 'info');
+        input.value = '';
+        dropdown.style.display = 'none';
         return;
     }
     
     sessionTickers.push(ticker);
     input.value = '';
+    dropdown.style.display = 'none';
     saveSessionTickers();
     updateTickerChips();
     showToast(`${ticker} added to analysis session`, 'success');
@@ -579,6 +709,7 @@ async function analyzeSingleTicker(ticker) {
      * Analyze a single ticker without showing UI - for chat background analysis
      */
     const chartType = appConfig.defaultChartType;
+    const theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
     
     try {
         const response = await fetch('/analyze', {
@@ -589,6 +720,7 @@ async function analyzeSingleTicker(ticker) {
             body: JSON.stringify({ 
                 tickers: [ticker],  // Only analyze this one ticker
                 chart_type: chartType,
+                theme: theme,
                 max_news: appConfig.maxNews,
                 max_social: appConfig.maxSocial,
                 news_sort: appConfig.newsSort,
@@ -624,6 +756,24 @@ async function analyzeSingleTicker(ticker) {
     }
 }
 
+// Calculate news/social days based on timeframe
+function getDaysFromTimeframe(timeframe) {
+    const timeframeMap = {
+        '1d': { news: 1, social: 1 },
+        '5d': { news: 5, social: 5 },
+        '1wk': { news: 7, social: 7 },
+        '1mo': { news: 30, social: 30 },
+        '3mo': { news: 7, social: 14 },
+        '6mo': { news: 14, social: 30 },
+        '1y': { news: 30, social: 60 },
+        '2y': { news: 60, social: 90 },
+        '5y': { news: 90, social: 180 },
+        'max': { news: 180, social: 365 }
+    };
+    
+    return timeframeMap[timeframe] || { news: 7, social: 14 };
+}
+
 async function analyzePortfolio() {
     if (sessionTickers.length === 0) {
         showToast('Please add at least one ticker to analyze', 'warning');
@@ -632,6 +782,15 @@ async function analyzePortfolio() {
     
     // Use configured default chart type
     const chartType = appConfig.defaultChartType;
+    
+    // Get selected timeframe
+    const timeframe = document.getElementById('timeframeSelect').value || '3mo';
+    
+    // Calculate appropriate news/social days based on timeframe
+    const days = getDaysFromTimeframe(timeframe);
+    
+    // Detect current theme
+    const theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
     
     // Show loading
     document.getElementById('loadingIndicator').style.display = 'block';
@@ -647,12 +806,14 @@ async function analyzePortfolio() {
             body: JSON.stringify({ 
                 tickers: sessionTickers,
                 chart_type: chartType,  // Initial chart type for all
+                timeframe: timeframe,    // Analysis timeframe
+                theme: theme,            // Chart theme (dark/light)
                 max_news: appConfig.maxNews,
                 max_social: appConfig.maxSocial,
                 news_sort: appConfig.newsSort,
                 social_sort: appConfig.socialSort,
-                news_days: appConfig.newsDays,
-                social_days: appConfig.socialDays
+                news_days: days.news,      // Dynamic based on timeframe
+                social_days: days.social   // Dynamic based on timeframe
             })
         });
         
@@ -1289,7 +1450,9 @@ function renderStockDetails(ticker, resultIndex) {
                         <div class="news-item sentiment-${sent.label}">
                             <div class="news-title">
                                 <strong>${sent.source || 'Social Media'}</strong>: ${textPreview}
-                                ${sent.link ? `<a href="${sent.link}" target="_blank" rel="noopener" class="news-link-icon" title="View post">🔗</a>` : ''}
+                                ${sent.link && !sent.link.includes('message/undefined') && !sent.link.includes('message/') ? 
+                                    `<a href="${sent.link}" target="_blank" rel="noopener" class="news-link-icon" title="View post">🔗</a>` : 
+                                    `<span class="news-link-icon" title="No link available" style="cursor: default;">🔗💔</span>`}
                             </div>
                             ${sent.created_at ? `<div class="news-timestamp">📅 ${formatTimestamp(sent.created_at)}</div>` : ''}
                             <div class="news-sentiment">
@@ -1318,15 +1481,15 @@ function renderStockDetails(ticker, resultIndex) {
                     <label for="timeframe_${r.ticker}" style="margin-left: 15px;">Timeframe:</label>
                     <select id="timeframe_${r.ticker}" class="chart-type-select-inline" 
                             onchange="updateChart('${r.ticker}', ${resultIndex})">
-                        <option value="1d">1 Day</option>
-                        <option value="5d">1 Week</option>
-                        <option value="1mo">1 Month</option>
-                        <option value="3mo" selected>3 Months</option>
-                        <option value="6mo">6 Months</option>
-                        <option value="1y">1 Year</option>
-                        <option value="2y">2 Years</option>
-                        <option value="5y">5 Years</option>
-                        <option value="max">All Time</option>
+                        <option value="1d" ${r.timeframe_used === '1d' ? 'selected' : ''}>1 Day</option>
+                        <option value="5d" ${r.timeframe_used === '5d' ? 'selected' : ''}>1 Week</option>
+                        <option value="1mo" ${r.timeframe_used === '1mo' ? 'selected' : ''}>1 Month</option>
+                        <option value="3mo" ${!r.timeframe_used || r.timeframe_used === '3mo' ? 'selected' : ''}>3 Months</option>
+                        <option value="6mo" ${r.timeframe_used === '6mo' ? 'selected' : ''}>6 Months</option>
+                        <option value="1y" ${r.timeframe_used === '1y' ? 'selected' : ''}>1 Year</option>
+                        <option value="2y" ${r.timeframe_used === '2y' ? 'selected' : ''}>2 Years</option>
+                        <option value="5y" ${r.timeframe_used === '5y' ? 'selected' : ''}>5 Years</option>
+                        <option value="max" ${r.timeframe_used === 'max' ? 'selected' : ''}>All Time</option>
                     </select>
                     
                     <button class="btn-small btn-secondary" onclick="toggleIndicators('${r.ticker}')" 
@@ -1340,7 +1503,7 @@ function renderStockDetails(ticker, resultIndex) {
                 </div>
                 
                 <!-- Indicator Controls (Hidden by default) -->
-                <div id="indicatorControls_${r.ticker}" class="indicator-controls" style="display: none; margin-top: 10px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                <div id="indicatorControls_${r.ticker}" class="indicator-controls" style="display: none; margin-top: 10px; padding: 15px; border-radius: 8px;">
                     <div class="row g-3">
                         <div class="col-md-6">
                             <h6 style="font-size: 0.9rem; margin-bottom: 10px;">
@@ -1474,9 +1637,17 @@ function renderChart(ticker, chartDataJson) {
 }
 
 // Update chart type for a specific ticker
-async function updateChart(ticker, resultIndex) {
-    const chartType = document.getElementById(`chartType_${ticker}`).value;
-    const timeframe = document.getElementById(`timeframe_${ticker}`).value;
+async function updateChart(ticker, resultIndex, chartType = null, timeframe = null) {
+    // Get values from controls if not provided
+    if (!chartType) {
+        const chartTypeSelect = document.getElementById(`chartType_${ticker}`);
+        chartType = chartTypeSelect ? chartTypeSelect.value : 'candlestick';
+    }
+    if (!timeframe) {
+        const timeframeSelect = document.getElementById(`timeframe_${ticker}`);
+        timeframe = timeframeSelect ? timeframeSelect.value : '3mo';
+    }
+    
     console.log(`Updating ${ticker} to ${chartType} chart with ${timeframe} timeframe`);
     
     // Show loading placeholder with spinner (preserve layout)
@@ -1498,6 +1669,9 @@ async function updateChart(ticker, resultIndex) {
     `;
     
     try {
+        // Detect current theme
+        const theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+        
         const response = await fetch('/analyze', {
             method: 'POST',
             headers: {
@@ -1507,6 +1681,7 @@ async function updateChart(ticker, resultIndex) {
                 tickers: [ticker],
                 chart_type: chartType,
                 timeframe: timeframe,
+                theme: theme,
                 use_cache: false,
                 max_news: appConfig.maxNews,
                 max_social: appConfig.maxSocial,
@@ -1561,8 +1736,7 @@ function toggleIndicators(ticker) {
     }
 }
 
-// Apply indicator settings (currently just refreshes chart with selected indicators)
-// TODO: Implement selective indicator rendering
+// Apply indicator settings by showing/hiding traces
 function applyIndicatorSettings(ticker, resultIndex) {
     const settings = {
         showSMA20: document.getElementById(`showSMA20_${ticker}`)?.checked ?? true,
@@ -1580,28 +1754,45 @@ function applyIndicatorSettings(ticker, resultIndex) {
     }
     window.indicatorSettings[ticker] = settings;
     
+    // Get the chart div
+    const chartDiv = document.getElementById(`chart_${ticker}`);
+    if (!chartDiv || !chartDiv.data) {
+        console.error('Chart not found or not initialized');
+        return;
+    }
+    
+    // Map indicator names to trace names in the chart
+    const updates = [];
+    
+    chartDiv.data.forEach((trace, index) => {
+        const traceName = trace.name || '';
+        let visible = true; // Default to visible (keep price and volume)
+        
+        // Determine visibility based on trace name
+        if (traceName.includes('SMA(20)')) {
+            visible = settings.showSMA20;
+        } else if (traceName.includes('SMA(50)')) {
+            visible = settings.showSMA50;
+        } else if (traceName.includes('BB Upper') || traceName.includes('BB Lower')) {
+            visible = settings.showBB;
+        } else if (traceName.includes('MACD') || traceName.includes('Signal') || traceName.includes('MACD Histogram')) {
+            visible = settings.showMACD;
+        } else if (traceName.includes('RSI')) {
+            visible = settings.showRSI;
+        }
+        
+        updates.push({ visible: visible });
+    });
+    
+    // Update trace visibility for each trace individually
+    updates.forEach((update, index) => {
+        Plotly.restyle(chartDiv, { visible: update.visible }, [index]);
+    });
+    
     // Hide controls
     toggleIndicators(ticker);
     
-    // Show info message that this feature is coming soon
-    const controlsDiv = document.getElementById(`indicatorControls_${ticker}`);
-    if (controlsDiv) {
-        const originalHTML = controlsDiv.innerHTML;
-        controlsDiv.innerHTML = `
-            <div class="alert alert-info mb-0">
-                <i class="bi bi-info-circle me-2"></i>
-                <strong>Coming Soon!</strong> Selective indicator display is being implemented. 
-                Currently, all available indicators are shown based on data availability.
-            </div>
-        `;
-        
-        setTimeout(() => {
-            controlsDiv.innerHTML = originalHTML;
-        }, 3000);
-    }
-    
-    // For now, just refresh the chart
-    // refreshChart(ticker, resultIndex);
+    showToast(`Indicator settings applied for ${ticker}`, 'success');
 }
 
 // ===== AI CHAT FUNCTIONS =====
@@ -2274,7 +2465,60 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     console.log('✅ Theme, portfolio, and chat initialized');
+    
+    // Listen for theme changes and refresh charts
+    setupThemeChangeListener();
 });
+
+// Setup theme change listener to refresh charts automatically
+function setupThemeChangeListener() {
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'data-bs-theme') {
+                const newTheme = document.documentElement.getAttribute('data-bs-theme');
+                console.log(`🎨 Theme changed to: ${newTheme}`);
+                refreshAllChartsForTheme();
+            }
+        });
+    });
+
+    observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-bs-theme']
+    });
+    
+    console.log('👀 Theme change observer activated');
+}
+
+// Refresh all visible charts when theme changes
+function refreshAllChartsForTheme() {
+    if (!window.analysisResults || window.analysisResults.length === 0) {
+        console.log('No charts to refresh');
+        return;
+    }
+    
+    const theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+    console.log(`🔄 Refreshing ${window.analysisResults.length} chart(s) for ${theme} theme`);
+    
+    window.analysisResults.forEach((result, index) => {
+        const chartDiv = document.getElementById(`chart_${result.ticker}`);
+        
+        // Only refresh if chart exists and has been rendered
+        if (chartDiv && chartDiv.innerHTML.trim() !== '') {
+            console.log(`  ↻ Refreshing chart for ${result.ticker}`);
+            
+            // Get current chart type and timeframe from controls
+            const chartTypeSelect = document.getElementById(`chartType_${result.ticker}`);
+            const timeframeSelect = document.getElementById(`timeframe_${result.ticker}`);
+            
+            const chartType = chartTypeSelect ? chartTypeSelect.value : result.chart_type_used;
+            const timeframe = timeframeSelect ? timeframeSelect.value : result.timeframe_used;
+            
+            // Update chart with new theme
+            updateChart(result.ticker, index, chartType, timeframe);
+        }
+    });
+}
 
 // Initialize chat panel - start collapsed
 function initializeChatPanel() {

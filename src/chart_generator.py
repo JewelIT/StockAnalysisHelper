@@ -7,7 +7,7 @@ from .utils import format_timeframe_display
 
 class ChartGenerator:
     @staticmethod
-    def create_candlestick_chart(ticker, df, indicators, chart_type='candlestick', timeframe='3mo'):
+    def create_candlestick_chart(ticker, df, indicators, chart_type='candlestick', timeframe='3mo', theme='dark'):
         """Create interactive chart with indicators
         
         Args:
@@ -16,9 +16,11 @@ class ChartGenerator:
             indicators: Technical indicators
             chart_type: Type of chart ('candlestick', 'line', 'ohlc', 'area', 'volume', 'mountain')
             timeframe: Timeframe for the chart (e.g., '1wk', '1mo', '3mo', '1y')
+            theme: Chart theme ('dark' or 'light')
         """
-        print(f"  📊 Generating {chart_type} chart for {ticker} with {len(df)} data points")
+        print(f"  📊 Generating {chart_type} chart for {ticker} with {len(df)} data points (theme: {theme})")
         print(f"     Price range: ${df['Close'].min():.2f} - ${df['Close'].max():.2f}")
+        print(f"     🎨 THEME IS: {theme} - paper_bgcolor will be {'#111111' if theme == 'dark' else '#ffffff'}")
         
         # Calculate time range for title
         start_date = df.index[0].strftime('%Y-%m-%d')
@@ -267,6 +269,9 @@ class ChartGenerator:
                 fig.add_hline(y=30, line_dash="dash", line_color="green",
                              annotation_text="Oversold", row=current_row, col=1)
         
+        # Configure theme colors early for annotations
+        annotation_color = '#adb5bd' if theme == 'dark' else '#6c757d'
+        
         # Adjust height based on number of rows
         if not has_indicators:
             chart_height = 500 if chart_type != 'volume' else 600
@@ -277,7 +282,7 @@ class ChartGenerator:
                     xref="paper", yref="paper",
                     x=0.5, y=-0.1,
                     showarrow=False,
-                    font=dict(size=12, color="#6c757d"),
+                    font=dict(size=12, color=annotation_color),
                     align="center"
                 )
         else:
@@ -318,22 +323,44 @@ class ChartGenerator:
                 'tickangle': -45
             }
         
+        # Configure theme-based styling
+        if theme == 'dark':
+            grid_color = 'rgba(128,128,128,0.2)'
+            paper_bgcolor = '#111111'
+            plot_bgcolor = '#111111'
+            font_color = '#e0e0e0'
+        else:
+            grid_color = 'rgba(128,128,128,0.2)'
+            paper_bgcolor = '#ffffff'
+            plot_bgcolor = '#ffffff'
+            font_color = '#000000'
+        
         fig.update_layout(
             height=chart_height,
             showlegend=True,
             xaxis_rangeslider_visible=False,
-            template='plotly_white',
             hovermode='x unified',
-            font=dict(size=10)
+            font=dict(size=10, color=font_color),
+            paper_bgcolor=paper_bgcolor,
+            plot_bgcolor=plot_bgcolor,
+            # Remove template - set colors explicitly instead
         )
+        
+        print(f"     ✅ Layout updated: paper_bgcolor={paper_bgcolor}, plot_bgcolor={plot_bgcolor}, font_color={font_color}")
         
         # Apply custom x-axis formatting to all subplots
         fig.update_xaxes(
             showgrid=True, 
             gridwidth=1, 
-            gridcolor='rgba(128,128,128,0.2)',
+            gridcolor=grid_color,
+            linecolor=font_color if theme == 'dark' else '#000000',
             **xaxis_format
         )
-        fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='rgba(128,128,128,0.2)')
+        fig.update_yaxes(
+            showgrid=True, 
+            gridwidth=1, 
+            gridcolor=grid_color,
+            linecolor=font_color if theme == 'dark' else '#000000'
+        )
         
         return fig
