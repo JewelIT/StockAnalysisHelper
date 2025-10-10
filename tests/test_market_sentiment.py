@@ -159,12 +159,13 @@ class TestMarketSentimentService(unittest.TestCase):
         recommendations = self.service._generate_buy_recommendations(sector_data, 'BULLISH')
         
         self.assertIsInstance(recommendations, list)
-        self.assertLessEqual(len(recommendations), 3)
+        self.assertLessEqual(len(recommendations), 10)  # Now returns up to 10
         
         for rec in recommendations:
             self.assertIn('ticker', rec)
             self.assertIn('reason', rec)
             self.assertIn('sector', rec)
+            self.assertIn('price', rec)  # Price field added
             self.assertIsInstance(rec['ticker'], str)
             self.assertIsInstance(rec['reason'], str)
             self.assertIsInstance(rec['sector'], str)
@@ -180,12 +181,13 @@ class TestMarketSentimentService(unittest.TestCase):
         recommendations = self.service._generate_sell_recommendations(sector_data, 'BEARISH')
         
         self.assertIsInstance(recommendations, list)
-        self.assertLessEqual(len(recommendations), 3)
+        self.assertLessEqual(len(recommendations), 10)  # Now returns up to 10
         
         for rec in recommendations:
             self.assertIn('ticker', rec)
             self.assertIn('reason', rec)
             self.assertIn('sector', rec)
+            self.assertIn('price', rec)  # Price field added
     
     def test_cache_save_and_load(self):
         """Test: Cache saving and loading"""
@@ -304,6 +306,55 @@ class TestMarketSentimentAPI(unittest.TestCase):
         self.assertIn('error', data)
 
 
+class TestPriceFiltering(unittest.TestCase):
+    """Test price filtering functionality"""
+    
+    def test_price_range_filtering(self):
+        """Test: Price range filtering works correctly"""
+        recommendations = [
+            {'ticker': 'AAPL', 'price': 150.0, 'sector': 'Tech'},
+            {'ticker': 'F', 'price': 12.0, 'sector': 'Auto'},
+            {'ticker': 'BAC', 'price': 30.0, 'sector': 'Finance'},
+            {'ticker': 'AMZN', 'price': 175.0, 'sector': 'Tech'},
+            {'ticker': 'GE', 'price': 4.5, 'sector': 'Industrial'},
+        ]
+        
+        # Test 1-5 range
+        filtered = [r for r in recommendations if 1 <= r['price'] < 5]
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]['ticker'], 'GE')
+        
+        # Test 10-25 range
+        filtered = [r for r in recommendations if 10 <= r['price'] < 25]
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]['ticker'], 'F')
+        
+        # Test 25-100 range
+        filtered = [r for r in recommendations if 25 <= r['price'] < 100]
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]['ticker'], 'BAC')
+        
+        # Test 100+ range
+        filtered = [r for r in recommendations if r['price'] >= 100]
+        self.assertEqual(len(filtered), 2)
+        
+    def test_recommendations_include_prices(self):
+        """Test: Generated recommendations include price information"""
+        service = MarketSentimentService()
+        sector_data = {
+            'Technology': {'symbol': 'XLK', 'change_pct': 1.0, 'trend': 'up'}
+        }
+        
+        result = service.generate_sentiment_analysis({}, sector_data)
+        
+        # Check that at least some recommendations have prices
+        buy_recs = result.get('buy_recommendations', [])
+        if len(buy_recs) > 0:
+            # At least one should have a price field
+            has_price = any('price' in rec for rec in buy_recs)
+            self.assertTrue(has_price, "At least one recommendation should have a price")
+
+
 class TestMarketSentimentDataStructure(unittest.TestCase):
     """Test the data structure returned by sentiment service"""
     
@@ -342,9 +393,14 @@ class TestMarketSentimentDataStructure(unittest.TestCase):
             self.assertIn('ticker', rec)
             self.assertIn('reason', rec)
             self.assertIn('sector', rec)
+            self.assertIn('price', rec)
             # Ticker should be valid format
             self.assertTrue(rec['ticker'].isupper())
             self.assertGreater(len(rec['ticker']), 0)
+            # Price should be a positive number if present
+            if rec['price'] is not None:
+                self.assertIsInstance(rec['price'], (int, float))
+                self.assertGreater(rec['price'], 0)
     
     def test_sentiment_values_valid(self):
         """Test: Sentiment values are valid"""

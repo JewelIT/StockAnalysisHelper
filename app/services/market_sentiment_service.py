@@ -197,60 +197,95 @@ class MarketSentimentService:
                 "sell_recommendations": []
             }
     
-    def _generate_buy_recommendations(self, sector_data: Dict, sentiment: str) -> List[Dict]:
-        """Generate buy recommendations based on top performing sectors"""
+    def _get_stock_price(self, ticker: str) -> Optional[float]:
+        """Get current stock price"""
+        try:
+            stock = yf.Ticker(ticker)
+            hist = stock.history(period='1d')
+            if not hist.empty:
+                return float(hist['Close'].iloc[-1])
+        except Exception as e:
+            logger.warning(f"Failed to get price for {ticker}: {e}")
+        return None
+    
+    def _generate_buy_recommendations(self, sector_data: Dict, sentiment: str, max_recommendations: int = 10) -> List[Dict]:
+        """Generate buy recommendations based on top performing sectors with prices"""
         recommendations = []
         
         try:
-            # Get top 3 performing sectors
-            top_sectors = list(sector_data.items())[:3]
+            # Get top performing sectors
+            top_sectors = list(sector_data.items())[:5]  # Get more sectors for better selection
             
             for sector_name, sector_info in top_sectors:
                 if sector_name in self.sector_stocks:
-                    # Pick a random stock from the sector
                     stocks = self.sector_stocks[sector_name]
-                    ticker = random.choice(stocks)
                     
-                    reason = f"Strong sector performance ({sector_info['change_pct']:+.2f}%) suggests momentum in {sector_name}"
-                    
-                    recommendations.append({
-                        "ticker": ticker,
-                        "reason": reason,
-                        "sector": sector_name
-                    })
+                    # Try to get multiple stocks from this sector
+                    for ticker in stocks:
+                        if len(recommendations) >= max_recommendations:
+                            break
+                        
+                        # Get stock price
+                        price = self._get_stock_price(ticker)
+                        
+                        if price is not None:
+                            reason = f"Strong sector performance ({sector_info['change_pct']:+.2f}%) suggests momentum in {sector_name}"
+                            
+                            recommendations.append({
+                                "ticker": ticker,
+                                "reason": reason,
+                                "sector": sector_name,
+                                "price": round(price, 2)
+                            })
+                        
+                        # Stop if we have enough
+                        if len(recommendations) >= max_recommendations:
+                            break
             
         except Exception as e:
             logger.warning(f"Error generating buy recommendations: {e}")
         
-        return recommendations[:3]
+        return recommendations[:max_recommendations]
     
-    def _generate_sell_recommendations(self, sector_data: Dict, sentiment: str) -> List[Dict]:
-        """Generate sell/avoid recommendations based on underperforming sectors"""
+    def _generate_sell_recommendations(self, sector_data: Dict, sentiment: str, max_recommendations: int = 10) -> List[Dict]:
+        """Generate sell/avoid recommendations based on underperforming sectors with prices"""
         recommendations = []
         
         try:
-            # Get bottom 3 performing sectors
-            bottom_sectors = list(sector_data.items())[-3:]
+            # Get bottom performing sectors
+            bottom_sectors = list(sector_data.items())[-5:]  # Get more sectors for better selection
             bottom_sectors.reverse()  # Worst first
             
             for sector_name, sector_info in bottom_sectors:
                 if sector_name in self.sector_stocks:
-                    # Pick a random stock from the sector
                     stocks = self.sector_stocks[sector_name]
-                    ticker = random.choice(stocks)
                     
-                    reason = f"Sector weakness ({sector_info['change_pct']:+.2f}%) indicates potential headwinds for {sector_name}"
-                    
-                    recommendations.append({
-                        "ticker": ticker,
-                        "reason": reason,
-                        "sector": sector_name
-                    })
+                    # Try to get multiple stocks from this sector
+                    for ticker in stocks:
+                        if len(recommendations) >= max_recommendations:
+                            break
+                        
+                        # Get stock price
+                        price = self._get_stock_price(ticker)
+                        
+                        if price is not None:
+                            reason = f"Sector weakness ({sector_info['change_pct']:+.2f}%) indicates potential headwinds for {sector_name}"
+                            
+                            recommendations.append({
+                                "ticker": ticker,
+                                "reason": reason,
+                                "sector": sector_name,
+                                "price": round(price, 2)
+                            })
+                        
+                        # Stop if we have enough
+                        if len(recommendations) >= max_recommendations:
+                            break
             
         except Exception as e:
             logger.warning(f"Error generating sell recommendations: {e}")
         
-        return recommendations[:3]
+        return recommendations[:max_recommendations]
     
     def load_cache(self) -> Optional[Dict]:
         """Load cached sentiment if still valid"""

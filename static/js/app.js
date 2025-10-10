@@ -2905,61 +2905,65 @@ function renderMarketSentiment(data) {
             <!-- Buy Recommendations -->
             ${data.buy_recommendations && data.buy_recommendations.length > 0 ? `
             <div class="col-md-6 mb-3">
-                <h6 class="mb-3 text-success">
-                    <i class="bi bi-cart-plus me-2"></i>Top Picks to Buy
-                </h6>
-                ${data.buy_recommendations.map((rec, idx) => `
-                    <div class="card border-success mb-2">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <h6 class="mb-0">
-                                    <span class="badge bg-success me-2">${idx + 1}</span>
-                                    <strong>${rec.ticker}</strong>
-                                </h6>
-                                <button class="btn btn-sm btn-outline-success" 
-                                        onclick="addTickerFromRecommendation('${rec.ticker}')"
-                                        title="Add to analysis">
-                                    <i class="bi bi-plus-circle"></i>
-                                </button>
-                            </div>
-                            <small class="text-muted d-block mb-2">
-                                <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
-                            </small>
-                            <p class="mb-0 small">${rec.reason}</p>
-                        </div>
-                    </div>
-                `).join('')}
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-success">
+                        <i class="bi bi-cart-plus me-2"></i>Top Picks to Buy
+                    </h6>
+                    <select class="form-select form-select-sm" id="buyPriceFilter" 
+                            onchange="renderFilteredRecommendations('buy')" 
+                            style="width: auto;">
+                        <option value="all">All Prices</option>
+                        <option value="1-5">€1 - €5</option>
+                        <option value="5-10">€5 - €10</option>
+                        <option value="10-25">€10 - €25</option>
+                        <option value="25-100">€25 - €100</option>
+                        <option value="100+">€100+</option>
+                    </select>
+                </div>
+                <div id="buyRecommendations">
+                    <!-- Populated by JavaScript -->
+                </div>
             </div>
             ` : ''}
             
             <!-- Sell Recommendations -->
             ${data.sell_recommendations && data.sell_recommendations.length > 0 ? `
             <div class="col-md-6 mb-3">
-                <h6 class="mb-3 text-danger">
-                    <i class="bi bi-x-circle me-2"></i>Stocks to Avoid/Sell
-                </h6>
-                ${data.sell_recommendations.map((rec, idx) => `
-                    <div class="card border-danger mb-2">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                <h6 class="mb-0">
-                                    <span class="badge bg-danger me-2">${idx + 1}</span>
-                                    <strong>${rec.ticker}</strong>
-                                </h6>
-                            </div>
-                            <small class="text-muted d-block mb-2">
-                                <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
-                            </small>
-                            <p class="mb-0 small">${rec.reason}</p>
-                        </div>
-                    </div>
-                `).join('')}
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-danger">
+                        <i class="bi bi-x-circle me-2"></i>Stocks to Avoid/Sell
+                    </h6>
+                    <select class="form-select form-select-sm" id="sellPriceFilter" 
+                            onchange="renderFilteredRecommendations('sell')" 
+                            style="width: auto;">
+                        <option value="all">All Prices</option>
+                        <option value="1-5">€1 - €5</option>
+                        <option value="5-10">€5 - €10</option>
+                        <option value="10-25">€10 - €25</option>
+                        <option value="25-100">€25 - €100</option>
+                        <option value="100+">€100+</option>
+                    </select>
+                </div>
+                <div id="sellRecommendations">
+                    <!-- Populated by JavaScript -->
+                </div>
             </div>
             ` : ''}
         </div>
     `;
     
     contentDiv.innerHTML = html;
+    
+    // Store data globally for filtering
+    window.marketSentimentData = data;
+    
+    // Initial render with all prices
+    if (data.buy_recommendations && data.buy_recommendations.length > 0) {
+        renderFilteredRecommendations('buy');
+    }
+    if (data.sell_recommendations && data.sell_recommendations.length > 0) {
+        renderFilteredRecommendations('sell');
+    }
 }
 
 /**
@@ -2980,6 +2984,82 @@ async function refreshMarketSentiment() {
     }
     
     showToast('Market sentiment refreshed', 'success');
+}
+
+/**
+ * Filter recommendations by price range
+ */
+function filterRecommendationsByPrice(recommendations, priceRange) {
+    if (!recommendations || recommendations.length === 0) return [];
+    if (priceRange === 'all') return recommendations;
+    
+    const ranges = {
+        '1-5': [1, 5],
+        '5-10': [5, 10],
+        '10-25': [10, 25],
+        '25-100': [25, 100],
+        '100+': [100, Infinity]
+    };
+    
+    const [min, max] = ranges[priceRange] || [0, Infinity];
+    
+    return recommendations.filter(rec => {
+        if (!rec.price) return false;
+        return rec.price >= min && rec.price < max;
+    });
+}
+
+/**
+ * Render filtered recommendations
+ */
+function renderFilteredRecommendations(type) {
+    const priceRange = document.getElementById(`${type}PriceFilter`)?.value || 'all';
+    const allRecs = window.marketSentimentData?.[`${type}_recommendations`] || [];
+    const filtered = filterRecommendationsByPrice(allRecs, priceRange);
+    
+    const containerEl = document.getElementById(`${type}Recommendations`);
+    if (!containerEl) return;
+    
+    if (filtered.length === 0) {
+        containerEl.innerHTML = `
+            <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle me-2"></i>
+                No recommendations in the selected price range. Try a different range.
+            </div>
+        `;
+        return;
+    }
+    
+    const isBuy = type === 'buy';
+    const colorClass = isBuy ? 'success' : 'danger';
+    const iconClass = isBuy ? 'cart-plus' : 'x-circle';
+    
+    containerEl.innerHTML = filtered.slice(0, 5).map((rec, idx) => `
+        <div class="card border-${colorClass} mb-2">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <h6 class="mb-1">
+                            <span class="badge bg-${colorClass} me-2">${idx + 1}</span>
+                            <strong>${rec.ticker}</strong>
+                            ${rec.price ? `<span class="badge bg-secondary ms-2">€${rec.price.toFixed(2)}</span>` : ''}
+                        </h6>
+                    </div>
+                    ${isBuy ? `
+                    <button class="btn btn-sm btn-outline-${colorClass}" 
+                            onclick="addTickerFromRecommendation('${rec.ticker}')"
+                            title="Add to analysis">
+                        <i class="bi bi-plus-circle"></i>
+                    </button>
+                    ` : ''}
+                </div>
+                <small class="text-muted d-block mb-2">
+                    <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
+                </small>
+                <p class="mb-0 small">${rec.reason}</p>
+            </div>
+        </div>
+    `).join('');
 }
 
 /**
