@@ -296,6 +296,12 @@
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="charts-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#charts" type="button" role="tab">
+                                <i class="bi bi-graph-up me-1"></i> Charts
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
                             <button class="nav-link" id="newsfeeds-tab" data-bs-toggle="tab" 
                                     data-bs-target="#newsfeeds" type="button" role="tab">
                                 <i class="bi bi-newspaper me-1"></i> Newsfeeds
@@ -363,6 +369,116 @@
                                     <i class="bi bi-info-circle me-1"></i>
                                     Changes will apply after page reload
                                 </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Chart Settings -->
+                        <div class="tab-pane fade" id="charts" role="tabpanel">
+                            <h6 class="mb-3">📊 Chart Preferences</h6>
+                            <p class="text-muted">Configure default timeframe and indicators for interactive charts.</p>
+                            
+                            <div class="mb-4">
+                                <label for="configDefaultTimeframe" class="form-label fw-semibold">Default Analysis Timeframe</label>
+                                <select class="form-select" id="configDefaultTimeframe">
+                                    <option value="1d">1 Day</option>
+                                    <option value="5d">5 Days</option>
+                                    <option value="1wk">1 Week</option>
+                                    <option value="1mo">1 Month</option>
+                                    <option value="3mo" selected>3 Months</option>
+                                    <option value="6mo">6 Months</option>
+                                    <option value="1y">1 Year</option>
+                                    <option value="2y">2 Years</option>
+                                    <option value="5y">5 Years</option>
+                                    <option value="max">Max</option>
+                                </select>
+                                <div class="form-text">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    This will be the default timeframe when starting a new analysis
+                                </div>
+                            </div>
+                            
+                            <h6 class="mb-3 mt-4">Default Indicators</h6>
+                            <p class="text-muted small">Select which indicators should be visible by default on charts.</p>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-body">
+                                            <h6 class="card-subtitle mb-3 text-muted">
+                                                <i class="bi bi-graph-up me-1"></i> Moving Averages
+                                            </h6>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="defaultSMA20" checked>
+                                                <label class="form-check-label" for="defaultSMA20">
+                                                    SMA(20) - Orange line
+                                                </label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="defaultSMA50" checked>
+                                                <label class="form-check-label" for="defaultSMA50">
+                                                    SMA(50) - Blue line
+                                                </label>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="defaultBB" checked>
+                                                <label class="form-check-label" for="defaultBB">
+                                                    Bollinger Bands
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-body">
+                                            <h6 class="card-subtitle mb-3 text-muted">
+                                                <i class="bi bi-activity me-1"></i> Oscillators
+                                            </h6>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="defaultMACD" checked>
+                                                <label class="form-check-label" for="defaultMACD">
+                                                    MACD
+                                                </label>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="defaultRSI" checked>
+                                                <label class="form-check-label" for="defaultRSI">
+                                                    RSI
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-body">
+                                            <h6 class="card-subtitle mb-3 text-muted">
+                                                <i class="bi bi-bar-chart me-1"></i> Advanced Indicators
+                                            </h6>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="defaultVWAP" checked>
+                                                <label class="form-check-label" for="defaultVWAP">
+                                                    VWAP - Red dotted
+                                                </label>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="defaultIchimoku" checked>
+                                                <label class="form-check-label" for="defaultIchimoku">
+                                                    Ichimoku Cloud
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info" role="alert">
+                                <i class="bi bi-lightbulb me-2"></i>
+                                <strong>Tip:</strong> You can always toggle indicators on/off using the "⚙️ Indicators" button in each chart.
                             </div>
                         </div>
                         

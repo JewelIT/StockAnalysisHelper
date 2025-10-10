@@ -9,13 +9,24 @@ let portfolioTickers = [];    // Saved portfolio tickers (persistent)
 let appConfig = {              // App configuration
     currency: 'USD',           // USD, EUR, or 'native'
     defaultChartType: 'candlestick',
+    defaultTimeframe: '3mo',   // Default analysis timeframe
     displayMode: 'accordion',   // accordion or tabs (for future)
     maxNews: 5,                // Maximum news articles to display
     maxSocial: 5,              // Maximum social media posts to display
     newsSort: 'relevance',     // How to sort news: relevance, date_desc, date_asc
     socialSort: 'relevance',   // How to sort social media: relevance, date_desc, date_asc
     newsDays: 3,               // How many days back for news
-    socialDays: 7              // How many days back for social media
+    socialDays: 7,             // How many days back for social media
+    // Default indicator visibility
+    defaultIndicators: {
+        sma20: true,
+        sma50: true,
+        bb: true,
+        macd: true,
+        rsi: true,
+        vwap: true,
+        ichimoku: true
+    }
 };
 
 // Conversation context for chat
@@ -160,6 +171,16 @@ document.addEventListener('DOMContentLoaded', function() {
     loadAppConfig();
     loadPortfolioFromStorage();
     loadSessionTickers();
+    loadIndicatorSettings();  // Load saved indicator settings
+    
+    // Apply default timeframe to dropdown if set
+    if (appConfig.defaultTimeframe) {
+        const timeframeSelect = document.getElementById('timeframeSelect');
+        if (timeframeSelect) {
+            timeframeSelect.value = appConfig.defaultTimeframe;
+        }
+    }
+    
     updateTickerChips();
     updateChatTickers();  // Populate chat with portfolio tickers
     initTickerAutocomplete();  // Initialize autocomplete
@@ -184,6 +205,22 @@ function loadPortfolioFromStorage() {
         } catch (e) {
             portfolioTickers = [];
         }
+    }
+}
+
+// Load saved indicator settings from localStorage
+function loadIndicatorSettings() {
+    const stored = localStorage.getItem('indicator_settings');
+    if (stored) {
+        try {
+            window.indicatorSettings = JSON.parse(stored);
+            console.log('Loaded indicator settings from localStorage:', window.indicatorSettings);
+        } catch (e) {
+            console.error('Failed to load indicator settings:', e);
+            window.indicatorSettings = {};
+        }
+    } else {
+        window.indicatorSettings = {};
     }
 }
 
@@ -481,6 +518,31 @@ function loadConfigToUI() {
     document.getElementById('configChartType').value = appConfig.defaultChartType;
     document.getElementById('configCurrency').value = appConfig.currency;
     
+    // Load default timeframe
+    const defaultTimeframeEl = document.getElementById('configDefaultTimeframe');
+    if (defaultTimeframeEl) {
+        defaultTimeframeEl.value = appConfig.defaultTimeframe || '3mo';
+    }
+    
+    // Load default indicators
+    const indicators = appConfig.defaultIndicators || {};
+    const indicatorElements = {
+        sma20: 'defaultSMA20',
+        sma50: 'defaultSMA50',
+        bb: 'defaultBB',
+        macd: 'defaultMACD',
+        rsi: 'defaultRSI',
+        vwap: 'defaultVWAP',
+        ichimoku: 'defaultIchimoku'
+    };
+    
+    for (const [key, elementId] of Object.entries(indicatorElements)) {
+        const el = document.getElementById(elementId);
+        if (el) {
+            el.checked = indicators[key] !== false; // Default to true if not set
+        }
+    }
+    
     // Load chat panel default state
     const chatPanelDefaultEl = document.getElementById('chatPanelDefault');
     if (chatPanelDefaultEl) {
@@ -517,6 +579,25 @@ function saveAllConfigAndClose() {
     // Save display settings
     appConfig.defaultChartType = document.getElementById('configChartType').value;
     appConfig.currency = document.getElementById('configCurrency').value;
+    
+    // Save default timeframe
+    const defaultTimeframeEl = document.getElementById('configDefaultTimeframe');
+    if (defaultTimeframeEl) {
+        appConfig.defaultTimeframe = defaultTimeframeEl.value;
+        // Update the main timeframe selector
+        document.getElementById('timeframeSelect').value = appConfig.defaultTimeframe;
+    }
+    
+    // Save default indicators
+    appConfig.defaultIndicators = {
+        sma20: document.getElementById('defaultSMA20')?.checked !== false,
+        sma50: document.getElementById('defaultSMA50')?.checked !== false,
+        bb: document.getElementById('defaultBB')?.checked !== false,
+        macd: document.getElementById('defaultMACD')?.checked !== false,
+        rsi: document.getElementById('defaultRSI')?.checked !== false,
+        vwap: document.getElementById('defaultVWAP')?.checked !== false,
+        ichimoku: document.getElementById('defaultIchimoku')?.checked !== false
+    };
     
     // Save chat panel default state
     const chatPanelDefaultEl = document.getElementById('chatPanelDefault');
@@ -757,8 +838,18 @@ async function analyzeSingleTicker(ticker) {
 }
 
 // Calculate news/social days based on timeframe
+// Match the actual time window being displayed (not the fetch period)
 function getDaysFromTimeframe(timeframe) {
     const timeframeMap = {
+        // Intraday timeframes - match the actual window shown (very recent data)
+        '5m': { news: 1, social: 1 },      // Last 5 minutes - use today's news
+        '15m': { news: 1, social: 1 },     // Last 15 minutes - use today's news
+        '30m': { news: 1, social: 1 },     // Last 30 minutes - use today's news
+        '1h': { news: 1, social: 1 },      // Last 1 hour - use today's news
+        '3h': { news: 1, social: 1 },      // Last 3 hours - use today's news
+        '6h': { news: 1, social: 1 },      // Last 6 hours - use today's news
+        '12h': { news: 1, social: 1 },     // Last 12 hours - use today's news
+        // Daily and longer
         '1d': { news: 1, social: 1 },
         '5d': { news: 5, social: 5 },
         '1wk': { news: 7, social: 7 },
@@ -1452,7 +1543,7 @@ function renderStockDetails(ticker, resultIndex) {
                                 <strong>${sent.source || 'Social Media'}</strong>: ${textPreview}
                                 ${sent.link && !sent.link.includes('message/undefined') && !sent.link.includes('message/') ? 
                                     `<a href="${sent.link}" target="_blank" rel="noopener" class="news-link-icon" title="View post">🔗</a>` : 
-                                    `<span class="news-link-icon" title="No link available" style="cursor: default;">🔗💔</span>`}
+                                    `<span class="news-link-icon" title="No link available" style="cursor: default;">⛓️‍💥</span>`}
                             </div>
                             ${sent.created_at ? `<div class="news-timestamp">📅 ${formatTimestamp(sent.created_at)}</div>` : ''}
                             <div class="news-sentiment">
@@ -1481,15 +1572,27 @@ function renderStockDetails(ticker, resultIndex) {
                     <label for="timeframe_${r.ticker}" style="margin-left: 15px;">Timeframe:</label>
                     <select id="timeframe_${r.ticker}" class="chart-type-select-inline" 
                             onchange="updateChart('${r.ticker}', ${resultIndex})">
-                        <option value="1d" ${r.timeframe_used === '1d' ? 'selected' : ''}>1 Day</option>
-                        <option value="5d" ${r.timeframe_used === '5d' ? 'selected' : ''}>1 Week</option>
-                        <option value="1mo" ${r.timeframe_used === '1mo' ? 'selected' : ''}>1 Month</option>
-                        <option value="3mo" ${!r.timeframe_used || r.timeframe_used === '3mo' ? 'selected' : ''}>3 Months</option>
-                        <option value="6mo" ${r.timeframe_used === '6mo' ? 'selected' : ''}>6 Months</option>
-                        <option value="1y" ${r.timeframe_used === '1y' ? 'selected' : ''}>1 Year</option>
-                        <option value="2y" ${r.timeframe_used === '2y' ? 'selected' : ''}>2 Years</option>
-                        <option value="5y" ${r.timeframe_used === '5y' ? 'selected' : ''}>5 Years</option>
-                        <option value="max" ${r.timeframe_used === 'max' ? 'selected' : ''}>All Time</option>
+                        <optgroup label="Intraday">
+                            <option value="5m" ${r.timeframe_used === '5m' ? 'selected' : ''}>5 Minutes</option>
+                            <option value="15m" ${r.timeframe_used === '15m' ? 'selected' : ''}>15 Minutes</option>
+                            <option value="30m" ${r.timeframe_used === '30m' ? 'selected' : ''}>30 Minutes</option>
+                            <option value="1h" ${r.timeframe_used === '1h' ? 'selected' : ''}>1 Hour</option>
+                            <option value="3h" ${r.timeframe_used === '3h' ? 'selected' : ''}>3 Hours</option>
+                            <option value="6h" ${r.timeframe_used === '6h' ? 'selected' : ''}>6 Hours</option>
+                            <option value="12h" ${r.timeframe_used === '12h' ? 'selected' : ''}>12 Hours</option>
+                        </optgroup>
+                        <optgroup label="Daily & Longer">
+                            <option value="1d" ${r.timeframe_used === '1d' ? 'selected' : ''}>1 Day</option>
+                            <option value="5d" ${r.timeframe_used === '5d' ? 'selected' : ''}>5 Days</option>
+                            <option value="1wk" ${r.timeframe_used === '1wk' ? 'selected' : ''}>1 Week</option>
+                            <option value="1mo" ${r.timeframe_used === '1mo' ? 'selected' : ''}>1 Month</option>
+                            <option value="3mo" ${!r.timeframe_used || r.timeframe_used === '3mo' ? 'selected' : ''}>3 Months</option>
+                            <option value="6mo" ${r.timeframe_used === '6mo' ? 'selected' : ''}>6 Months</option>
+                            <option value="1y" ${r.timeframe_used === '1y' ? 'selected' : ''}>1 Year</option>
+                            <option value="2y" ${r.timeframe_used === '2y' ? 'selected' : ''}>2 Years</option>
+                            <option value="5y" ${r.timeframe_used === '5y' ? 'selected' : ''}>5 Years</option>
+                            <option value="max" ${r.timeframe_used === 'max' ? 'selected' : ''}>Max</option>
+                        </optgroup>
                     </select>
                     
                     <button class="btn-small btn-secondary" onclick="toggleIndicators('${r.ticker}')" 
@@ -1505,43 +1608,60 @@ function renderStockDetails(ticker, resultIndex) {
                 <!-- Indicator Controls (Hidden by default) -->
                 <div id="indicatorControls_${r.ticker}" class="indicator-controls" style="display: none; margin-top: 10px; padding: 15px; border-radius: 8px;">
                     <div class="row g-3">
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <h6 style="font-size: 0.9rem; margin-bottom: 10px;">
                                 <i class="bi bi-graph-up"></i> Moving Averages
                             </h6>
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="showSMA20_${r.ticker}" checked>
+                                <input class="form-check-input" type="checkbox" id="showSMA20_${r.ticker}" ${appConfig.defaultIndicators?.sma20 !== false ? 'checked' : ''}>
                                 <label class="form-check-label" for="showSMA20_${r.ticker}">
-                                    SMA(20) - Orange line
+                                    SMA(20) - Orange
                                 </label>
                             </div>
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="showSMA50_${r.ticker}" checked>
+                                <input class="form-check-input" type="checkbox" id="showSMA50_${r.ticker}" ${appConfig.defaultIndicators?.sma50 !== false ? 'checked' : ''}>
                                 <label class="form-check-label" for="showSMA50_${r.ticker}">
-                                    SMA(50) - Blue line
+                                    SMA(50) - Blue
                                 </label>
                             </div>
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="showBB_${r.ticker}" checked>
+                                <input class="form-check-input" type="checkbox" id="showBB_${r.ticker}" ${appConfig.defaultIndicators?.bb !== false ? 'checked' : ''}>
                                 <label class="form-check-label" for="showBB_${r.ticker}">
-                                    Bollinger Bands - Gray bands
+                                    Bollinger Bands
                                 </label>
                             </div>
                         </div>
-                        <div class="col-md-6">
+                        <div class="col-md-4">
                             <h6 style="font-size: 0.9rem; margin-bottom: 10px;">
                                 <i class="bi bi-activity"></i> Oscillators
                             </h6>
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="showMACD_${r.ticker}" checked>
+                                <input class="form-check-input" type="checkbox" id="showMACD_${r.ticker}" ${appConfig.defaultIndicators?.macd !== false ? 'checked' : ''}>
                                 <label class="form-check-label" for="showMACD_${r.ticker}">
-                                    MACD - Momentum indicator
+                                    MACD
                                 </label>
                             </div>
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="showRSI_${r.ticker}" checked>
+                                <input class="form-check-input" type="checkbox" id="showRSI_${r.ticker}" ${appConfig.defaultIndicators?.rsi !== false ? 'checked' : ''}>
                                 <label class="form-check-label" for="showRSI_${r.ticker}">
-                                    RSI - Overbought/Oversold
+                                    RSI
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 style="font-size: 0.9rem; margin-bottom: 10px;">
+                                <i class="bi bi-bar-chart"></i> Advanced
+                            </h6>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showVWAP_${r.ticker}" ${appConfig.defaultIndicators?.vwap !== false ? 'checked' : ''}>
+                                <label class="form-check-label" for="showVWAP_${r.ticker}">
+                                    VWAP - Red dotted
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showIchimoku_${r.ticker}" ${appConfig.defaultIndicators?.ichimoku !== false ? 'checked' : ''}>
+                                <label class="form-check-label" for="showIchimoku_${r.ticker}">
+                                    Ichimoku Cloud
                                 </label>
                             </div>
                         </div>
@@ -1590,6 +1710,14 @@ function renderStockDetails(ticker, resultIndex) {
         
         console.log(`Rendering ${r.ticker} with chart type: ${r.chart_type_used || initialChartType}`);
         renderChart(r.ticker, r.chart_data);
+        
+        // Apply saved indicator settings after initial render
+        if (window.indicatorSettings && window.indicatorSettings[ticker]) {
+            console.log(`Applying saved indicator settings for ${ticker} after initial render`);
+            setTimeout(() => {
+                applyIndicatorSettings(ticker, resultIndex, true); // Silent mode
+            }, 200);
+        }
         
         // After rendering, change button to "Refresh"
         setTimeout(() => {
@@ -1702,6 +1830,14 @@ async function updateChart(ticker, resultIndex, chartType = null, timeframe = nu
             const result = data.results[0];
             window.analysisResults[resultIndex] = result;
             renderChart(ticker, result.chart_data);
+            
+            // Re-apply saved indicator settings after chart refresh (silent mode)
+            if (window.indicatorSettings && window.indicatorSettings[ticker]) {
+                console.log(`Re-applying saved indicator settings for ${ticker} after chart update`);
+                setTimeout(() => {
+                    applyIndicatorSettings(ticker, resultIndex, true); // Silent mode: no toast, no panel close
+                }, 100);
+            }
         }
     } catch (error) {
         console.error(`Error updating chart for ${ticker}:`, error);
@@ -1737,22 +1873,36 @@ function toggleIndicators(ticker) {
 }
 
 // Apply indicator settings by showing/hiding traces
-function applyIndicatorSettings(ticker, resultIndex) {
+function applyIndicatorSettings(ticker, resultIndex, silent = false) {
+    // Get default settings from config
+    const defaults = appConfig.defaultIndicators || {};
+    
     const settings = {
-        showSMA20: document.getElementById(`showSMA20_${ticker}`)?.checked ?? true,
-        showSMA50: document.getElementById(`showSMA50_${ticker}`)?.checked ?? true,
-        showBB: document.getElementById(`showBB_${ticker}`)?.checked ?? true,
-        showMACD: document.getElementById(`showMACD_${ticker}`)?.checked ?? true,
-        showRSI: document.getElementById(`showRSI_${ticker}`)?.checked ?? true
+        showSMA20: document.getElementById(`showSMA20_${ticker}`)?.checked ?? (defaults.sma20 !== false),
+        showSMA50: document.getElementById(`showSMA50_${ticker}`)?.checked ?? (defaults.sma50 !== false),
+        showBB: document.getElementById(`showBB_${ticker}`)?.checked ?? (defaults.bb !== false),
+        showMACD: document.getElementById(`showMACD_${ticker}`)?.checked ?? (defaults.macd !== false),
+        showRSI: document.getElementById(`showRSI_${ticker}`)?.checked ?? (defaults.rsi !== false),
+        showVWAP: document.getElementById(`showVWAP_${ticker}`)?.checked ?? (defaults.vwap !== false),
+        showIchimoku: document.getElementById(`showIchimoku_${ticker}`)?.checked ?? (defaults.ichimoku !== false)
     };
     
-    console.log(`Applying indicator settings for ${ticker}:`, settings);
+    if (!silent) {
+        console.log(`Applying indicator settings for ${ticker}:`, settings);
+    }
     
-    // Store settings for future use
+    // Store settings for future use (in memory and localStorage)
     if (!window.indicatorSettings) {
         window.indicatorSettings = {};
     }
     window.indicatorSettings[ticker] = settings;
+    
+    // Save to localStorage for persistence across page refreshes
+    try {
+        localStorage.setItem('indicator_settings', JSON.stringify(window.indicatorSettings));
+    } catch (e) {
+        console.error('Failed to save indicator settings to localStorage:', e);
+    }
     
     // Get the chart div
     const chartDiv = document.getElementById(`chart_${ticker}`);
@@ -1763,36 +1913,60 @@ function applyIndicatorSettings(ticker, resultIndex) {
     
     // Map indicator names to trace names in the chart
     const updates = [];
+    const traceIndices = [];
     
     chartDiv.data.forEach((trace, index) => {
         const traceName = trace.name || '';
         let visible = true; // Default to visible (keep price and volume)
+        let shouldUpdate = false;
         
         // Determine visibility based on trace name
         if (traceName.includes('SMA(20)')) {
             visible = settings.showSMA20;
+            shouldUpdate = true;
         } else if (traceName.includes('SMA(50)')) {
             visible = settings.showSMA50;
+            shouldUpdate = true;
         } else if (traceName.includes('BB Upper') || traceName.includes('BB Lower')) {
             visible = settings.showBB;
+            shouldUpdate = true;
         } else if (traceName.includes('MACD') || traceName.includes('Signal') || traceName.includes('MACD Histogram')) {
             visible = settings.showMACD;
+            shouldUpdate = true;
         } else if (traceName.includes('RSI')) {
             visible = settings.showRSI;
+            shouldUpdate = true;
+        } else if (traceName.includes('VWAP')) {
+            visible = settings.showVWAP;
+            shouldUpdate = true;
+        } else if (traceName.includes('Tenkan-sen') || traceName.includes('Kijun-sen') || 
+                   traceName.includes('Senkou A') || traceName.includes('Senkou B') || 
+                   traceName.includes('Chikou Span')) {
+            visible = settings.showIchimoku;
+            shouldUpdate = true;
         }
         
-        updates.push({ visible: visible });
+        if (shouldUpdate) {
+            updates.push(visible);
+            traceIndices.push(index);
+        }
     });
     
-    // Update trace visibility for each trace individually
-    updates.forEach((update, index) => {
-        Plotly.restyle(chartDiv, { visible: update.visible }, [index]);
-    });
+    // Update trace visibility using batch update
+    if (traceIndices.length > 0) {
+        if (!silent) {
+            console.log(`Updating visibility for ${traceIndices.length} traces`);
+        }
+        traceIndices.forEach((traceIndex, i) => {
+            Plotly.restyle(chartDiv, { visible: updates[i] }, [traceIndex]);
+        });
+    }
     
-    // Hide controls
-    toggleIndicators(ticker);
-    
-    showToast(`Indicator settings applied for ${ticker}`, 'success');
+    // Hide controls and show toast only if not silent
+    if (!silent) {
+        toggleIndicators(ticker);
+        showToast(`Indicator settings applied for ${ticker}`, 'success');
+    }
 }
 
 // ===== AI CHAT FUNCTIONS =====
