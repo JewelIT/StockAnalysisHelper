@@ -232,6 +232,55 @@ class ChartGenerator:
                 showlegend=False
             ), row=1, col=1)
             
+            # VWAP
+            if indicators.get('VWAP') is not None:
+                fig.add_trace(go.Scatter(
+                    x=df.index.tolist(), y=indicators['VWAP'].tolist(),
+                    name='VWAP', line=dict(color='#FF6B6B', width=2, dash='dot'),
+                    showlegend=True
+                ), row=1, col=1)
+            
+            # Ichimoku Cloud
+            if indicators.get('Ichimoku_tenkan') is not None:
+                # Tenkan-sen (Conversion Line) - blue
+                fig.add_trace(go.Scatter(
+                    x=df.index.tolist(), y=indicators['Ichimoku_tenkan'].tolist(),
+                    name='Tenkan-sen', line=dict(color='#42A5F5', width=1.5),
+                    showlegend=True
+                ), row=1, col=1)
+                
+                # Kijun-sen (Base Line) - red
+                fig.add_trace(go.Scatter(
+                    x=df.index.tolist(), y=indicators['Ichimoku_kijun'].tolist(),
+                    name='Kijun-sen', line=dict(color='#EF5350', width=1.5),
+                    showlegend=True
+                ), row=1, col=1)
+                
+                # Senkou Span A (Leading Span A) - cloud boundary
+                if indicators.get('Ichimoku_senkou_a') is not None:
+                    fig.add_trace(go.Scatter(
+                        x=df.index.tolist(), y=indicators['Ichimoku_senkou_a'].tolist(),
+                        name='Senkou A', line=dict(color='rgba(0,255,0,0.3)', width=1),
+                        showlegend=False
+                    ), row=1, col=1)
+                
+                # Senkou Span B (Leading Span B) - cloud boundary with fill
+                if indicators.get('Ichimoku_senkou_b') is not None:
+                    fig.add_trace(go.Scatter(
+                        x=df.index.tolist(), y=indicators['Ichimoku_senkou_b'].tolist(),
+                        name='Senkou B', line=dict(color='rgba(255,0,0,0.3)', width=1),
+                        fill='tonexty', fillcolor='rgba(128,128,128,0.2)',
+                        showlegend=False
+                    ), row=1, col=1)
+                
+                # Chikou Span (Lagging Span) - green
+                if indicators.get('Ichimoku_chikou') is not None:
+                    fig.add_trace(go.Scatter(
+                        x=df.index.tolist(), y=indicators['Ichimoku_chikou'].tolist(),
+                        name='Chikou Span', line=dict(color='#66BB6A', width=1.5, dash='dot'),
+                        showlegend=True
+                    ), row=1, col=1)
+            
             # Dynamically determine row numbers
             current_row = 2 if chart_type == 'volume' else 1
             
@@ -296,8 +345,23 @@ class ChartGenerator:
         
         # Determine x-axis formatting based on timeframe
         time_delta = df.index[-1] - df.index[0]
-        if time_delta.days <= 1:
-            # Intraday - show hours and minutes
+        total_hours = time_delta.total_seconds() / 3600
+        
+        if total_hours < 1:
+            # Very short intraday (< 1 hour) - show hours:minutes:seconds
+            xaxis_format = {
+                'tickformat': '%H:%M:%S',
+                'tickangle': -45
+            }
+        elif total_hours < 6:
+            # Short intraday (< 6 hours) - show hours:minutes with frequent ticks
+            xaxis_format = {
+                'tickformat': '%H:%M',
+                'dtick': 900000,  # 15 minutes in milliseconds
+                'tickangle': -45
+            }
+        elif time_delta.days <= 1:
+            # Full day intraday - show hours and minutes
             xaxis_format = {
                 'tickformat': '%H:%M',
                 'dtick': 3600000,  # 1 hour in milliseconds

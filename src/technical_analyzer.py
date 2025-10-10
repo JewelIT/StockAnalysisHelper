@@ -55,6 +55,52 @@ class TechnicalAnalyzer:
             indicators['BB_low'] = df['Close'] * 0.98
             indicators['BB_mid'] = df['Close']
         
+        # VWAP (Volume Weighted Average Price)
+        try:
+            # VWAP calculation: cumulative(price * volume) / cumulative(volume)
+            typical_price = (df['High'] + df['Low'] + df['Close']) / 3
+            indicators['VWAP'] = (typical_price * df['Volume']).cumsum() / df['Volume'].cumsum()
+        except Exception as e:
+            print(f"  ⚠️  VWAP calculation failed: {e}")
+            indicators['VWAP'] = df['Close']  # Fallback to close price
+        
+        # Ichimoku Cloud
+        try:
+            # Standard Ichimoku periods
+            tenkan_period = 9 if data_points >= 9 else max(2, data_points // 4)
+            kijun_period = 26 if data_points >= 26 else max(4, data_points // 2)
+            senkou_span_b_period = 52 if data_points >= 52 else data_points
+            
+            # Tenkan-sen (Conversion Line): (9-period high + 9-period low)/2
+            period_high = df['High'].rolling(window=tenkan_period).max()
+            period_low = df['Low'].rolling(window=tenkan_period).min()
+            indicators['Ichimoku_tenkan'] = (period_high + period_low) / 2
+            
+            # Kijun-sen (Base Line): (26-period high + 26-period low)/2
+            period_high = df['High'].rolling(window=kijun_period).max()
+            period_low = df['Low'].rolling(window=kijun_period).min()
+            indicators['Ichimoku_kijun'] = (period_high + period_low) / 2
+            
+            # Senkou Span A (Leading Span A): (Tenkan-sen + Kijun-sen)/2, shifted 26 periods ahead
+            indicators['Ichimoku_senkou_a'] = ((indicators['Ichimoku_tenkan'] + indicators['Ichimoku_kijun']) / 2).shift(kijun_period)
+            
+            # Senkou Span B (Leading Span B): (52-period high + 52-period low)/2, shifted 26 periods ahead
+            period_high = df['High'].rolling(window=senkou_span_b_period).max()
+            period_low = df['Low'].rolling(window=senkou_span_b_period).min()
+            indicators['Ichimoku_senkou_b'] = ((period_high + period_low) / 2).shift(kijun_period)
+            
+            # Chikou Span (Lagging Span): Close shifted 26 periods back
+            indicators['Ichimoku_chikou'] = df['Close'].shift(-kijun_period)
+            
+        except Exception as e:
+            print(f"  ⚠️  Ichimoku Cloud calculation failed: {e}")
+            # Create null indicators if calculation fails
+            indicators['Ichimoku_tenkan'] = None
+            indicators['Ichimoku_kijun'] = None
+            indicators['Ichimoku_senkou_a'] = None
+            indicators['Ichimoku_senkou_b'] = None
+            indicators['Ichimoku_chikou'] = None
+        
         return indicators
     
     @staticmethod
