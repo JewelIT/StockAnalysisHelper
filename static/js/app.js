@@ -43,6 +43,61 @@ let exchangeRates = {
     USD: 1.0
 };
 
+// ===== EXCHANGE RATE FETCHING =====
+
+/**
+ * Fetch live exchange rates from external API
+ * Caches rates in localStorage for 24 hours
+ */
+async function fetchExchangeRates() {
+    try {
+        // Check cache first
+        const cached = localStorage.getItem('exchange_rates_cache');
+        if (cached) {
+            const { rates, timestamp } = JSON.parse(cached);
+            const age = Date.now() - timestamp;
+            const MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+            
+            if (age < MAX_AGE) {
+                console.log('Using cached exchange rates (age: ' + Math.round(age / 3600000) + ' hours)');
+                exchangeRates = rates;
+                return rates;
+            }
+        }
+        
+        // Fetch fresh rates
+        console.log('Fetching live exchange rates...');
+        const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+        
+        if (!response.ok) {
+            throw new Error('Exchange rate API returned ' + response.status);
+        }
+        
+        const data = await response.json();
+        
+        // Update global rates
+        exchangeRates = {
+            USD: 1.0,
+            EUR: data.rates.EUR || 0.92,
+            GBP: data.rates.GBP || 0.79
+        };
+        
+        // Cache for 24 hours
+        localStorage.setItem('exchange_rates_cache', JSON.stringify({
+            rates: exchangeRates,
+            timestamp: Date.now()
+        }));
+        
+        console.log('Exchange rates updated:', exchangeRates);
+        return exchangeRates;
+        
+    } catch (error) {
+        console.warn('Failed to fetch exchange rates, using fallbacks:', error.message);
+        // Keep fallback values already set
+        return exchangeRates;
+    }
+}
+
 // ===== TIMESTAMP FORMATTING =====
 
 function formatTimestamp(timestamp) {
@@ -632,9 +687,15 @@ function saveAllConfigAndClose() {
     // Show success message
     showToast('✅ Settings saved successfully', 'success');
     
-    // If currency changed and we have results, re-render to update prices
-    if (oldCurrency !== appConfig.currency && window.analysisResults && window.analysisResults.length > 0) {
-        displayResults(window.analysisResults);
+    // If currency changed, refresh data to update all prices
+    if (oldCurrency !== appConfig.currency) {
+        // Re-render existing analysis results
+        if (window.analysisResults && window.analysisResults.length > 0) {
+            displayResults(window.analysisResults);
+        }
+        
+        // 💱 Refresh market sentiment with new currency
+        loadMarketSentiment(true);
     }
 }
 
@@ -1449,19 +1510,19 @@ function renderStockDetails(ticker, resultIndex) {
                                 <div class="col-4">
                                     <div class="text-center p-2 bg-danger bg-opacity-10 rounded">
                                         <small class="d-block text-danger" style="font-size: 0.7rem;">LOW</small>
-                                        <strong class="text-danger" style="font-size: 0.95rem;">${r.analyst_data.target_low_price ? '$' + r.analyst_data.target_low_price.toFixed(2) : 'N/A'}</strong>
+                                        <strong class="text-danger" style="font-size: 0.95rem;">${r.analyst_data.target_low_price ? formatPrice(r.analyst_data.target_low_price, r.ticker) : 'N/A'}</strong>
                                     </div>
                                 </div>
                                 <div class="col-4">
                                     <div class="text-center p-2 bg-primary bg-opacity-10 rounded">
                                         <small class="d-block text-primary" style="font-size: 0.7rem;">TARGET</small>
-                                        <strong class="text-primary" style="font-size: 0.95rem;">$${r.analyst_data.target_mean_price.toFixed(2)}</strong>
+                                        <strong class="text-primary" style="font-size: 0.95rem;">${formatPrice(r.analyst_data.target_mean_price, r.ticker)}</strong>
                                     </div>
                                 </div>
                                 <div class="col-4">
                                     <div class="text-center p-2 bg-success bg-opacity-10 rounded">
                                         <small class="d-block text-success" style="font-size: 0.7rem;">HIGH</small>
-                                        <strong class="text-success" style="font-size: 0.95rem;">${r.analyst_data.target_high_price ? '$' + r.analyst_data.target_high_price.toFixed(2) : 'N/A'}</strong>
+                                        <strong class="text-success" style="font-size: 0.95rem;">${r.analyst_data.target_high_price ? formatPrice(r.analyst_data.target_high_price, r.ticker) : 'N/A'}</strong>
                                     </div>
                                 </div>
                             </div>
@@ -2618,13 +2679,16 @@ document.addEventListener('DOMContentLoaded', function() {
     
     initializeTheme();
     initializeChatPanel();  // Initialize chat panel state
+    fetchExchangeRates();   // 💱 Fetch live exchange rates
     loadSessionTickers();
     loadChatHistory();  // Load previous conversation
     loadMarketSentiment();  // Load daily market sentiment
     
     const settingsModal = document.getElementById('settingsModal');
     if (settingsModal) {
-        settingsModal.addEventListener('shown.bs.modal', function() {
+        // Load config immediately when modal is about to show (before animation)
+        settingsModal.addEventListener('show.bs.modal', function() {
+            loadConfigToUI();  // 🔧 FIX: Load saved settings before modal animation
             updateSavedTickersList();
         });
     }
@@ -2747,7 +2811,10 @@ async function loadMarketSentiment(forceRefresh = false) {
         const params = new URLSearchParams();
         if (forceRefresh) params.append('refresh', 'true');
         
-        const url = `/market-sentiment${params.toString() ? '?' + params.toString() : ''}`;
+        // 💱 Pass user's currency preference to backend
+        params.append('currency', appConfig.currency || 'USD');
+        
+        const url = `/market-sentiment?${params.toString()}`;
         const response = await fetch(url);
         const result = await response.json();
         
@@ -2907,9 +2974,16 @@ function renderMarketSentiment(data) {
         <div class="row">
             <!-- Buy Recommendations -->
             <div class="col-md-6 mb-3">
-                <h6 class="mb-3 text-success">
-                    <i class="bi bi-cart-plus me-2"></i>Top Picks to Buy
-                </h6>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-success">
+                        <i class="bi bi-cart-plus me-2"></i>Top Picks to Buy
+                    </h6>
+                    <button class="btn btn-sm btn-outline-success" id="refreshBuyRecsBtn" 
+                            onclick="refreshRecommendations()" 
+                            title="Get different recommendations">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                </div>
                 ${data.buy_recommendations && data.buy_recommendations.length > 0 ? 
                     data.buy_recommendations.map((rec, idx) => `
                         <div class="card border-success mb-2">
@@ -2919,7 +2993,7 @@ function renderMarketSentiment(data) {
                                         <h6 class="mb-1">
                                             <span class="badge bg-success me-2">${idx + 1}</span>
                                             <strong>${rec.ticker}</strong>
-                                            ${rec.price ? `<span class="badge bg-secondary ms-2">€${rec.price.toFixed(2)}</span>` : ''}
+                                            ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker)}</span>` : ''}
                                         </h6>
                                     </div>
                                     <button class="btn btn-sm btn-outline-success" 
@@ -2945,9 +3019,16 @@ function renderMarketSentiment(data) {
             
             <!-- Sell Recommendations -->
             <div class="col-md-6 mb-3">
-                <h6 class="mb-3 text-danger">
-                    <i class="bi bi-x-circle me-2"></i>Stocks to Avoid/Sell
-                </h6>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-danger">
+                        <i class="bi bi-x-circle me-2"></i>Stocks to Avoid/Sell
+                    </h6>
+                    <button class="btn btn-sm btn-outline-danger" id="refreshSellRecsBtn" 
+                            onclick="refreshRecommendations()" 
+                            title="Get different recommendations">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                </div>
                 ${data.sell_recommendations && data.sell_recommendations.length > 0 ? 
                     data.sell_recommendations.map((rec, idx) => `
                         <div class="card border-danger mb-2">
@@ -2956,7 +3037,7 @@ function renderMarketSentiment(data) {
                                     <h6 class="mb-1">
                                         <span class="badge bg-danger me-2">${idx + 1}</span>
                                         <strong>${rec.ticker}</strong>
-                                        ${rec.price ? `<span class="badge bg-secondary ms-2">€${rec.price.toFixed(2)}</span>` : ''}
+                                        ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker)}</span>` : ''}
                                     </h6>
                                 </div>
                                 <small class="text-muted d-block mb-2">
@@ -2980,13 +3061,14 @@ function renderMarketSentiment(data) {
 }
 
 /**
- * Refresh market sentiment
+ * Refresh market sentiment (full dashboard)
  */
 async function refreshMarketSentiment() {
     const btn = document.getElementById('refreshSentimentBtn');
     if (btn) {
         btn.disabled = true;
-        btn.innerHTML = '<i class="bi bi-arrow-clockwise spinner-border spinner-border-sm"></i>';
+        // Use only spinner, not the arrow icon to avoid double spinning
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
     }
     
     await loadMarketSentiment(true);
@@ -2995,8 +3077,157 @@ async function refreshMarketSentiment() {
         btn.disabled = false;
         btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
     }
+}
+
+/**
+ * Refresh only stock recommendations (not the entire sentiment analysis)
+ */
+async function refreshRecommendations() {
+    const buyBtn = document.getElementById('refreshBuyRecsBtn');
+    const sellBtn = document.getElementById('refreshSellRecsBtn');
     
-    showToast('Market sentiment refreshed', 'success');
+    // Disable buttons and show loading
+    if (buyBtn) {
+        buyBtn.disabled = true;
+        buyBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+    }
+    if (sellBtn) {
+        sellBtn.disabled = true;
+        sellBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+    }
+    
+    try {
+        // Force refresh to get new recommendations
+        const params = new URLSearchParams();
+        params.append('refresh', 'true');
+        
+        const url = `/market-sentiment?${params.toString()}`;
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to load recommendations');
+        }
+        
+        // Get the data
+        const data = result.data;
+        
+        // Find the recommendations row specifically (it's the last row with col-md-6 children)
+        const allRows = document.querySelectorAll('#marketSentimentContent .row');
+        let recommendationsRow = null;
+        
+        // Find the row that contains the buy/sell recommendations
+        for (let i = allRows.length - 1; i >= 0; i--) {
+            const cols = allRows[i].querySelectorAll('.col-md-6');
+            if (cols.length === 2) {
+                // Check if this row has the recommendations by looking for the specific buttons
+                const hasBuyBtn = allRows[i].querySelector('#refreshBuyRecsBtn');
+                const hasSellBtn = allRows[i].querySelector('#refreshSellRecsBtn');
+                if (hasBuyBtn || hasSellBtn) {
+                    recommendationsRow = allRows[i];
+                    break;
+                }
+            }
+        }
+        
+        if (!recommendationsRow) {
+            console.error('Could not find recommendations row');
+            return;
+        }
+        
+        const cols = recommendationsRow.querySelectorAll('.col-md-6');
+        const buyContainer = cols[0];
+        const sellContainer = cols[1];
+        
+        if (buyContainer && data.buy_recommendations) {
+            // Rebuild buy recommendations section
+            const buyHtml = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-success">
+                        <i class="bi bi-cart-plus me-2"></i>Top Picks to Buy
+                    </h6>
+                    <button class="btn btn-sm btn-outline-success" id="refreshBuyRecsBtn" 
+                            onclick="refreshRecommendations()" 
+                            title="Get different recommendations">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                </div>
+                ${data.buy_recommendations.map((rec, idx) => `
+                    <div class="card border-success mb-2">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <h6 class="mb-1">
+                                        <span class="badge bg-success me-2">${idx + 1}</span>
+                                        <strong>${rec.ticker}</strong>
+                                        ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price)}</span>` : ''}
+                                    </h6>
+                                </div>
+                                <button class="btn btn-sm btn-outline-success" 
+                                        onclick="addTickerFromRecommendation('${rec.ticker}')"
+                                        title="Add to analysis">
+                                    <i class="bi bi-plus-circle"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted d-block mb-2">
+                                <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
+                            </small>
+                            <p class="mb-0 small">${rec.reason}</p>
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+            buyContainer.innerHTML = buyHtml;
+        }
+        
+        if (sellContainer && data.sell_recommendations) {
+            // Rebuild sell recommendations section
+            const sellHtml = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-danger">
+                        <i class="bi bi-x-circle me-2"></i>Stocks to Avoid/Sell
+                    </h6>
+                    <button class="btn btn-sm btn-outline-danger" id="refreshSellRecsBtn" 
+                            onclick="refreshRecommendations()" 
+                            title="Get different recommendations">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                </div>
+                ${data.sell_recommendations.map((rec, idx) => `
+                    <div class="card border-danger mb-2">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="mb-1">
+                                    <span class="badge bg-danger me-2">${idx + 1}</span>
+                                    <strong>${rec.ticker}</strong>
+                                    ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price)}</span>` : ''}
+                                </h6>
+                            </div>
+                            <small class="text-muted d-block mb-2">
+                                <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
+                            </small>
+                            <p class="mb-0 small">${rec.reason}</p>
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+            sellContainer.innerHTML = sellHtml;
+        }
+        
+    } catch (error) {
+        console.error('Error refreshing recommendations:', error);
+        showToast('Failed to refresh recommendations', 'danger');
+    } finally {
+        // Re-enable buttons
+        if (buyBtn) {
+            buyBtn.disabled = false;
+            buyBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+        }
+        if (sellBtn) {
+            sellBtn.disabled = false;
+            sellBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+        }
+    }
 }
 
 
