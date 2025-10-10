@@ -12,7 +12,7 @@ import random
 logger = logging.getLogger(__name__)
 
 class MarketSentimentService:
-    """Service for generating daily market sentiment and recommendations"""
+    """Service for gener    def get_daily_sentiment(self, force_refresh: bool = False) -> Dict:entiment and recommendations"""
     
     def __init__(self):
         self.cache_file = 'cache/market_sentiment_cache.json'
@@ -208,6 +208,154 @@ class MarketSentimentService:
             logger.warning(f"Failed to get price for {ticker}: {e}")
         return None
     
+    def _get_stock_specific_buy_reason(self, ticker: str, sector_name: str, sector_change: float, sentiment: str) -> str:
+        """Generate stock-specific buy recommendation reason"""
+        stock_characteristics = {
+            # Technology
+            'AAPL': 'Strong brand loyalty and ecosystem, consistent revenue growth from services',
+            'MSFT': 'Leading cloud computing position with Azure, enterprise software dominance',
+            'GOOGL': 'Dominant search market share, diversified revenue streams including cloud',
+            'NVDA': 'AI chip market leader, strong data center demand',
+            'META': 'Social media dominance, growing AI investments and advertising platform',
+            'TSLA': 'Electric vehicle market leader, autonomous driving technology advancement',
+            'AMD': 'Competitive CPU/GPU offerings, gaining server market share',
+            'INTC': 'Manufacturing investments, AI chip development potential',
+            'CRM': 'Leading CRM platform, strong enterprise customer retention',
+            'ORCL': 'Database market leader, growing cloud infrastructure business',
+            
+            # Healthcare
+            'JNJ': 'Diversified healthcare portfolio, stable dividend history',
+            'UNH': 'Healthcare services leader, consistent earnings growth',
+            'PFE': 'Strong pharmaceutical pipeline, dividend reliability',
+            'ABBV': 'Immunology drugs market leader, attractive dividend yield',
+            'TMO': 'Life sciences equipment leader, essential research tools provider',
+            'LLY': 'Diabetes and obesity drug success, strong pipeline',
+            'MRK': 'Cancer drug portfolio strength, solid R&D investments',
+            'ABT': 'Medical devices leader, diverse product portfolio',
+            'DHR': 'Healthcare technology innovator, consistent acquisition strategy',
+            'BMY': 'Oncology focus, attractive valuation',
+            
+            # Financials
+            'JPM': 'Strongest balance sheet among major banks, diversified revenue',
+            'BAC': 'Large deposit base, improving net interest margins',
+            'WFC': 'Branch network advantage, cost reduction progress',
+            'GS': 'Investment banking leader, strong trading operations',
+            'MS': 'Wealth management growth, diversified revenue streams',
+            'C': 'Global presence, turnaround potential',
+            'BLK': 'Asset management leader, ETF market dominance',
+            'SCHW': 'Retail trading platform strength, banking services growth',
+            'V': 'Payment processing leader, global transaction growth',
+            'MA': 'Strong network effects, digital payment trend beneficiary',
+            
+            # Consumer Discretionary
+            'AMZN': 'E-commerce dominance, AWS cloud leadership',
+            'HD': 'Home improvement leader, housing market beneficiary',
+            'MCD': 'Global brand strength, consistent same-store sales growth',
+            'NKE': 'Athletic wear brand leader, direct-to-consumer strategy',
+            'SBUX': 'Coffee chain dominance, international expansion',
+            'TGT': 'Retail innovation, omnichannel execution',
+            'LOW': 'Home improvement growth, professional customer focus',
+            'TJX': 'Off-price retail leader, inventory management excellence',
+            'CMG': 'Fast-casual dining success, digital ordering growth',
+            'BKNG': 'Travel booking platform leader, post-pandemic recovery',
+            
+            # Consumer Staples
+            'WMT': 'Retail giant with strong e-commerce growth, recession-resistant',
+            'PG': 'Consumer products leader, premium brand portfolio',
+            'KO': 'Beverage industry icon, global distribution network',
+            'PEP': 'Diversified food and beverage portfolio, snacks division strength',
+            'COST': 'Membership model strength, customer loyalty',
+            'MDLZ': 'Global snacks portfolio, emerging markets growth',
+            'PM': 'International tobacco presence, smoke-free product transition',
+            'CL': 'Oral care leadership, emerging markets presence',
+            'KMB': 'Essential products portfolio, stable demand',
+            'GIS': 'Cereal and snacks brands, e-commerce adaptation',
+            
+            # Energy
+            'XOM': 'Integrated energy major, strong balance sheet',
+            'CVX': 'Energy diversification, reliable dividend',
+            'COP': 'Low-cost production, strong cash flow',
+            'SLB': 'Oilfield services leader, technology advantage',
+            'EOG': 'Shale production efficiency, strong returns',
+            'MPC': 'Refining capacity leader, downstream integration',
+            'PSX': 'Refining and midstream assets, stable cash flow',
+            'VLO': 'Refining operations strength, renewable diesel growth',
+            'OXY': 'Permian Basin focus, debt reduction progress',
+            'PXD': 'Permian pure-play, capital discipline',
+            
+            # Industrials
+            'BA': 'Aviation duopoly, commercial aircraft backlog',
+            'CAT': 'Construction equipment leader, infrastructure spending beneficiary',
+            'UNP': 'Railroad network advantage, pricing power',
+            'HON': 'Diversified technology and manufacturing, aerospace exposure',
+            'UPS': 'Logistics leader, e-commerce delivery growth',
+            'LMT': 'Defense contractor leader, consistent government contracts',
+            'RTX': 'Aerospace and defense diversification, commercial recovery',
+            'DE': 'Agricultural equipment dominance, precision farming technology',
+            'MMM': 'Diversified industrial conglomerate, innovation culture',
+            'GE': 'Industrial transformation, aviation recovery',
+            
+            # Materials
+            'LIN': 'Industrial gases leader, essential manufacturing inputs',
+            'APD': 'Gases and chemicals diversification, hydrogen potential',
+            'ECL': 'Cleaning and sanitation leader, recurring revenue',
+            'SHW': 'Paint and coatings dominance, retail and contractor presence',
+            'NEM': 'Gold mining leader, inflation hedge',
+            'FCX': 'Copper production scale, EV demand beneficiary',
+            'NUE': 'Steel minimill efficiency, construction demand',
+            'DOW': 'Chemicals and materials diversification, essential products',
+            'DD': 'Specialty chemicals focus, electronics materials',
+            'PPG': 'Coatings technology leader, automotive and industrial exposure',
+            
+            # Real Estate
+            'AMT': 'Cell tower REIT leader, 5G infrastructure beneficiary',
+            'PLD': 'Logistics real estate focus, e-commerce tailwind',
+            'CCI': 'Telecom infrastructure provider, recurring revenues',
+            'EQIX': 'Data center REIT leader, cloud infrastructure growth',
+            'PSA': 'Self-storage market leader, stable occupancy',
+            'WELL': 'Healthcare real estate focus, aging demographics',
+            'DLR': 'Data center presence, digital transformation trend',
+            'O': 'Monthly dividend REIT, retail diversification',
+            'SPG': 'Premium mall operator, retail evolution',
+            'AVB': 'Apartment REIT, urban housing demand',
+            
+            # Utilities
+            'NEE': 'Renewable energy leader, regulated utility base',
+            'DUK': 'Regulated utility operations, clean energy transition',
+            'SO': 'Southeast utilities presence, customer growth',
+            'D': 'Mid-Atlantic service area, infrastructure investments',
+            'AEP': 'Transmission network strength, renewable investments',
+            'EXC': 'Nuclear fleet operator, carbon-free generation',
+            'SRE': 'California utilities presence, renewable focus',
+            'XEL': 'Upper Midwest operations, clean energy leadership',
+            'WEC': 'Midwest utilities, customer satisfaction ratings',
+            'ES': 'Nuclear operations, clean energy transition',
+            
+            # Communication Services
+            'GOOGL': 'Digital advertising duopoly, YouTube dominance',
+            'META': 'Social media platforms leadership, engagement metrics',
+            'NFLX': 'Streaming entertainment leader, content library',
+            'DIS': 'Entertainment empire, streaming growth',
+            'CMCSA': 'Cable and broadband provider, content ownership',
+            'T': 'Telecom infrastructure, 5G deployment',
+            'VZ': 'Network quality reputation, enterprise services',
+            'TMUS': 'Un-carrier strategy, 5G network leadership',
+            'CHTR': 'Cable provider, broadband expansion',
+            'EA': 'Gaming franchises strength, live services revenue'
+        }
+        
+        base_reason = stock_characteristics.get(ticker, f'Strong presence in {sector_name} sector')
+        
+        # Add context based on sector performance and market sentiment
+        if sector_change > 1.0:
+            context = f' Sector leading with {sector_change:+.1f}% performance'
+        elif sentiment == 'BULLISH':
+            context = f' Bullish market conditions favor {sector_name} exposure'
+        else:
+            context = f' Sector showing {sector_change:+.1f}% momentum'
+            
+        return f'{base_reason}.{context}'
+    
     def _generate_buy_recommendations(self, sector_data: Dict, sentiment: str, max_recommendations: int = 10) -> List[Dict]:
         """Generate buy recommendations based on top performing sectors with prices"""
         recommendations = []
@@ -229,7 +377,13 @@ class MarketSentimentService:
                         price = self._get_stock_price(ticker)
                         
                         if price is not None:
-                            reason = f"Strong sector performance ({sector_info['change_pct']:+.2f}%) suggests momentum in {sector_name}"
+                            # Generate stock-specific reason
+                            reason = self._get_stock_specific_buy_reason(
+                                ticker, 
+                                sector_name, 
+                                sector_info['change_pct'],
+                                sentiment
+                            )
                             
                             recommendations.append({
                                 "ticker": ticker,
@@ -246,6 +400,154 @@ class MarketSentimentService:
             logger.warning(f"Error generating buy recommendations: {e}")
         
         return recommendations[:max_recommendations]
+    
+    def _get_stock_specific_sell_reason(self, ticker: str, sector_name: str, sector_change: float, sentiment: str) -> str:
+        """Generate stock-specific sell/avoid recommendation reason"""
+        stock_risks = {
+            # Technology
+            'AAPL': 'High valuation relative to growth rates, regulatory scrutiny risks',
+            'MSFT': 'Premium valuation, cybersecurity concerns',
+            'GOOGL': 'Antitrust challenges, advertising market uncertainty',
+            'NVDA': 'Extreme valuation, AI hype cycle concerns',
+            'META': 'Privacy regulations impact, user engagement challenges',
+            'TSLA': 'Valuation disconnect from fundamentals, competition intensifying',
+            'AMD': 'Competitive pressures, cyclical semiconductor exposure',
+            'INTC': 'Market share losses, manufacturing delays',
+            'CRM': 'Slowing growth, high valuation multiples',
+            'ORCL': 'Cloud market share challenges, licensing model pressures',
+            
+            # Healthcare
+            'JNJ': 'Litigation risks, patent expirations',
+            'UNH': 'Regulatory scrutiny, political healthcare policy risks',
+            'PFE': 'Post-COVID revenue normalization, pipeline uncertainties',
+            'ABBV': 'Key drug patent expiration risks, pricing pressures',
+            'TMO': 'High acquisition debt levels, integration risks',
+            'LLY': 'Valuation stretched, drug pricing scrutiny',
+            'MRK': 'Patent cliff concerns, R&D execution risks',
+            'ABT': 'Medical device competition, reimbursement pressures',
+            'DHR': 'Rich valuation, acquisition integration challenges',
+            'BMY': 'Pipeline development delays, competitive threats',
+            
+            # Financials
+            'JPM': 'Interest rate sensitivity, credit cycle concerns',
+            'BAC': 'Economic slowdown exposure, credit quality risks',
+            'WFC': 'Regulatory constraints, operational risk legacy',
+            'GS': 'Trading volatility, deal flow uncertainty',
+            'MS': 'Market downturn vulnerability, wealth management fee pressures',
+            'C': 'Turnaround execution risks, emerging market exposures',
+            'BLK': 'Fee compression, passive investing shift',
+            'SCHW': 'Interest rate dependency, competitive pressures',
+            'V': 'Regulatory pressures on interchange fees, competitive threats',
+            'MA': 'Similar payment network challenges, fintech disruption',
+            
+            # Consumer Discretionary
+            'AMZN': 'Antitrust concerns, margin compression from investments',
+            'HD': 'Housing market slowdown sensitivity, high valuation',
+            'MCD': 'Labor cost inflation, franchise operational issues',
+            'NKE': 'Inventory management challenges, China market weakness',
+            'SBUX': 'Labor union pressures, competition intensifying',
+            'TGT': 'Retail margin pressures, e-commerce competition',
+            'LOW': 'Housing market dependency, DIY demand normalization',
+            'TJX': 'Inventory sourcing challenges, retail traffic concerns',
+            'CMG': 'Food safety reputation risks, high valuation',
+            'BKNG': 'Travel demand uncertainty, competition from alternatives',
+            
+            # Consumer Staples
+            'WMT': 'Wage inflation pressures, e-commerce investment costs',
+            'PG': 'Commodity cost inflation, market share losses',
+            'KO': 'Health trend headwinds, volume growth challenges',
+            'PEP': 'Input cost inflation, health-conscious consumer shifts',
+            'COST': 'Competition from online retail, membership growth slowing',
+            'MDLZ': 'Commodity price volatility, portfolio optimization delays',
+            'PM': 'Tobacco consumption declining, ESG investor concerns',
+            'CL': 'Emerging market volatility, competitive pricing',
+            'KMB': 'Raw material inflation, private label competition',
+            'GIS': 'Changing consumer preferences, brand relevance challenges',
+            
+            # Energy
+            'XOM': 'Energy transition risks, carbon emission pressures',
+            'CVX': 'Oil price volatility, renewable energy transition',
+            'COP': 'Commodity price exposure, production decline risks',
+            'SLB': 'Oil capex cycle dependency, technology disruption',
+            'EOG': 'Shale production economics, ESG concerns',
+            'MPC': 'Refining margin volatility, EV adoption impact',
+            'PSX': 'Crack spread uncertainty, environmental regulations',
+            'VLO': 'Refining capacity oversupply, demand destruction risks',
+            'OXY': 'High debt levels, oil price sensitivity',
+            'PXD': 'Permian competition, water disposal challenges',
+            
+            # Industrials
+            'BA': 'Manufacturing quality issues, delivery delays',
+            'CAT': 'Economic cycle sensitivity, China exposure',
+            'UNP': 'Service quality concerns, regulatory headwinds',
+            'HON': 'Cyclical aerospace exposure, restructuring costs',
+            'UPS': 'Labor cost inflation, volume growth challenges',
+            'LMT': 'Defense budget uncertainties, program delays',
+            'RTX': 'Supply chain challenges, commercial recovery delays',
+            'DE': 'Agricultural market cyclicality, farmer income pressures',
+            'MMM': 'Legacy liability issues, organic growth challenges',
+            'GE': 'Execution risks on turnaround, debt reduction needs',
+            
+            # Materials
+            'LIN': 'Energy cost sensitivity, demand cyclicality',
+            'APD': 'Capital intensity, hydrogen economics uncertainty',
+            'ECL': 'Hospitality demand dependency, input cost pressures',
+            'SHW': 'Raw material inflation, housing market sensitivity',
+            'NEM': 'Gold price volatility, operational cost inflation',
+            'FCX': 'Copper price dependency, geopolitical mining risks',
+            'NUE': 'Steel cycle vulnerability, import competition',
+            'DOW': 'Chemical demand cyclicality, margin compression',
+            'DD': 'End market weakness, semiconductor cycle exposure',
+            'PPG': 'Raw material inflation, automotive production delays',
+            
+            # Real Estate
+            'AMT': 'Interest rate sensitivity, tenant consolidation',
+            'PLD': 'Industrial real estate oversupply, e-commerce normalization',
+            'CCI': 'Carrier capex uncertainty, tower lease dynamics',
+            'EQIX': 'Data center competition, power cost inflation',
+            'PSA': 'Self-storage demand normalization, new supply',
+            'WELL': 'Healthcare tenant credit risks, regulatory changes',
+            'DLR': 'Valuation premium, competitive market dynamics',
+            'O': 'Retail tenant challenges, lease renewal risks',
+            'SPG': 'Mall traffic decline, tenant bankruptcies',
+            'AVB': 'Apartment supply increases, rent growth deceleration',
+            
+            # Utilities
+            'NEE': 'Interest rate sensitivity, regulatory recovery lags',
+            'DUK': 'Regulatory review risks, coal plant retirement costs',
+            'SO': 'Rate case outcomes, weather normalization',
+            'D': 'Regulatory challenges, offshore wind costs',
+            'AEP': 'Transmission investment recovery, coal transition',
+            'EXC': 'Nuclear operational risks, power price exposure',
+            'SRE': 'California wildfire liabilities, regulatory constraints',
+            'XEL': 'Renewable integration costs, weather impacts',
+            'WEC': 'Rate base growth limits, coal retirement costs',
+            'ES': 'Nuclear plant operational costs, wholesale power prices',
+            
+            # Communication Services
+            'GOOGL': 'Advertising market maturity, regulatory breakup risk',
+            'META': 'Metaverse investment drag, advertising weakness',
+            'NFLX': 'Streaming competition, subscriber growth saturation',
+            'DIS': 'Streaming profitability challenges, parks attendance',
+            'CMCSA': 'Cord-cutting acceleration, broadband competition',
+            'T': 'Wireless competition, fiber buildout costs',
+            'VZ': 'Market share losses, capital spending burden',
+            'TMUS': 'Integration risks, network investment needs',
+            'CHTR': 'Cable subscriber losses, fixed wireless competition',
+            'EA': 'Gaming cycle maturity, live service monetization risks'
+        }
+        
+        base_reason = stock_risks.get(ticker, f'Facing headwinds in {sector_name} sector')
+        
+        # Add context based on sector performance and market sentiment
+        if sector_change < -1.0:
+            context = f' Sector underperforming with {sector_change:.1f}% decline'
+        elif sentiment == 'BEARISH':
+            context = f' Bearish market conditions amplify {sector_name} risks'
+        else:
+            context = f' Sector showing {sector_change:.1f}% weakness'
+            
+        return f'{base_reason}.{context}'
     
     def _generate_sell_recommendations(self, sector_data: Dict, sentiment: str, max_recommendations: int = 10) -> List[Dict]:
         """Generate sell/avoid recommendations based on underperforming sectors with prices"""
@@ -269,7 +571,13 @@ class MarketSentimentService:
                         price = self._get_stock_price(ticker)
                         
                         if price is not None:
-                            reason = f"Sector weakness ({sector_info['change_pct']:+.2f}%) indicates potential headwinds for {sector_name}"
+                            # Generate stock-specific reason
+                            reason = self._get_stock_specific_sell_reason(
+                                ticker,
+                                sector_name,
+                                sector_info['change_pct'],
+                                sentiment
+                            )
                             
                             recommendations.append({
                                 "ticker": ticker,
@@ -322,6 +630,25 @@ class MarketSentimentService:
         except Exception as e:
             logger.warning(f"Failed to save cache: {e}")
     
+    def _filter_by_price_range(self, recommendations: List[Dict], price_range: str) -> List[Dict]:
+        """Filter recommendations by price range"""
+        if price_range == 'all' or not recommendations:
+            return recommendations
+        
+        ranges = {
+            '1-5': (1, 5),
+            '5-10': (5, 10),
+            '10-25': (10, 25),
+            '25-100': (25, 100),
+            '100+': (100, float('inf'))
+        }
+        
+        if price_range not in ranges:
+            return recommendations
+        
+        min_price, max_price = ranges[price_range]
+        return [r for r in recommendations if r.get('price') and min_price <= r['price'] < max_price]
+    
     def get_daily_sentiment(self, force_refresh: bool = False) -> Dict:
         """
         Get daily market sentiment with caching
@@ -339,14 +666,18 @@ class MarketSentimentService:
                 if cached:
                     return cached
             
-            logger.info("Generating fresh market sentiment")
+            logger.info("Generating market sentiment")
             
             # Fetch market data
             market_data = self.get_market_indices_data()
             sector_data = self.get_sector_performance()
             
-            # Generate sentiment analysis
+            # Generate sentiment analysis with all recommendations
             ai_sentiment = self.generate_sentiment_analysis(market_data, sector_data)
+            
+            # Get all recommendations (up to 10 each)
+            buy_recs = ai_sentiment.get('buy_recommendations', [])[:3]
+            sell_recs = ai_sentiment.get('sell_recommendations', [])[:3]
             
             # Combine all data
             result = {
@@ -358,11 +689,11 @@ class MarketSentimentService:
                 'summary': ai_sentiment.get('summary', ''),
                 'reasoning': ai_sentiment.get('reasoning', ''),
                 'key_factors': ai_sentiment.get('key_factors', []),
-                'buy_recommendations': ai_sentiment.get('buy_recommendations', []),
-                'sell_recommendations': ai_sentiment.get('sell_recommendations', [])
+                'buy_recommendations': buy_recs,
+                'sell_recommendations': sell_recs
             }
             
-            # Cache the result
+            # Save to cache
             self.save_cache(result)
             
             return result

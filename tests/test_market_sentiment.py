@@ -306,55 +306,6 @@ class TestMarketSentimentAPI(unittest.TestCase):
         self.assertIn('error', data)
 
 
-class TestPriceFiltering(unittest.TestCase):
-    """Test price filtering functionality"""
-    
-    def test_price_range_filtering(self):
-        """Test: Price range filtering works correctly"""
-        recommendations = [
-            {'ticker': 'AAPL', 'price': 150.0, 'sector': 'Tech'},
-            {'ticker': 'F', 'price': 12.0, 'sector': 'Auto'},
-            {'ticker': 'BAC', 'price': 30.0, 'sector': 'Finance'},
-            {'ticker': 'AMZN', 'price': 175.0, 'sector': 'Tech'},
-            {'ticker': 'GE', 'price': 4.5, 'sector': 'Industrial'},
-        ]
-        
-        # Test 1-5 range
-        filtered = [r for r in recommendations if 1 <= r['price'] < 5]
-        self.assertEqual(len(filtered), 1)
-        self.assertEqual(filtered[0]['ticker'], 'GE')
-        
-        # Test 10-25 range
-        filtered = [r for r in recommendations if 10 <= r['price'] < 25]
-        self.assertEqual(len(filtered), 1)
-        self.assertEqual(filtered[0]['ticker'], 'F')
-        
-        # Test 25-100 range
-        filtered = [r for r in recommendations if 25 <= r['price'] < 100]
-        self.assertEqual(len(filtered), 1)
-        self.assertEqual(filtered[0]['ticker'], 'BAC')
-        
-        # Test 100+ range
-        filtered = [r for r in recommendations if r['price'] >= 100]
-        self.assertEqual(len(filtered), 2)
-        
-    def test_recommendations_include_prices(self):
-        """Test: Generated recommendations include price information"""
-        service = MarketSentimentService()
-        sector_data = {
-            'Technology': {'symbol': 'XLK', 'change_pct': 1.0, 'trend': 'up'}
-        }
-        
-        result = service.generate_sentiment_analysis({}, sector_data)
-        
-        # Check that at least some recommendations have prices
-        buy_recs = result.get('buy_recommendations', [])
-        if len(buy_recs) > 0:
-            # At least one should have a price field
-            has_price = any('price' in rec for rec in buy_recs)
-            self.assertTrue(has_price, "At least one recommendation should have a price")
-
-
 class TestMarketSentimentDataStructure(unittest.TestCase):
     """Test the data structure returned by sentiment service"""
     

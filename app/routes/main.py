@@ -38,8 +38,11 @@ def market_sentiment():
     """Get daily market sentiment analysis"""
     try:
         force_refresh = request.args.get('refresh', 'false').lower() == 'true'
+        
         service = get_market_sentiment_service()
-        sentiment_data = service.get_daily_sentiment(force_refresh=force_refresh)
+        sentiment_data = service.get_daily_sentiment(
+            force_refresh=force_refresh
+        )
         return jsonify({
             'success': True,
             'data': sentiment_data
