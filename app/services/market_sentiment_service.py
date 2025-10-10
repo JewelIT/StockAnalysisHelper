@@ -12,11 +12,18 @@ import random
 logger = logging.getLogger(__name__)
 
 class MarketSentimentService:
-    """Service for gener    def get_daily_sentiment(self, force_refresh: bool = False) -> Dict:entiment and recommendations"""
+    """Service for generating market sentiment and recommendations"""
     
     def __init__(self):
         self.cache_file = 'cache/market_sentiment_cache.json'
         self.cache_duration_hours = 4  # Refresh every 4 hours
+        
+        # Exchange rates (fallback values, should fetch live)
+        self.exchange_rates = {
+            'USD': 1.0,
+            'EUR': 0.92,
+            'GBP': 0.79
+        }
         
         # Stock recommendations by sector
         self.sector_stocks = {
@@ -198,7 +205,7 @@ class MarketSentimentService:
             }
     
     def _get_stock_price(self, ticker: str) -> Optional[float]:
-        """Get current stock price"""
+        """Get current stock price in USD"""
         try:
             stock = yf.Ticker(ticker)
             hist = stock.history(period='1d')
@@ -207,6 +214,24 @@ class MarketSentimentService:
         except Exception as e:
             logger.warning(f"Failed to get price for {ticker}: {e}")
         return None
+    
+    def _convert_price(self, price_usd: float, target_currency: str) -> float:
+        """Convert price from USD to target currency"""
+        if target_currency == 'USD' or target_currency == 'NATIVE':
+            return price_usd
+        
+        rate = self.exchange_rates.get(target_currency, 1.0)
+        return price_usd * rate
+    
+    def _fetch_live_exchange_rates(self) -> Dict[str, float]:
+        """Fetch live exchange rates (optional enhancement)"""
+        try:
+            # Could implement live fetching from API here
+            # For now, return fallback rates
+            return self.exchange_rates
+        except Exception as e:
+            logger.warning(f"Failed to fetch live exchange rates: {e}")
+            return self.exchange_rates
     
     def _get_stock_specific_buy_reason(self, ticker: str, sector_name: str, sector_change: float, sentiment: str) -> str:
         """Generate stock-specific buy recommendation reason"""
@@ -362,18 +387,27 @@ class MarketSentimentService:
         
         try:
             # Get top performing sectors
-            top_sectors = list(sector_data.items())[:5]  # Get more sectors for better selection
+            top_sectors = list(sector_data.items())[:5]  # Get top 5 sectors
             
+            # Round-robin approach: take 1 stock from each sector to diversify
+            sector_stock_iterators = {}
             for sector_name, sector_info in top_sectors:
                 if sector_name in self.sector_stocks:
-                    stocks = self.sector_stocks[sector_name]
+                    sector_stock_iterators[sector_name] = {
+                        'stocks': iter(self.sector_stocks[sector_name]),
+                        'info': sector_info
+                    }
+            
+            # Keep cycling through sectors until we have enough recommendations
+            while len(recommendations) < max_recommendations and sector_stock_iterators:
+                sectors_to_remove = []
+                
+                for sector_name, data in list(sector_stock_iterators.items()):
+                    if len(recommendations) >= max_recommendations:
+                        break
                     
-                    # Try to get multiple stocks from this sector
-                    for ticker in stocks:
-                        if len(recommendations) >= max_recommendations:
-                            break
-                        
-                        # Get stock price
+                    try:
+                        ticker = next(data['stocks'])
                         price = self._get_stock_price(ticker)
                         
                         if price is not None:
@@ -381,7 +415,7 @@ class MarketSentimentService:
                             reason = self._get_stock_specific_buy_reason(
                                 ticker, 
                                 sector_name, 
-                                sector_info['change_pct'],
+                                data['info']['change_pct'],
                                 sentiment
                             )
                             
@@ -391,10 +425,13 @@ class MarketSentimentService:
                                 "sector": sector_name,
                                 "price": round(price, 2)
                             })
-                        
-                        # Stop if we have enough
-                        if len(recommendations) >= max_recommendations:
-                            break
+                    except StopIteration:
+                        # No more stocks in this sector
+                        sectors_to_remove.append(sector_name)
+                
+                # Remove exhausted sectors
+                for sector_name in sectors_to_remove:
+                    del sector_stock_iterators[sector_name]
             
         except Exception as e:
             logger.warning(f"Error generating buy recommendations: {e}")
@@ -555,19 +592,28 @@ class MarketSentimentService:
         
         try:
             # Get bottom performing sectors
-            bottom_sectors = list(sector_data.items())[-5:]  # Get more sectors for better selection
+            bottom_sectors = list(sector_data.items())[-5:]  # Get bottom 5 sectors
             bottom_sectors.reverse()  # Worst first
             
+            # Round-robin approach: take 1 stock from each sector to diversify
+            sector_stock_iterators = {}
             for sector_name, sector_info in bottom_sectors:
                 if sector_name in self.sector_stocks:
-                    stocks = self.sector_stocks[sector_name]
+                    sector_stock_iterators[sector_name] = {
+                        'stocks': iter(self.sector_stocks[sector_name]),
+                        'info': sector_info
+                    }
+            
+            # Keep cycling through sectors until we have enough recommendations
+            while len(recommendations) < max_recommendations and sector_stock_iterators:
+                sectors_to_remove = []
+                
+                for sector_name, data in list(sector_stock_iterators.items()):
+                    if len(recommendations) >= max_recommendations:
+                        break
                     
-                    # Try to get multiple stocks from this sector
-                    for ticker in stocks:
-                        if len(recommendations) >= max_recommendations:
-                            break
-                        
-                        # Get stock price
+                    try:
+                        ticker = next(data['stocks'])
                         price = self._get_stock_price(ticker)
                         
                         if price is not None:
@@ -575,7 +621,7 @@ class MarketSentimentService:
                             reason = self._get_stock_specific_sell_reason(
                                 ticker,
                                 sector_name,
-                                sector_info['change_pct'],
+                                data['info']['change_pct'],
                                 sentiment
                             )
                             
@@ -585,10 +631,13 @@ class MarketSentimentService:
                                 "sector": sector_name,
                                 "price": round(price, 2)
                             })
-                        
-                        # Stop if we have enough
-                        if len(recommendations) >= max_recommendations:
-                            break
+                    except StopIteration:
+                        # No more stocks in this sector
+                        sectors_to_remove.append(sector_name)
+                
+                # Remove exhausted sectors
+                for sector_name in sectors_to_remove:
+                    del sector_stock_iterators[sector_name]
             
         except Exception as e:
             logger.warning(f"Error generating sell recommendations: {e}")
@@ -649,22 +698,24 @@ class MarketSentimentService:
         min_price, max_price = ranges[price_range]
         return [r for r in recommendations if r.get('price') and min_price <= r['price'] < max_price]
     
-    def get_daily_sentiment(self, force_refresh: bool = False) -> Dict:
+    def get_daily_sentiment(self, force_refresh: bool = False, currency: str = 'USD') -> Dict:
         """
         Get daily market sentiment with caching
         
         Args:
             force_refresh: Force refresh even if cache is valid
+            currency: Target currency for price display (USD, EUR, GBP, NATIVE)
             
         Returns:
-            Dictionary containing market sentiment analysis
+            Dictionary containing market sentiment analysis with prices in requested currency
         """
         try:
             # Check cache first unless force refresh
             if not force_refresh:
                 cached = self.load_cache()
                 if cached:
-                    return cached
+                    # Convert cached prices to requested currency
+                    return self._convert_sentiment_currency(cached, currency)
             
             logger.info("Generating market sentiment")
             
@@ -675,11 +726,11 @@ class MarketSentimentService:
             # Generate sentiment analysis with all recommendations
             ai_sentiment = self.generate_sentiment_analysis(market_data, sector_data)
             
-            # Get all recommendations (up to 10 each)
+            # Get all recommendations (up to 10 each) - prices in USD
             buy_recs = ai_sentiment.get('buy_recommendations', [])[:3]
             sell_recs = ai_sentiment.get('sell_recommendations', [])[:3]
             
-            # Combine all data
+            # Combine all data (prices in USD for caching)
             result = {
                 'timestamp': datetime.now().isoformat(),
                 'market_indices': market_data,
@@ -690,13 +741,15 @@ class MarketSentimentService:
                 'reasoning': ai_sentiment.get('reasoning', ''),
                 'key_factors': ai_sentiment.get('key_factors', []),
                 'buy_recommendations': buy_recs,
-                'sell_recommendations': sell_recs
+                'sell_recommendations': sell_recs,
+                'currency': 'USD'  # Cache is always in USD
             }
             
-            # Save to cache
+            # Save to cache (in USD)
             self.save_cache(result)
             
-            return result
+            # Convert to requested currency before returning
+            return self._convert_sentiment_currency(result, currency)
             
         except Exception as e:
             logger.error(f"Error getting daily sentiment: {e}")
@@ -710,8 +763,44 @@ class MarketSentimentService:
                 'reasoning': 'An error occurred while fetching market data.',
                 'key_factors': [],
                 'buy_recommendations': [],
-                'sell_recommendations': []
+                'sell_recommendations': [],
+                'currency': currency
             }
+    
+    def _convert_sentiment_currency(self, data: Dict, target_currency: str) -> Dict:
+        """Convert all prices in sentiment data to target currency"""
+        if not data or target_currency == 'USD':
+            # Already in USD or no data
+            result = data.copy()
+            result['currency'] = target_currency
+            return result
+        
+        result = data.copy()
+        
+        # Convert buy recommendations
+        if 'buy_recommendations' in result:
+            result['buy_recommendations'] = [
+                {
+                    **rec,
+                    'price': round(self._convert_price(rec['price'], target_currency), 2)
+                    if rec.get('price') else None
+                }
+                for rec in result['buy_recommendations']
+            ]
+        
+        # Convert sell recommendations
+        if 'sell_recommendations' in result:
+            result['sell_recommendations'] = [
+                {
+                    **rec,
+                    'price': round(self._convert_price(rec['price'], target_currency), 2)
+                    if rec.get('price') else None
+                }
+                for rec in result['sell_recommendations']
+            ]
+        
+        result['currency'] = target_currency
+        return result
 
 
 # Singleton instance

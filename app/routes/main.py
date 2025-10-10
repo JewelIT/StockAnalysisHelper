@@ -38,10 +38,17 @@ def market_sentiment():
     """Get daily market sentiment analysis"""
     try:
         force_refresh = request.args.get('refresh', 'false').lower() == 'true'
+        currency = request.args.get('currency', 'USD').upper()
+        
+        # Validate currency
+        valid_currencies = ['USD', 'EUR', 'GBP', 'NATIVE']
+        if currency not in valid_currencies:
+            currency = 'USD'
         
         service = get_market_sentiment_service()
         sentiment_data = service.get_daily_sentiment(
-            force_refresh=force_refresh
+            force_refresh=force_refresh,
+            currency=currency
         )
         return jsonify({
             'success': True,

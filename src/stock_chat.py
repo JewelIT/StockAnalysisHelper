@@ -15,6 +15,11 @@ class StockChatAssistant:
         self.initialized = False
         self.conversation_history = []  # Track conversation for context
         
+        # Conversation memory for follow-up questions
+        self.last_ticker = None
+        self.last_analysis_context = None
+        self.last_analysis_time = None
+        
         # Financial Advisor Persona
         self.system_persona = """
 I am a financial advisor and investment mentor. I help people understand financial markets, 
@@ -153,6 +158,20 @@ and always emphasize risk management and due diligence.
         
         # Store question in conversation history (after security check)
         self.conversation_history.append({'question': question, 'ticker': ticker})
+        
+        # 🧠 CONVERSATION MEMORY: Use context from previous questions
+        if not ticker and self.last_ticker:
+            ticker = self.last_ticker
+            # Use last analysis context if current context is empty
+            if not context or len(context.strip()) < 50:
+                context = self.last_analysis_context or context
+        
+        # Store context for future follow-up questions
+        if ticker and context and len(context.strip()) > 50:
+            self.last_ticker = ticker
+            self.last_analysis_context = context
+            from datetime import datetime
+            self.last_analysis_time = datetime.now()
         
         # Check if this is a non-financial question
         if self._is_non_financial_question(question):
@@ -460,7 +479,7 @@ and always emphasize risk management and due diligence.
         response += f"4. **Diversification:** Don't put all your capital in one asset.\n"
         response += f"5. **Professional Advice:** Consider consulting a licensed financial advisor for personalized guidance.\n\n"
         
-        response += f"*Would you like me to explain the technical indicators or sentiment analysis in more detail?*"
+        # Removed loop-generating question - answer is complete
         
         return response
     
@@ -598,10 +617,7 @@ and always emphasize risk management and due diligence.
         response += f"- Best used in combination, not in isolation\n"
         response += f"- Fundamental news can override technical signals\n\n"
         
-        response += f"📚 **Want to learn more?** Ask me about:\n"
-        response += f"- \"How does RSI work?\"\n"
-        response += f"- \"What is MACD?\"\n"
-        response += f"- \"Books on technical analysis\"\n\n"
+        # Removed loop-generating "Want to learn more?" section
         
         response += f"*Remember: Technical analysis is a tool, not a guarantee. Always manage your risk.*"
         
@@ -638,7 +654,7 @@ and always emphasize risk management and due diligence.
         response += f"- What's the market sentiment?\n"
         response += f"- Are there technical buy/sell signals?\n\n"
         
-        response += f"*Want to know if this is a good entry point? Ask me about the recommendation or technical analysis!*"
+        # Removed loop-generating question
         
         return response
     
@@ -804,14 +820,9 @@ and always emphasize risk management and due diligence.
         response += f"### ⚠️ Remember:\n\n"
         response += f"**Capital is at risk.** All investments can lose value. Only invest money you can afford to lose completely.\n\n"
         
-        response += f"### 💬 Ask Me More:\n\n"
-        response += f"- \"Should I invest in {ticker_str}?\"\n"
-        response += f"- \"What's the sentiment like?\"\n"
-        response += f"- \"Explain the technical indicators\"\n"
-        response += f"- \"What are the risks?\"\n"
-        response += f"- \"Why did the price change?\"\n\n"
+        # Removed loop-generating "Ask Me More" section
         
-        response += f"I'm here to help you make **informed** decisions, not to make decisions **for** you. Let's discuss!"
+        response += f"I'm here to help you make **informed** decisions, not to make decisions **for** you."
         
         return response
     
@@ -831,7 +842,7 @@ and always emphasize risk management and due diligence.
         
         # Recommendation questions
         if any(word in question_lower for word in ['recommend', 'should i', 'buy', 'sell', 'hold']):
-            return f"📋 **Investment Recommendation**\n\n{raw_answer}\n\n⚠️ **Important Reminder**: This recommendation is based on technical and sentiment analysis. Always:\n• Do your own research (DYOR)\n• Consider your risk tolerance\n• Diversify your portfolio\n• Only invest what you can afford to lose\n\n💡 *Want to understand why? Ask me about the technical indicators or sentiment analysis!*"
+            return f"📋 **Investment Recommendation**\n\n{raw_answer}\n\n⚠️ **Important Reminder**: This recommendation is based on technical and sentiment analysis. Always:\n• Do your own research (DYOR)\n• Consider your risk tolerance\n• Diversify your portfolio\n• Only invest what you can afford to lose"
         
         # Sentiment questions
         if any(word in question_lower for word in ['sentiment', 'feel', 'opinion', 'news']):
