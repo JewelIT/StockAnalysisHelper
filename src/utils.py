@@ -14,18 +14,31 @@ def format_timeframe_display(time_delta):
         time_delta: datetime.timedelta object
         
     Returns:
-        str: Human-readable time range (e.g., "3 months", "1 week", "2 years")
+        str: Human-readable time range (e.g., "5 hours", "30 minutes", "3 months", "1 week")
     """
+    total_seconds = time_delta.total_seconds()
     days = time_delta.days
+    hours = int(total_seconds // 3600)
+    minutes = int((total_seconds % 3600) // 60)
     
-    if days < 7:
+    # Less than 1 hour - show minutes
+    if total_seconds < 3600:
+        return f"{minutes} minute{'s' if minutes != 1 else ''}"
+    # Less than 1 day - show hours
+    elif days == 0:
+        return f"{hours} hour{'s' if hours != 1 else ''}"
+    # Less than 1 week - show days
+    elif days < 7:
         return f"{days} day{'s' if days != 1 else ''}"
+    # Less than 1 month - show weeks
     elif days < 30:
         weeks = days // 7
         return f"{weeks} week{'s' if weeks != 1 else ''}"
+    # Less than 1 year - show months
     elif days < 365:
         months = days // 30
         return f"{months} month{'s' if months != 1 else ''}"
+    # 1 year or more - show years
     else:
         years = days // 365
         return f"{years} year{'s' if years != 1 else ''}"
