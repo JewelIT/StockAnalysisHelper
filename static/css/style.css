@@ -1249,12 +1249,54 @@ body {
     outline-offset: 2px;
 }
 
+/* Market Sentiment Section */
+#marketSentimentCard .card-header.bg-gradient {
+    border: none;
+}
+
+#marketSentimentCard .progress {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+#marketSentimentCard .card.border-success,
+#marketSentimentCard .card.border-danger {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+#marketSentimentCard .card.border-success:hover,
+#marketSentimentCard .card.border-danger:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+#marketSentimentCard .list-group-item {
+    transition: background-color 0.2s;
+}
+
+#marketSentimentCard .list-group-item:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+[data-bs-theme="dark"] #marketSentimentCard .list-group-item:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+#marketSentimentCard .card.border-0.shadow-sm {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+#marketSentimentCard .card.border-0.shadow-sm:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
 /* Print Styles */
 @media print {
     .chat-side-panel,
     .chat-toggle-btn,
     .navbar,
-    #settingsModal {
+    #settingsModal,
+    #marketSentimentCard {
         display: none !important;
     }
     

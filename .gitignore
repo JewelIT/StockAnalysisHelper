@@ -51,6 +51,9 @@ htmlcov/
 .cache/
 transformers_cache/
 
+# Market sentiment cache
+cache/market_sentiment_cache.json
+
 # IDE
 .vscode/
 .idea/

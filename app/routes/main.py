@@ -1,8 +1,9 @@
 """
 Main routes - Home page and utility endpoints
 """
-from flask import Blueprint, render_template, jsonify, session
+from flask import Blueprint, render_template, jsonify, session, request
 import time
+from app.services.market_sentiment_service import get_market_sentiment_service
 
 bp = Blueprint('main', __name__)
 
@@ -31,3 +32,20 @@ def get_chat_history():
         'last_ticker': last_ticker,
         'success': True
     })
+
+@bp.route('/market-sentiment', methods=['GET'])
+def market_sentiment():
+    """Get daily market sentiment analysis"""
+    try:
+        force_refresh = request.args.get('refresh', 'false').lower() == 'true'
+        service = get_market_sentiment_service()
+        sentiment_data = service.get_daily_sentiment(force_refresh=force_refresh)
+        return jsonify({
+            'success': True,
+            'data': sentiment_data
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

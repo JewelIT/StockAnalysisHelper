@@ -2620,6 +2620,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeChatPanel();  // Initialize chat panel state
     loadSessionTickers();
     loadChatHistory();  // Load previous conversation
+    loadMarketSentiment();  // Load daily market sentiment
     
     const settingsModal = document.getElementById('settingsModal');
     if (settingsModal) {
@@ -2638,7 +2639,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    console.log('✅ Theme, portfolio, and chat initialized');
+    console.log('✅ Theme, portfolio, chat, and market sentiment initialized');
     
     // Listen for theme changes and refresh charts
     setupThemeChangeListener();
@@ -2720,4 +2721,277 @@ function initializeChatPanel() {
     }
     
     console.log(`💬 Chat panel initialized: ${savedState}`);
+}
+
+// ===== MARKET SENTIMENT =====
+
+/**
+ * Load and display daily market sentiment
+ */
+async function loadMarketSentiment(forceRefresh = false) {
+    const contentDiv = document.getElementById('marketSentimentContent');
+    
+    if (!contentDiv) return;
+    
+    // Show loading state
+    contentDiv.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Analyzing market sentiment...</p>
+        </div>
+    `;
+    
+    try {
+        const url = forceRefresh ? '/market-sentiment?refresh=true' : '/market-sentiment';
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to load market sentiment');
+        }
+        
+        renderMarketSentiment(result.data);
+        
+    } catch (error) {
+        console.error('Error loading market sentiment:', error);
+        contentDiv.innerHTML = `
+            <div class="alert alert-warning mb-0">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                Unable to load market sentiment. Please try again later.
+            </div>
+        `;
+    }
+}
+
+/**
+ * Render market sentiment data
+ */
+function renderMarketSentiment(data) {
+    const contentDiv = document.getElementById('marketSentimentContent');
+    
+    if (!contentDiv || !data) return;
+    
+    const sentimentColor = {
+        'BULLISH': 'success',
+        'BEARISH': 'danger',
+        'NEUTRAL': 'warning'
+    }[data.sentiment] || 'secondary';
+    
+    const sentimentIcon = {
+        'BULLISH': 'arrow-up-circle-fill',
+        'BEARISH': 'arrow-down-circle-fill',
+        'NEUTRAL': 'dash-circle-fill'
+    }[data.sentiment] || 'circle-fill';
+    
+    const timestamp = data.timestamp ? new Date(data.timestamp).toLocaleString() : '';
+    
+    let html = `
+        <!-- Overall Sentiment -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="display-4">
+                            <i class="bi bi-${sentimentIcon} text-${sentimentColor}"></i>
+                        </div>
+                        <div>
+                            <h3 class="mb-1 text-${sentimentColor}">${data.sentiment}</h3>
+                            <div class="progress" style="width: 200px; height: 8px;">
+                                <div class="progress-bar bg-${sentimentColor}" role="progressbar" 
+                                     style="width: ${data.confidence}%" 
+                                     aria-valuenow="${data.confidence}" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <small class="text-muted">Confidence: ${data.confidence}%</small>
+                        </div>
+                    </div>
+                    <small class="text-muted">
+                        <i class="bi bi-clock me-1"></i>${timestamp}
+                    </small>
+                </div>
+                
+                ${data.summary ? `
+                <div class="alert alert-${sentimentColor} alert-dismissible fade show mb-3" role="alert">
+                    <strong><i class="bi bi-megaphone me-2"></i>Market Summary:</strong> ${data.summary}
+                </div>
+                ` : ''}
+                
+                ${data.reasoning ? `
+                <div class="card border-0 bg-light mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title">
+                            <i class="bi bi-lightbulb text-warning me-2"></i>Analysis
+                        </h6>
+                        <p class="mb-0">${data.reasoning}</p>
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+        
+        <!-- Market Indices -->
+        ${data.market_indices && Object.keys(data.market_indices).length > 0 ? `
+        <div class="row mb-4">
+            <div class="col-12">
+                <h6 class="mb-3">
+                    <i class="bi bi-graph-up text-primary me-2"></i>Market Indices
+                </h6>
+                <div class="row g-3">
+                    ${Object.entries(data.market_indices).map(([name, idx]) => `
+                        <div class="col-md-6 col-lg-3">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body">
+                                    <h6 class="card-title text-truncate" title="${name}">${name}</h6>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="h5 mb-0">${idx.current}</span>
+                                        <span class="badge bg-${idx.trend === 'up' ? 'success' : 'danger'}">
+                                            <i class="bi bi-arrow-${idx.trend === 'up' ? 'up' : 'down'} me-1"></i>${idx.change_pct}%
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+        ` : ''}
+        
+        <!-- Top Sectors -->
+        ${data.top_sectors && Object.keys(data.top_sectors).length > 0 ? `
+        <div class="row mb-4">
+            <div class="col-12">
+                <h6 class="mb-3">
+                    <i class="bi bi-pie-chart text-info me-2"></i>Top Performing Sectors
+                </h6>
+                <div class="list-group">
+                    ${Object.entries(data.top_sectors).map(([name, sector]) => `
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${name}</strong>
+                                <small class="text-muted ms-2">${sector.symbol}</small>
+                            </div>
+                            <span class="badge bg-${sector.trend === 'up' ? 'success' : 'danger'} fs-6">
+                                <i class="bi bi-arrow-${sector.trend === 'up' ? 'up' : 'down'} me-1"></i>${sector.change_pct}%
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+        ` : ''}
+        
+        <!-- Key Factors -->
+        ${data.key_factors && data.key_factors.length > 0 ? `
+        <div class="row mb-4">
+            <div class="col-12">
+                <h6 class="mb-3">
+                    <i class="bi bi-key text-warning me-2"></i>Key Factors
+                </h6>
+                <ul class="list-group list-group-flush">
+                    ${data.key_factors.map(factor => `
+                        <li class="list-group-item">
+                            <i class="bi bi-chevron-right text-primary me-2"></i>${factor}
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        </div>
+        ` : ''}
+        
+        <!-- Stock Recommendations -->
+        <div class="row">
+            <!-- Buy Recommendations -->
+            ${data.buy_recommendations && data.buy_recommendations.length > 0 ? `
+            <div class="col-md-6 mb-3">
+                <h6 class="mb-3 text-success">
+                    <i class="bi bi-cart-plus me-2"></i>Top Picks to Buy
+                </h6>
+                ${data.buy_recommendations.map((rec, idx) => `
+                    <div class="card border-success mb-2">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="mb-0">
+                                    <span class="badge bg-success me-2">${idx + 1}</span>
+                                    <strong>${rec.ticker}</strong>
+                                </h6>
+                                <button class="btn btn-sm btn-outline-success" 
+                                        onclick="addTickerFromRecommendation('${rec.ticker}')"
+                                        title="Add to analysis">
+                                    <i class="bi bi-plus-circle"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted d-block mb-2">
+                                <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
+                            </small>
+                            <p class="mb-0 small">${rec.reason}</p>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            ` : ''}
+            
+            <!-- Sell Recommendations -->
+            ${data.sell_recommendations && data.sell_recommendations.length > 0 ? `
+            <div class="col-md-6 mb-3">
+                <h6 class="mb-3 text-danger">
+                    <i class="bi bi-x-circle me-2"></i>Stocks to Avoid/Sell
+                </h6>
+                ${data.sell_recommendations.map((rec, idx) => `
+                    <div class="card border-danger mb-2">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="mb-0">
+                                    <span class="badge bg-danger me-2">${idx + 1}</span>
+                                    <strong>${rec.ticker}</strong>
+                                </h6>
+                            </div>
+                            <small class="text-muted d-block mb-2">
+                                <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
+                            </small>
+                            <p class="mb-0 small">${rec.reason}</p>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            ` : ''}
+        </div>
+    `;
+    
+    contentDiv.innerHTML = html;
+}
+
+/**
+ * Refresh market sentiment
+ */
+async function refreshMarketSentiment() {
+    const btn = document.getElementById('refreshSentimentBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-arrow-clockwise spinner-border spinner-border-sm"></i>';
+    }
+    
+    await loadMarketSentiment(true);
+    
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
+    }
+    
+    showToast('Market sentiment refreshed', 'success');
+}
+
+/**
+ * Add ticker from recommendation to analysis
+ */
+function addTickerFromRecommendation(ticker) {
+    if (!ticker) return;
+    
+    const tickerInput = document.getElementById('tickerInput');
+    if (tickerInput) {
+        tickerInput.value = ticker.toUpperCase();
+        addTicker();
+        showToast(`${ticker} added to analysis`, 'success');
+    }
 }

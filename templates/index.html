@@ -133,6 +133,27 @@
                     </div>
                 </div>
 
+                <!-- Market Sentiment Section -->
+                <div class="card shadow-sm mb-4" id="marketSentimentCard">
+                    <div class="card-header bg-gradient d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <h5 class="mb-0 text-white">
+                            <i class="bi bi-activity me-2"></i>
+                            Daily Market Sentiment
+                        </h5>
+                        <button class="btn btn-sm btn-light" onclick="refreshMarketSentiment()" title="Refresh sentiment" id="refreshSentimentBtn">
+                            <i class="bi bi-arrow-clockwise"></i>
+                        </button>
+                    </div>
+                    <div class="card-body" id="marketSentimentContent">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2 text-muted">Loading market sentiment...</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Loading Indicator -->
                 <div id="loadingIndicator" class="text-center py-5" style="display: none;">
                     <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
