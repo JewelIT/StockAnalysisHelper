@@ -14,9 +14,27 @@ class Config:
     DAILY_INTERVAL = "1d"          # Daily intervals for longer periods
     
     # Timeframe to interval mapping
+    # For intraday timeframes, we need to map to both period and interval
     INTERVAL_MAP = {
+        # Intraday (these are intervals, not periods - handled specially)
+        "5m": "5m",
+        "15m": "15m",
+        "30m": "30m",
+        "1h": "1h",
+        "3h": "3h",      # Not supported by yfinance, will use 1h
+        "6h": "6h",      # Not supported by yfinance, will use 1h
+        "12h": "12h",    # Not supported by yfinance, will use 1h
+        # Daily and longer
         "1d": INTRADAY_INTERVAL,
-        "1wk": WEEKLY_INTERVAL,
+        "5d": DAILY_INTERVAL,
+        "1wk": DAILY_INTERVAL,
+        "1mo": DAILY_INTERVAL,
+        "3mo": DAILY_INTERVAL,
+        "6mo": WEEKLY_INTERVAL,
+        "1y": WEEKLY_INTERVAL,
+        "2y": WEEKLY_INTERVAL,
+        "5y": WEEKLY_INTERVAL,
+        "max": WEEKLY_INTERVAL,
     }
     
     # ==================== TECHNICAL INDICATORS ====================

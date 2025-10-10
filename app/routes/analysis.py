@@ -37,7 +37,7 @@ def analyze():
     if chart_type not in valid_chart_types:
         chart_type = 'candlestick'
     
-    valid_timeframes = ['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y', 'max']
+    valid_timeframes = ['5m', '15m', '30m', '1h', '3h', '6h', '12h', '1d', '5d', '1wk', '1mo', '3mo', '6mo', '1y', '2y', '5y', 'max']
     if timeframe not in valid_timeframes:
         timeframe = '3mo'
     

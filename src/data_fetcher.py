@@ -153,20 +153,43 @@ class DataFetcher:
     
     def fetch_historical_data(self, ticker, period="3mo"):
         """Fetch historical stock/crypto price data with appropriate interval"""
+        from datetime import datetime, timedelta
+        
         # Check if it's a cryptocurrency
         if CoinGeckoFetcher.is_crypto_ticker(ticker):
             print(f"  💰 Using CoinGecko for crypto: {ticker}")
             return self.coingecko.fetch_historical_data(ticker, period)
         
-        # Determine appropriate interval based on period (from config)
-        interval = Config.get_interval_for_period(period)
+        # Map intraday timeframes to appropriate period and interval for Yahoo Finance
+        # These show data with the specified interval over a reasonable period
+        intraday_map = {
+            "5m": {"period": "1d", "interval": "5m"},      # 5-min bars for 1 day
+            "15m": {"period": "5d", "interval": "15m"},    # 15-min bars for 5 days
+            "30m": {"period": "5d", "interval": "30m"},    # 30-min bars for 5 days
+            "1h": {"period": "5d", "interval": "1h"},      # 1-hour bars for 5 days
+            "3h": {"period": "1mo", "interval": "1h"},     # Yahoo doesn't support 3h, use 1h over 1 month
+            "6h": {"period": "1mo", "interval": "1h"},     # Yahoo doesn't support 6h, use 1h over 1 month
+            "12h": {"period": "1mo", "interval": "1h"},    # Yahoo doesn't support 12h, use 1h over 1 month
+        }
         
-        # Otherwise use Yahoo Finance
+        # Check if it's an intraday timeframe
+        if period in intraday_map:
+            yf_period = intraday_map[period]["period"]
+            yf_interval = intraday_map[period]["interval"]
+            print(f"  📊 Intraday data: using period={yf_period}, interval={yf_interval}")
+        else:
+            # For daily and longer periods, use the period directly
+            yf_period = period
+            yf_interval = Config.get_interval_for_period(period)
+        
+        # Fetch data from Yahoo Finance
         stock = yf.Ticker(ticker)
         try:
-            hist = stock.history(period=period, interval=interval)
+            hist = stock.history(period=yf_period, interval=yf_interval)
             return hist if not hist.empty else None
-        except:
+            
+        except Exception as e:
+            print(f"  ❌ Error fetching data: {e}")
             return None
     
     def get_stock_info(self, ticker):
