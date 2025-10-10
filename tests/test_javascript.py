@@ -69,6 +69,12 @@ def test_javascript_undefined_functions():
         'then', 'catch', 'finally', 'resolve', 'reject', 'all', 'race',
         # Date methods
         'now', 'getTime', 'toISOString',
+        # Browser APIs
+        'MutationObserver', 'IntersectionObserver', 'ResizeObserver',
+        'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval',
+        'requestAnimationFrame', 'cancelAnimationFrame',
+        # False positives (text within strings/templates, not actual functions)
+        'Consensus', 'stock', 'Stock', 'Strong', 'Buy', 'Sell',
     }
     
     # Find undefined functions

@@ -132,11 +132,12 @@ class TestNewsfeedConfigInAnalysisService(unittest.TestCase):
             social_days=14
         )
         
-        # Verify all parameters were forwarded
+        # Verify all parameters were forwarded (including theme with default value)
         mock_analyzer.analyze_portfolio.assert_called_once_with(
             ['AAPL'],
             chart_type='candlestick',
             timeframe='3mo',
+            theme='dark',  # Default theme parameter added
             max_news=15,
             max_social=12,
             news_sort='date_asc',
