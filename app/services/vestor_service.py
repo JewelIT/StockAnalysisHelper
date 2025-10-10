@@ -262,30 +262,35 @@ Just say the company name and I'll look it up for you! 📊""",
         # Build Vestor's system prompt
         vestor_prompt = self._build_vestor_prompt(conversation_context)
         
-        # Determine conversation mode
-        # If we have a final_ticker (either mentioned or from context), we need stock analysis
-        needs_analysis = bool(final_ticker)
-        
-        print(f"🤖 Vestor Mode: {'Stock Analysis' if needs_analysis else 'Conversation'}")
-        print("="*80 + "\n")
-        
-        # Process based on mode
-        if not needs_analysis:
+        # Check if there's a ticker mentioned or in context
+        if final_ticker:
+            # Check if analysis exists
+            cached_analysis = self.analysis_service.get_cached_analysis(final_ticker)
+            
+            if cached_analysis:
+                print(f"🤖 Vestor Mode: Stock Analysis (with data for {final_ticker})")
+                print("="*80 + "\n")
+                # Generate response with analysis context
+                return self._handle_stock_conversation(
+                    question, 
+                    final_ticker, 
+                    cached_analysis, 
+                    vestor_prompt
+                )
+            else:
+                print(f"🤖 Vestor Mode: Stock Conversation (no data yet for {final_ticker})")
+                print("="*80 + "\n")
+                # Answer the question anyway, and suggest analysis
+                return self._handle_conversation_with_ticker(
+                    question,
+                    final_ticker,
+                    vestor_prompt
+                )
+        else:
+            print(f"🤖 Vestor Mode: General Conversation")
+            print("="*80 + "\n")
+            # Pure conversational response
             return self._handle_conversation(question, vestor_prompt, mentioned_tickers)
-        
-        # Check if analysis exists
-        cached_analysis = self.analysis_service.get_cached_analysis(final_ticker)
-        
-        if not cached_analysis:
-            return self._request_analysis(final_ticker)
-        
-        # Generate response with analysis context
-        return self._handle_stock_conversation(
-            question, 
-            final_ticker, 
-            cached_analysis, 
-            vestor_prompt
-        )
     
     def _build_conversation_context(self, history):
         """Build context string from conversation history"""
@@ -309,10 +314,16 @@ Just say the company name and I'll look it up for you! 📊""",
             'BYE', 'GOODBYE', 'PLEASE', 'SORRY', 'THE', 'AND', 'FOR', 'BUT', 'NOT',
             'WITH', 'FROM', 'ABOUT', 'WHAT', 'WHERE', 'WHEN', 'WHY', 'HOW', 'WHO',
             'WHICH', 'THIS', 'THAT', 'THESE', 'THOSE', 'CAN', 'COULD', 'WOULD',
-            'SHOULD', 'WILL', 'SHALL', 'MAY', 'MIGHT', 'MUST'
+            'SHOULD', 'WILL', 'SHALL', 'MAY', 'MIGHT', 'MUST', 'JUST', 'VERY',
+            'ALSO', 'EVEN', 'STILL', 'ONLY', 'LIKE', 'NEED', 'WANT', 'MAKE',
+            'KNOW', 'THINK', 'TAKE', 'COME', 'GIVE', 'LOOK', 'USE', 'FIND'
         }
         
-        # Check for company names
+        # Commodity/general investment terms that shouldn't be treated as tickers
+        # unless explicitly meant as tickers (e.g., "analyze CORN" vs "invest in corn")
+        commodity_terms = {'CORN', 'WHEAT', 'RICE', 'GOLD', 'SILVER', 'OIL', 'GAS', 'WATER'}
+        
+        # Check for company names first (these take priority)
         for company, ticker in self.company_to_ticker.items():
             if company in question_lower:
                 mentioned.append(ticker)
@@ -323,27 +334,40 @@ Just say the company name and I'll look it up for you! 📊""",
         potential_tickers = re.findall(ticker_pattern, question)
         for t in potential_tickers:
             if t not in mentioned and t not in excluded_words:
-                mentioned.append(t)
-                print(f"📊 Detected ticker: {t}")
+                # If it's a commodity term, only include if used as ticker (e.g., "analyze CORN", not "corn investment")
+                if t in commodity_terms:
+                    # Check if it's used in a ticker-like context
+                    if re.search(rf'\b(analyze|check|look at|show me|ticker|symbol)\s+{t}\b', question, re.IGNORECASE):
+                        mentioned.append(t)
+                        print(f"📊 Detected ticker: {t} (explicit usage)")
+                    else:
+                        print(f"⏭️  Skipping '{t}' - looks like commodity/general term, not ticker")
+                else:
+                    mentioned.append(t)
+                    print(f"📊 Detected ticker: {t}")
         
         return mentioned
     
     def _resolve_ticker(self, explicit_ticker, mentioned, context_ticker, question_lower):
         """Determine which ticker to use for the conversation"""
+        # Priority 1: Explicit ticker parameter
         if explicit_ticker:
             return explicit_ticker
         
+        # Priority 2: Newly mentioned ticker in THIS message
         if mentioned:
             return mentioned[0]
         
-        # Check for follow-up indicators
-        if context_ticker:
+        # Priority 3: Check for follow-up indicators about previous ticker
+        # Only use context ticker if NO new ticker was mentioned
+        if context_ticker and not mentioned:
             follow_up_phrases = [
-                'is it', 'should i', 'worth it', 'what about it', 'tell me more',
-                'more info', 'thoughts on that', 'opinion', 'good investment',
-                'buy it', 'sell it', 'yes', 'analyze', 'the stock', 'that stock'
+                'is it', 'worth it', 'what about it', 'tell me more',
+                'more info', 'thoughts on that', 'opinion on it', 'the stock', 'that stock',
+                'analyze it', 'buy it', 'sell it'
             ]
-            if any(phrase in question_lower for phrase in follow_up_phrases):
+            # More specific follow-up: requires at least one phrase AND short question
+            if any(phrase in question_lower for phrase in follow_up_phrases) and len(question_lower) < 100:
                 print(f"🔄 Follow-up about: {context_ticker}")
                 return context_ticker
         
@@ -378,6 +402,56 @@ Just say the company name and I'll look it up for you! 📊""",
 - Don't be preachy - be helpful and practical
 - Use emojis sparingly for friendliness (1-2 per response max)
 """
+    
+    def _handle_conversation_with_ticker(self, question, ticker, prompt):
+        """Handle conversation when ticker is mentioned but not yet analyzed"""
+        try:
+            # Add ticker context to the prompt
+            ticker_context = f"\n\nUser is asking about **{ticker}**. Answer their question naturally. If you don't have analysis data yet, you can:\n- Answer general questions about the company\n- Explain what the ticker represents\n- Offer to analyze it if they want specific data\n- Just have a natural conversation about it"
+            
+            full_context = prompt + ticker_context
+            
+            assistant = self._get_chat_assistant()
+            response = assistant.answer_question(
+                question=question,
+                context=full_context,
+                ticker=ticker
+            )
+            
+            # Extract the answer
+            answer_text = response.get('answer', '') if isinstance(response, dict) else str(response)
+            
+            # Add a friendly offer to analyze at the end if not already mentioned
+            if 'analyze' not in answer_text.lower() and len(answer_text) < 500:
+                answer_text += f"\n\n💡 Would you like me to analyze **{ticker}** with real-time data? Just say 'analyze {ticker}' or click the analyze button!"
+            
+            return {
+                'answer': answer_text,
+                'ticker': ticker,
+                'vestor_mode': 'conversation_with_ticker',
+                'suggested_ticker': ticker,
+                'success': True
+            }
+        except Exception as e:
+            print(f"❌ Error in conversation with ticker: {str(e)}")
+            # Fallback: simple response
+            return {
+                'answer': f"""I'd be happy to discuss **{ticker}** with you!
+
+{question}
+
+To give you data-driven insights, I can analyze {ticker} with real-time information. Just say "analyze {ticker}" or use the analyze button, and I'll pull the latest:
+- Stock price and performance
+- Technical indicators
+- Market sentiment
+- Investment recommendation
+
+What would you like to know about {ticker}?""",
+                'ticker': ticker,
+                'vestor_mode': 'conversation_with_ticker',
+                'suggested_ticker': ticker,
+                'success': True
+            }
     
     def _handle_conversation(self, question, prompt, mentioned_tickers):
         """Handle pure conversational response (no stock analysis)"""
@@ -424,12 +498,35 @@ I'm always here to help with your investment journey. Feel free to ask me:
                 'success': True
             }
         
-        # For other conversational questions, use the AI assistant
+        # Handle ticker lookup questions
+        ticker_lookup = self._handle_ticker_lookup(question, question_lower)
+        if ticker_lookup:
+            return ticker_lookup
+        
+        # Handle company list questions
+        list_response = self._handle_list_companies(question_lower)
+        if list_response:
+            return list_response
+        
+        # For any other question, use the AI assistant - answer naturally!
         try:
             assistant = self._get_chat_assistant()
+            
+            # Enhance prompt to answer ANY question naturally
+            open_prompt = prompt + """
+
+**IMPORTANT**: Answer the user's question naturally and helpfully, regardless of topic:
+- Financial questions: Give detailed investment advice
+- Stock market questions: Explain concepts clearly
+- General questions: Provide helpful, friendly responses
+- Educational questions: Teach and explain
+- "What is X?" questions: Define and explain clearly
+
+Be conversational, helpful, and knowledgeable. Don't refuse to answer - just be honest about your knowledge limits if needed."""
+            
             response = assistant.answer_question(
                 question=question,
-                context=prompt,
+                context=open_prompt,
                 ticker=""
             )
             
@@ -476,7 +573,7 @@ Let me analyze it first so I can give you informed insights. Would you like me t
             
             # Build analysis context
             analysis_context = f"""
-=== Analysis Data for {ticker} ===
+=== Real-Time Analysis Data for {ticker} ===
 Current Price: ${cached_result.get('current_price', 0):.2f}
 Price Change: {cached_result.get('price_change', 0):+.2f}%
 Recommendation: {cached_result.get('recommendation', 'N/A')}
@@ -487,12 +584,19 @@ MACD Signal: {cached_result.get('macd_signal', 'N/A')}
 
 Key Reasons:
 {chr(10).join(f"- {r}" for r in cached_result.get('reasons', [])[:5])}
+
+**Instructions**: Use this analysis data to answer the user's question about {ticker}. 
+- Answer their specific question directly
+- Reference the data when relevant
+- Be conversational and helpful
+- Provide your investment perspective
+- Don't just repeat the data - add insights and context
 """
             
             full_context = prompt + "\n\n" + analysis_context
             
             assistant = self._get_chat_assistant()
-            print(f"🤖 Calling AI with ticker='{ticker}'")
+            print(f"🤖 Calling AI with ticker='{ticker}' and analysis data")
             response = assistant.answer_question(
                 question=question,
                 context=full_context,
@@ -507,6 +611,7 @@ Key Reasons:
                 'answer': answer_text,
                 'ticker': ticker,
                 'vestor_mode': 'stock_advice',
+                'has_analysis_data': True,
                 'success': True
             }
         except Exception as e:
