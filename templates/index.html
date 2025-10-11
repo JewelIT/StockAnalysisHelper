@@ -340,6 +340,12 @@
                                 <i class="bi bi-info-circle me-1"></i> About
                             </button>
                         </li>
+                        <li class="nav-item" role="presentation" id="developer-tab-nav" style="display: none;">
+                            <button class="nav-link" id="developer-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#developer" type="button" role="tab">
+                                <i class="bi bi-code-slash me-1"></i> Developer
+                            </button>
+                        </li>
                     </ul>
                     
                     <!-- Tab Content -->
@@ -709,6 +715,132 @@
                             <p>Version 2.0.0 - Modernized UI</p>
                             <h6 class="mt-4">Developer</h6>
                             <p>Built with Python, Flask, PyTorch, and Bootstrap 5</p>
+                        </div>
+                        
+                        <!-- Developer Settings (Hidden by default, shown only when DEBUG_MODE enabled) -->
+                        <div class="tab-pane fade" id="developer" role="tabpanel">
+                            <div class="alert alert-warning">
+                                <i class="bi bi-code-slash me-2"></i>
+                                <strong>Developer Mode</strong> - These settings are only visible when DEBUG_MODE is enabled.
+                            </div>
+                            
+                            <h6 class="mb-3">🐛 Frontend Debugging</h6>
+                            
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h6 class="card-title">Console Logging Control</h6>
+                                    <p class="text-muted small">Control browser console output verbosity</p>
+                                    
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" id="devDebugModeToggle" 
+                                               onchange="toggleDebugMode(this.checked)">
+                                        <label class="form-check-label" for="devDebugModeToggle">
+                                            <strong>Enable Frontend Debug Logging</strong>
+                                        </label>
+                                    </div>
+                                    <div class="form-text">
+                                        When enabled, detailed logs will appear in browser console (F12).
+                                        Disable for cleaner console output.
+                                    </div>
+                                    
+                                    <div class="mt-3">
+                                        <p class="mb-1 small text-muted">Current Status:</p>
+                                        <span id="devDebugStatus" class="badge bg-secondary">Unknown</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <h6 class="mb-3 mt-4">🔧 Backend Logging Control</h6>
+                            
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h6 class="card-title">Server Log Level</h6>
+                                    <p class="text-muted small">Control Python backend logging verbosity</p>
+                                    
+                                    <div class="mb-3">
+                                        <label for="devLogLevel" class="form-label">Backend Log Level</label>
+                                        <select class="form-select" id="devLogLevel">
+                                            <option value="DEBUG">🔊 DEBUG - Everything (Development)</option>
+                                            <option value="INFO" selected>📢 INFO - Normal (Default)</option>
+                                            <option value="WARNING">⚠️ WARNING - Important only</option>
+                                            <option value="ERROR">🔇 ERROR - Errors only (Production)</option>
+                                            <option value="CRITICAL">🚨 CRITICAL - Critical only</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="alert alert-info mb-3">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        <strong>How to apply:</strong>
+                                        <ol class="mb-0 mt-2 small">
+                                            <li>Select desired log level above</li>
+                                            <li>Copy the command below</li>
+                                            <li>Stop the app (Ctrl+C)</li>
+                                            <li>Run the command in your terminal</li>
+                                            <li>Restart to see changes</li>
+                                        </ol>
+                                    </div>
+                                    
+                                    <div class="mb-2">
+                                        <label class="form-label small text-muted">Command to run:</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control font-monospace small" 
+                                                   id="devLogLevelCommand" readonly value="LOG_LEVEL=INFO python3 app.py">
+                                            <button class="btn btn-outline-secondary" type="button" 
+                                                    onclick="copyLogLevelCommand()" title="Copy to clipboard">
+                                                <i class="bi bi-clipboard"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-text">
+                                        💡 <strong>Quick Script:</strong> Use <code>./set-log-level.sh [mode]</code><br>
+                                        Examples: <code>./set-log-level.sh quiet</code>, <code>./set-log-level.sh verbose</code>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <h6 class="mb-3 mt-4">📋 Quick Reference</h6>
+                            
+                            <div class="card">
+                                <div class="card-body">
+                                    <table class="table table-sm mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Level</th>
+                                                <th>What You'll See</th>
+                                                <th>Best For</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td><span class="badge bg-primary">DEBUG</span></td>
+                                                <td>Everything including function calls</td>
+                                                <td>Active development</td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-info">INFO</span></td>
+                                                <td>Normal operations & milestones</td>
+                                                <td>Testing & staging</td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-warning">WARNING</span></td>
+                                                <td>Warnings & potential issues</td>
+                                                <td>Pre-production</td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-danger">ERROR</span></td>
+                                                <td>Errors only</td>
+                                                <td>Production</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-secondary mt-3">
+                                <i class="bi bi-file-earmark-text me-2"></i>
+                                <strong>Documentation:</strong> See <code>docs/LOGGING_CONTROL.md</code> for complete guide
+                            </div>
                         </div>
                         
                     </div>
