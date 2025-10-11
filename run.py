@@ -3,7 +3,7 @@ Vestor - AI Financial Advisor Application
 Main application entry point
 """
 import os
-from app import create_app
+from src.web import create_app
 from src.logging_config import setup_logging
 
 # Setup logging

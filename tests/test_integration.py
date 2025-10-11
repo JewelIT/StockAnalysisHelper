@@ -3,7 +3,7 @@ Integration tests for Vestor chatbot
 Tests complete conversation flows and multi-turn interactions
 """
 import unittest
-from app import create_app
+from src.web import create_app
 import json
 
 
