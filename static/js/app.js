@@ -193,7 +193,7 @@ function formatPrice(priceUSD, ticker = null) {
 function showToast(message, type = 'info', title = null) {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
+    toast.className = `custom-toast toast-${type}`;
     
     const icons = {
         success: '✅',
@@ -202,22 +202,22 @@ function showToast(message, type = 'info', title = null) {
         info: 'ℹ️'
     };
     
-    const defaultTitles = {
-        success: 'Success',
-        error: 'Error',
-        warning: 'Warning',
-        info: 'Information'
-    };
-    
-    toast.innerHTML = `
+    // Build toast HTML - only show title if explicitly provided
+    let toastHTML = `
         <div class="toast-icon">${icons[type] || icons.info}</div>
-        <div class="toast-content">
-            <div class="toast-title">${title || defaultTitles[type]}</div>
-            <div class="toast-message">${message}</div>
+        <div class="toast-content">`;
+    
+    if (title) {
+        toastHTML += `<div class="toast-title">${title}</div>`;
+    }
+    
+    toastHTML += `
+            <div class="toast-message ${title ? '' : 'toast-message-only'}">${message}</div>
         </div>
         <button class="toast-close" onclick="this.parentElement.remove()">×</button>
     `;
     
+    toast.innerHTML = toastHTML;
     container.appendChild(toast);
     
     // Auto-remove after 5 seconds
@@ -3266,3 +3266,107 @@ function addTickerFromRecommendation(ticker) {
         addTicker();  // addTicker() already shows a toast
     }
 }
+
+
+// ===== DEVELOPER MODE FUNCTIONS =====
+
+/**
+ * Initialize developer mode UI elements
+ * Shows/hides developer tab based on DEBUG_MODE
+ */
+function initializeDeveloperMode() {
+    const devTabNav = document.getElementById('developer-tab-nav');
+    const devDebugToggle = document.getElementById('devDebugModeToggle');
+    const devDebugStatus = document.getElementById('devDebugStatus');
+    
+    if (DEBUG_MODE) {
+        // Show developer tab
+        if (devTabNav) {
+            devTabNav.style.display = 'block';
+        }
+        
+        // Update toggle state
+        if (devDebugToggle) {
+            devDebugToggle.checked = true;
+        }
+        
+        // Update status badge
+        if (devDebugStatus) {
+            devDebugStatus.textContent = 'Enabled';
+            devDebugStatus.className = 'badge bg-success';
+        }
+    } else {
+        // Hide developer tab
+        if (devTabNav) {
+            devTabNav.style.display = 'none';
+        }
+        
+        // Update toggle state
+        if (devDebugToggle) {
+            devDebugToggle.checked = false;
+        }
+        
+        // Update status badge
+        if (devDebugStatus) {
+            devDebugStatus.textContent = 'Disabled';
+            devDebugStatus.className = 'badge bg-secondary';
+        }
+    }
+}
+
+/**
+ * Toggle frontend debug mode
+ */
+function toggleDebugMode(enabled) {
+    if (enabled) {
+        localStorage.setItem('DEBUG_MODE', 'true');
+        showToast('Debug mode enabled. Reload page to see console logs.', 'info');
+    } else {
+        localStorage.removeItem('DEBUG_MODE');
+        showToast('Debug mode disabled. Reload page to apply.', 'info');
+    }
+    
+    // Update status
+    const devDebugStatus = document.getElementById('devDebugStatus');
+    if (devDebugStatus) {
+        devDebugStatus.textContent = enabled ? 'Enabled (reload needed)' : 'Disabled (reload needed)';
+        devDebugStatus.className = enabled ? 'badge bg-warning' : 'badge bg-secondary';
+    }
+}
+
+/**
+ * Update backend log level command display
+ */
+function updateLogLevelCommand() {
+    const logLevel = document.getElementById('devLogLevel')?.value || 'INFO';
+    const commandInput = document.getElementById('devLogLevelCommand');
+    
+    if (commandInput) {
+        commandInput.value = `LOG_LEVEL=${logLevel} python3 app.py`;
+    }
+}
+
+/**
+ * Copy log level command to clipboard
+ */
+function copyLogLevelCommand() {
+    const commandInput = document.getElementById('devLogLevelCommand');
+    
+    if (commandInput) {
+        commandInput.select();
+        document.execCommand('copy');
+        showToast('Command copied to clipboard!', 'success');
+    }
+}
+
+// Listen for log level changes
+document.addEventListener('DOMContentLoaded', function() {
+    const devLogLevelSelect = document.getElementById('devLogLevel');
+    if (devLogLevelSelect) {
+        devLogLevelSelect.addEventListener('change', updateLogLevelCommand);
+        updateLogLevelCommand(); // Initialize
+    }
+    
+    // Initialize developer mode UI
+    initializeDeveloperMode();
+});
