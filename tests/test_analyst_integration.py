@@ -4,7 +4,7 @@ Test script to verify analyst consensus integration
 Tests both COUR (with analyst coverage) and a stock without coverage
 """
 
-from src.portfolio_analyzer import PortfolioAnalyzer
+from src.core.portfolio_analyzer import PortfolioAnalyzer
 import json
 
 def test_analyst_integration():

@@ -1,7 +1,7 @@
 """
 Analysis Service - Handles stock and portfolio analysis business logic
 """
-from src.portfolio_analyzer import PortfolioAnalyzer
+from src.core.portfolio_analyzer import PortfolioAnalyzer
 from src.data.data_fetcher import DataFetcher
 from src.technical_analyzer import TechnicalAnalyzer
 from src.chart_generator import ChartGenerator

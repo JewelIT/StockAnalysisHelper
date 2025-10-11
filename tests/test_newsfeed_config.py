@@ -4,7 +4,7 @@ Tests the configurable limits for news and social media
 """
 import unittest
 from unittest.mock import Mock, patch, MagicMock
-from src.portfolio_analyzer import PortfolioAnalyzer
+from src.core.portfolio_analyzer import PortfolioAnalyzer
 
 
 class TestNewsfeedConfiguration(unittest.TestCase):

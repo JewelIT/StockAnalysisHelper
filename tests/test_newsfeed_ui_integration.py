@@ -158,7 +158,7 @@ class TestNewsfeedConfigInPortfolioAnalyzer(unittest.TestCase):
                                                             mock_sent,
                                                             mock_fetcher_class):
         """Test that analyze_portfolio forwards params to analyze_stock"""
-        from src.portfolio_analyzer import PortfolioAnalyzer
+        from src.core.portfolio_analyzer import PortfolioAnalyzer
         
         # Mock data fetcher to return valid DataFrame
         mock_fetcher = Mock()
