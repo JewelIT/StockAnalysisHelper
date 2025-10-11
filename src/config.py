@@ -177,11 +177,17 @@ class Config:
     
     # ==================== LOGGING ====================
     
-    LOG_LEVEL = 'INFO'
+    # Log levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    # Set via environment variable: LOG_LEVEL=ERROR or LOG_LEVEL=DEBUG
+    LOG_LEVEL = 'INFO'  # Default level (can be overridden by environment)
     LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     LOG_FILE = 'flask.log'
     LOG_MAX_BYTES = 10485760  # 10MB
     LOG_BACKUP_COUNT = 5
+    
+    # Console/Browser debugging
+    # Set DEBUG_MODE=true in environment to enable verbose frontend logging
+    DEBUG_MODE = False  # Set to True to enable console.log statements
     
     # ==================== SECURITY ====================
     

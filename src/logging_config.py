@@ -9,6 +9,13 @@ from datetime import datetime
 def setup_logging():
     """
     Configure logging with security event tracking
+    Respects LOG_LEVEL environment variable for control
+    
+    Environment Variables:
+        LOG_LEVEL: Set log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+                   Example: LOG_LEVEL=ERROR (only show errors)
+                   Example: LOG_LEVEL=DEBUG (show everything)
+                   Default: INFO
     """
     # Create logs directory if it doesn't exist
     log_dir = 'logs'
@@ -20,12 +27,16 @@ def setup_logging():
     log_file = os.path.join(log_dir, f'finbert_app_{timestamp}.log')
     security_log_file = os.path.join(log_dir, f'security_{timestamp}.log')
     
+    # Get log level from environment or use INFO as default
+    log_level_name = os.environ.get('LOG_LEVEL', 'WARNING').upper()
+    log_level = getattr(logging, log_level_name, logging.INFO)
+    
     # Configure root logger
     logging.basicConfig(
-        level=logging.INFO,
+        level=log_level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            # Console handler for INFO and above
+            # Console handler - respects configured level
             logging.StreamHandler(),
             # File handler for all logs
             logging.FileHandler(log_file, encoding='utf-8')
@@ -48,6 +59,7 @@ def setup_logging():
     # Log startup
     logging.info("=" * 80)
     logging.info("FinBERT Portfolio Analysis Application Started")
+    logging.info(f"Log Level: {log_level_name}")
     logging.info(f"Log file: {log_file}")
     logging.info(f"Security log: {security_log_file}")
     logging.info("=" * 80)
