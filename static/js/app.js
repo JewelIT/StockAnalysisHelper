@@ -1,4 +1,26 @@
 // Portfolio Analysis App
+
+// ===== DEBUG CONFIGURATION =====
+// Set DEBUG_MODE in localStorage to enable console logging
+// Usage: localStorage.setItem('DEBUG_MODE', 'true')  // Enable
+// To disable: localStorage.removeItem('DEBUG_MODE')  // Remove completely
+// Note: Setting to 'false' won't work - must remove it!
+const DEBUG_MODE = localStorage.getItem('DEBUG_MODE') === 'true';
+
+// Smart console wrapper - only logs if DEBUG_MODE is enabled
+const debug = {
+    log: (...args) => DEBUG_MODE && console.log(...args),
+    info: (...args) => DEBUG_MODE && console.info(...args),
+    warn: (...args) => console.warn(...args),  // Always show warnings
+    error: (...args) => console.error(...args)  // Always show errors
+};
+
+// Show debug mode status on load
+if (DEBUG_MODE) {
+    console.log('%c🐛 DEBUG MODE ENABLED', 'background: #ff9800; color: white; padding: 2px 8px; border-radius: 3px;');
+    console.log('To disable: localStorage.removeItem("DEBUG_MODE"); location.reload();');
+}
+
 const PORTFOLIO_STORAGE_KEY = 'saved_portfolio_tickers';  // Persistent portfolio
 const SESSION_STORAGE_KEY = 'session_analysis_tickers';    // Current session
 const CONFIG_STORAGE_KEY = 'app_configuration';             // App settings
@@ -59,14 +81,14 @@ async function fetchExchangeRates() {
             const MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
             
             if (age < MAX_AGE) {
-                console.log('Using cached exchange rates (age: ' + Math.round(age / 3600000) + ' hours)');
+                debug.log('Using cached exchange rates (age: ' + Math.round(age / 3600000) + ' hours)');
                 exchangeRates = rates;
                 return rates;
             }
         }
         
         // Fetch fresh rates
-        console.log('Fetching live exchange rates...');
+        debug.log('Fetching live exchange rates...');
         const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
         
         if (!response.ok) {
@@ -88,7 +110,7 @@ async function fetchExchangeRates() {
             timestamp: Date.now()
         }));
         
-        console.log('Exchange rates updated:', exchangeRates);
+        debug.log('Exchange rates updated:', exchangeRates);
         return exchangeRates;
         
     } catch (error) {
@@ -269,7 +291,7 @@ function loadIndicatorSettings() {
     if (stored) {
         try {
             window.indicatorSettings = JSON.parse(stored);
-            console.log('Loaded indicator settings from localStorage:', window.indicatorSettings);
+            debug.log('Loaded indicator settings from localStorage:', window.indicatorSettings);
         } catch (e) {
             console.error('Failed to load indicator settings:', e);
             window.indicatorSettings = {};
@@ -1769,12 +1791,12 @@ function renderStockDetails(ticker, resultIndex) {
             }
         }
         
-        console.log(`Rendering ${r.ticker} with chart type: ${r.chart_type_used || initialChartType}`);
+        debug.log(`Rendering ${r.ticker} with chart type: ${r.chart_type_used || initialChartType}`);
         renderChart(r.ticker, r.chart_data);
         
         // Apply saved indicator settings after initial render
         if (window.indicatorSettings && window.indicatorSettings[ticker]) {
-            console.log(`Applying saved indicator settings for ${ticker} after initial render`);
+            debug.log(`Applying saved indicator settings for ${ticker} after initial render`);
             setTimeout(() => {
                 applyIndicatorSettings(ticker, resultIndex, true); // Silent mode
             }, 200);
@@ -1810,7 +1832,7 @@ function renderChart(ticker, chartDataJson) {
             displaylogo: false,
             modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
         }).then(() => {
-            console.log(`✓ Chart rendered successfully for ${ticker}`);
+            debug.log(`✓ Chart rendered successfully for ${ticker}`);
         }).catch(err => {
             console.error(`✗ Failed to render chart for ${ticker}:`, err);
             chartDiv.innerHTML = '<div class="chart-error">Failed to render chart</div>';
@@ -1837,7 +1859,7 @@ async function updateChart(ticker, resultIndex, chartType = null, timeframe = nu
         timeframe = timeframeSelect ? timeframeSelect.value : '3mo';
     }
     
-    console.log(`Updating ${ticker} to ${chartType} chart with ${timeframe} timeframe`);
+    debug.log(`Updating ${ticker} to ${chartType} chart with ${timeframe} timeframe`);
     
     // Show loading placeholder with spinner (preserve layout)
     const chartDiv = document.getElementById(`chart_${ticker}`);
@@ -1894,7 +1916,7 @@ async function updateChart(ticker, resultIndex, chartType = null, timeframe = nu
             
             // Re-apply saved indicator settings after chart refresh (silent mode)
             if (window.indicatorSettings && window.indicatorSettings[ticker]) {
-                console.log(`Re-applying saved indicator settings for ${ticker} after chart update`);
+                debug.log(`Re-applying saved indicator settings for ${ticker} after chart update`);
                 setTimeout(() => {
                     applyIndicatorSettings(ticker, resultIndex, true); // Silent mode: no toast, no panel close
                 }, 100);
@@ -1949,7 +1971,7 @@ function applyIndicatorSettings(ticker, resultIndex, silent = false) {
     };
     
     if (!silent) {
-        console.log(`Applying indicator settings for ${ticker}:`, settings);
+        debug.log(`Applying indicator settings for ${ticker}:`, settings);
     }
     
     // Store settings for future use (in memory and localStorage)
@@ -2016,7 +2038,7 @@ function applyIndicatorSettings(ticker, resultIndex, silent = false) {
     // Update trace visibility using batch update
     if (traceIndices.length > 0) {
         if (!silent) {
-            console.log(`Updating visibility for ${traceIndices.length} traces`);
+            debug.log(`Updating visibility for ${traceIndices.length} traces`);
         }
         traceIndices.forEach((traceIndex, i) => {
             Plotly.restyle(chartDiv, { visible: updates[i] }, [traceIndex]);
@@ -2383,7 +2405,7 @@ function changeTheme(theme) {
         localStorage.setItem('theme', theme);
     }
     
-    console.log(`Theme changed to: ${theme}`);
+    debug.log(`Theme changed to: ${theme}`);
 }
 
 function initializeTheme() {
@@ -2552,7 +2574,7 @@ async function loadChatHistory() {
             }
         }
         
-        console.log('✅ Chat history loaded:', data.history.length, 'messages');
+        debug.log('✅ Chat history loaded:', data.history.length, 'messages');
     } catch (error) {
         console.error('Failed to load chat history:', error);
     }
@@ -2675,7 +2697,7 @@ function showRecommendationExplanation(ticker) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 FinBERT Portfolio Analyzer - Modern UI Loaded');
+    debug.log('🚀 FinBERT Portfolio Analyzer - Modern UI Loaded');
     
     initializeTheme();
     initializeChatPanel();  // Initialize chat panel state
@@ -2703,7 +2725,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    console.log('✅ Theme, portfolio, chat, and market sentiment initialized');
+    debug.log('✅ Theme, portfolio, chat, and market sentiment initialized');
     
     // Listen for theme changes and refresh charts
     setupThemeChangeListener();
@@ -2715,7 +2737,7 @@ function setupThemeChangeListener() {
         mutations.forEach((mutation) => {
             if (mutation.type === 'attributes' && mutation.attributeName === 'data-bs-theme') {
                 const newTheme = document.documentElement.getAttribute('data-bs-theme');
-                console.log(`🎨 Theme changed to: ${newTheme}`);
+                debug.log(`🎨 Theme changed to: ${newTheme}`);
                 refreshAllChartsForTheme();
             }
         });
@@ -2726,25 +2748,25 @@ function setupThemeChangeListener() {
         attributeFilter: ['data-bs-theme']
     });
     
-    console.log('👀 Theme change observer activated');
+    debug.log('👀 Theme change observer activated');
 }
 
 // Refresh all visible charts when theme changes
 function refreshAllChartsForTheme() {
     if (!window.analysisResults || window.analysisResults.length === 0) {
-        console.log('No charts to refresh');
+        debug.log('No charts to refresh');
         return;
     }
     
     const theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
-    console.log(`🔄 Refreshing ${window.analysisResults.length} chart(s) for ${theme} theme`);
+    debug.log(`🔄 Refreshing ${window.analysisResults.length} chart(s) for ${theme} theme`);
     
     window.analysisResults.forEach((result, index) => {
         const chartDiv = document.getElementById(`chart_${result.ticker}`);
         
         // Only refresh if chart exists and has been rendered
         if (chartDiv && chartDiv.innerHTML.trim() !== '') {
-            console.log(`  ↻ Refreshing chart for ${result.ticker}`);
+            debug.log(`  ↻ Refreshing chart for ${result.ticker}`);
             
             // Get current chart type and timeframe from controls
             const chartTypeSelect = document.getElementById(`chartType_${result.ticker}`);
@@ -2784,7 +2806,7 @@ function initializeChatPanel() {
         }
     }
     
-    console.log(`💬 Chat panel initialized: ${savedState}`);
+    debug.log(`💬 Chat panel initialized: ${savedState}`);
 }
 
 // ===== MARKET SENTIMENT =====
@@ -3241,7 +3263,6 @@ function addTickerFromRecommendation(ticker) {
     const tickerInput = document.getElementById('tickerInput');
     if (tickerInput) {
         tickerInput.value = ticker.toUpperCase();
-        addTicker();
-        showToast(`${ticker} added to analysis`, 'success');
+        addTicker();  // addTicker() already shows a toast
     }
 }
