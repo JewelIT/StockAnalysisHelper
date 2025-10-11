@@ -4,7 +4,7 @@ Chat routes - Vestor AI conversation endpoints
 from flask import Blueprint, request, jsonify, session
 from datetime import datetime
 
-from app.services.vestor_service import VestorService
+from src.web.services.vestor_service import VestorService
 from src.logging_config import log_chat_interaction
 
 bp = Blueprint('chat', __name__)

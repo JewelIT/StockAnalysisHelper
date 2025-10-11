@@ -3,7 +3,7 @@ Main routes - Home page and utility endpoints
 """
 from flask import Blueprint, render_template, jsonify, session, request
 import time
-from app.services.market_sentiment_service import get_market_sentiment_service  # TODO: move to src
+from src.web.services.market_sentiment_service import get_market_sentiment_service
 
 bp = Blueprint('main', __name__)
 

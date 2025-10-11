@@ -6,7 +6,7 @@ from datetime import datetime
 import json
 import os
 
-from app.services.analysis_service import AnalysisService
+from src.web.services.analysis_service import AnalysisService
 
 bp = Blueprint('analysis', __name__)
 

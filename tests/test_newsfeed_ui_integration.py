@@ -13,21 +13,19 @@ class TestNewsfeedUIIntegration(unittest.TestCase):
     
     def setUp(self):
         """Set up test client"""
-        from app import create_app
+        from src.web import create_app
         self.app = create_app()
         self.client = self.app.test_client()
     
-    @patch('app.services.analysis_service.AnalysisService._get_analyzer')
-    def test_analyze_endpoint_accepts_newsfeed_params(self, mock_get_analyzer):
+    @patch('src.web.routes.analysis.analysis_service.analyze')
+    def test_analyze_endpoint_accepts_newsfeed_params(self, mock_analyze):
         """Test that /analyze endpoint accepts max_news and max_social parameters"""
-        # Mock analyzer
-        mock_analyzer = Mock()
-        mock_analyzer.analyze_portfolio.return_value = [{
+        # Mock the analyze method to return test data
+        mock_analyze.return_value = [{
             'ticker': 'AAPL',
             'success': True,
             'chart': '<div>Chart</div>'
         }]
-        mock_get_analyzer.return_value = mock_analyzer
         
         # Make request with newsfeed parameters
         response = self.client.post('/analyze',
@@ -42,25 +40,24 @@ class TestNewsfeedUIIntegration(unittest.TestCase):
         
         self.assertEqual(response.status_code, 200)
         
-        # Verify parameters were passed to analyzer
-        mock_analyzer.analyze_portfolio.assert_called_once()
-        call_args = mock_analyzer.analyze_portfolio.call_args
+        # Verify parameters were passed to service
+        mock_analyze.assert_called_once()
+        call_args = mock_analyze.call_args
         
         self.assertEqual(call_args.kwargs['max_news'], 10)
         self.assertEqual(call_args.kwargs['max_social'], 8)
         self.assertEqual(call_args.kwargs['news_sort'], 'date_desc')
         self.assertEqual(call_args.kwargs['social_sort'], 'relevance')
     
-    @patch('app.services.analysis_service.AnalysisService._get_analyzer')
-    def test_analyze_endpoint_defaults_newsfeed_params(self, mock_get_analyzer):
+    @patch('src.web.routes.analysis.analysis_service.analyze')
+    def test_analyze_endpoint_defaults_newsfeed_params(self, mock_analyze):
         """Test that /analyze endpoint uses default values when params not provided"""
-        mock_analyzer = Mock()
-        mock_analyzer.analyze_portfolio.return_value = [{
+        # Mock the analyze method to return test data
+        mock_analyze.return_value = [{
             'ticker': 'MSFT',
             'success': True,
             'chart': '<div>Chart</div>'
         }]
-        mock_get_analyzer.return_value = mock_analyzer
         
         # Make request without newsfeed parameters
         response = self.client.post('/analyze',
@@ -72,22 +69,21 @@ class TestNewsfeedUIIntegration(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         
         # Verify default parameters were used
-        call_args = mock_analyzer.analyze_portfolio.call_args
+        call_args = mock_analyze.call_args
         self.assertEqual(call_args.kwargs['max_news'], 5)
         self.assertEqual(call_args.kwargs['max_social'], 5)
         self.assertEqual(call_args.kwargs['news_sort'], 'relevance')
         self.assertEqual(call_args.kwargs['social_sort'], 'relevance')
     
-    @patch('app.services.analysis_service.AnalysisService._get_analyzer')
-    def test_zero_limits_accepted(self, mock_get_analyzer):
+    @patch('src.web.routes.analysis.analysis_service.analyze')
+    def test_zero_limits_accepted(self, mock_analyze):
         """Test that max_news=0 and max_social=0 are properly handled"""
-        mock_analyzer = Mock()
-        mock_analyzer.analyze_portfolio.return_value = [{
+        # Mock the analyze method to return test data
+        mock_analyze.return_value = [{
             'ticker': 'GOOGL',
             'success': True,
             'chart': '<div>Chart</div>'
         }]
-        mock_get_analyzer.return_value = mock_analyzer
         
         # Request with zero limits (disable news and social)
         response = self.client.post('/analyze',
@@ -99,7 +95,7 @@ class TestNewsfeedUIIntegration(unittest.TestCase):
         
         self.assertEqual(response.status_code, 200)
         
-        call_args = mock_analyzer.analyze_portfolio.call_args
+        call_args = mock_analyze.call_args
         self.assertEqual(call_args.kwargs['max_news'], 0)
         self.assertEqual(call_args.kwargs['max_social'], 0)
 
@@ -107,10 +103,10 @@ class TestNewsfeedUIIntegration(unittest.TestCase):
 class TestNewsfeedConfigInAnalysisService(unittest.TestCase):
     """Test that AnalysisService properly forwards newsfeed parameters"""
     
-    @patch('app.services.analysis_service.PortfolioAnalyzer')
+    @patch('src.web.services.analysis_service.PortfolioAnalyzer')
     def test_analysis_service_forwards_params(self, mock_analyzer_class):
         """Test that analysis service forwards all parameters to portfolio analyzer"""
-        from app.services.analysis_service import AnalysisService
+        from src.web.services.analysis_service import AnalysisService
         
         # Mock the analyzer instance
         mock_analyzer = Mock()
