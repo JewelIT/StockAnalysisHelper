@@ -4,7 +4,7 @@ Handles both traditional stocks (yfinance) and cryptocurrencies (CoinGecko)
 """
 import yfinance as yf
 from .coingecko_fetcher import CoinGeckoFetcher
-from .config import Config
+from src.config.config import Config
 
 class DataFetcher:
     def __init__(self):

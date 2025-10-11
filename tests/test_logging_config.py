@@ -18,7 +18,7 @@ from pathlib import Path
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from logging_config import setup_logging
+from src.config.logging_config import setup_logging
 
 
 class TestLoggingConfig(unittest.TestCase):
@@ -177,7 +177,7 @@ class TestLoggingIntegration(unittest.TestCase):
     def test_logging_can_be_imported_in_app(self):
         """Test that logging config can be imported without errors."""
         try:
-            from logging_config import setup_logging
+            from src.config.logging_config import setup_logging
             logger = setup_logging()
             self.assertIsNotNone(logger)
         except Exception as e:

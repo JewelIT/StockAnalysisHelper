@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.data_fetcher import DataFetcher
 from src.technical_analyzer import TechnicalAnalyzer
 from src.chart_generator import ChartGenerator
-from app import create_app
+from src.web import create_app
 
 
 class TestIntradayTimeframes(unittest.TestCase):

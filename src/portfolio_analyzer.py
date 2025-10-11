@@ -8,7 +8,7 @@ from src.data_fetcher import DataFetcher
 from src.social_media_fetcher import SocialMediaFetcher
 from src.chart_generator import ChartGenerator
 from src.analyst_consensus import AnalystConsensusFetcher
-from src.config import Config
+from src.config.config import Config
 
 class PortfolioAnalyzer:
     def __init__(self, enable_social_media=True):

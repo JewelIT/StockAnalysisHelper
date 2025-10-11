@@ -4,7 +4,7 @@ Tests the core chatbot conversation logic
 """
 import unittest
 from unittest.mock import Mock, patch, MagicMock
-from app.services.vestor_service import VestorService
+from src.web.services.vestor_service import VestorService
 
 
 class TestVestorServiceGreetings(unittest.TestCase):

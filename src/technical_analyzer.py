@@ -3,7 +3,7 @@ Technical Analysis Module
 """
 import pandas as pd
 import ta
-from .config import Config
+from src.config.config import Config
 
 class TechnicalAnalyzer:
     @staticmethod

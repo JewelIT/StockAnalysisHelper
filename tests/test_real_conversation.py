@@ -13,7 +13,7 @@ import os
 # Add src to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
-from stock_chat import StockChatAssistant
+from src.stock_chat import StockChatAssistant
 from stock_analysis import StockAnalysis
 
 class ConversationTester:

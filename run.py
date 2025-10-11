@@ -4,7 +4,7 @@ Main application entry point
 """
 import os
 from src.web import create_app
-from src.logging_config import setup_logging
+from src.config.logging_config import setup_logging
 
 # Setup logging
 logger = setup_logging()

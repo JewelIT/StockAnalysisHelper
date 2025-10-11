@@ -4,8 +4,8 @@ Tests the market sentiment service and API endpoint
 """
 import unittest
 from unittest.mock import patch, MagicMock
-from app import create_app
-from app.services.market_sentiment_service import MarketSentimentService, get_market_sentiment_service
+from src.web import create_app
+from src.web.services.market_sentiment_service import MarketSentimentService, get_market_sentiment_service
 import json
 import os
 from datetime import datetime, timedelta

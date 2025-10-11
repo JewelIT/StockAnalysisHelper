@@ -6,7 +6,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.services.vestor_service import VestorService
+from src.web.services.vestor_service import VestorService
 
 def test_follow_up_flow():
     """Test that follow-up questions use the context ticker"""
