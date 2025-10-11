@@ -7,9 +7,12 @@ import os
 
 def create_app(config=None):
     """Application factory pattern"""
+    # Paths relative to project root (2 levels up from src/web/)
+    import os.path
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     app = Flask(__name__, 
-                template_folder='../templates',
-                static_folder='../static')
+                template_folder=os.path.join(project_root, 'templates'),
+                static_folder=os.path.join(project_root, 'static'))
     
     # Configuration
     app.config['EXPORTS_FOLDER'] = 'exports'
@@ -23,7 +26,7 @@ def create_app(config=None):
     # Ensure exports folder exists
     os.makedirs(app.config['EXPORTS_FOLDER'], exist_ok=True)
     
-    # Register blueprints
+    # Register blueprints - still in old location temporarily
     from app.routes import analysis, chat, main
     app.register_blueprint(main.bp)
     app.register_blueprint(analysis.bp)
