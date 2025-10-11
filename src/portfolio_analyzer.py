@@ -4,8 +4,8 @@ Portfolio Analyzer - Main Analysis Logic
 from src.sentiment_analyzer import SentimentAnalyzer
 from src.multi_model_sentiment import MultiModelSentimentAnalyzer
 from src.technical_analyzer import TechnicalAnalyzer
-from src.data_fetcher import DataFetcher
-from src.social_media_fetcher import SocialMediaFetcher
+from src.data.data_fetcher import DataFetcher
+from src.data.social_media_fetcher import SocialMediaFetcher
 from src.chart_generator import ChartGenerator
 from src.analyst_consensus import AnalystConsensusFetcher
 from src.config.config import Config

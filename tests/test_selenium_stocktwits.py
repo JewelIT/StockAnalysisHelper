@@ -2,7 +2,7 @@
 """
 Test script to verify Selenium can fetch StockTwits data
 """
-from src.social_media_fetcher import SocialMediaFetcher
+from src.data.social_media_fetcher import SocialMediaFetcher
 
 def test_stocktwits_selenium():
     print("=" * 80)
