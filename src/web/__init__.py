@@ -26,8 +26,8 @@ def create_app(config=None):
     # Ensure exports folder exists
     os.makedirs(app.config['EXPORTS_FOLDER'], exist_ok=True)
     
-    # Register blueprints - still in old location temporarily
-    from app.routes import analysis, chat, main
+    # Register blueprints
+    from src.web.routes import analysis, chat, main
     app.register_blueprint(main.bp)
     app.register_blueprint(analysis.bp)
     app.register_blueprint(chat.bp)
