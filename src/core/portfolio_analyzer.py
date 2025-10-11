@@ -3,11 +3,11 @@ Portfolio Analyzer - Main Analysis Logic
 """
 from src.ai.sentiment_analyzer import SentimentAnalyzer
 from src.ai.multi_model_sentiment import MultiModelSentimentAnalyzer
-from src.technical_analyzer import TechnicalAnalyzer
+from src.utils.technical_analyzer import TechnicalAnalyzer
 from src.data.data_fetcher import DataFetcher
 from src.data.social_media_fetcher import SocialMediaFetcher
-from src.chart_generator import ChartGenerator
-from src.analyst_consensus import AnalystConsensusFetcher
+from src.utils.chart_generator import ChartGenerator
+from src.utils.analyst_consensus import AnalystConsensusFetcher
 from src.config.config import Config
 
 class PortfolioAnalyzer:

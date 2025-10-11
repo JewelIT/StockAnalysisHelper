@@ -16,8 +16,8 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.data.data_fetcher import DataFetcher
-from src.technical_analyzer import TechnicalAnalyzer
-from src.chart_generator import ChartGenerator
+from src.utils.technical_analyzer import TechnicalAnalyzer
+from src.utils.chart_generator import ChartGenerator
 from src.web import create_app
 
 

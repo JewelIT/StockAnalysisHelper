@@ -3,7 +3,7 @@ Chart Generator Module
 """
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from .utils import format_timeframe_display
+from .helpers import format_timeframe_display
 
 class ChartGenerator:
     @staticmethod
