@@ -3,7 +3,7 @@ Vestor Service - AI Financial Advisor conversation service
 Handles all Vestor AI interactions and business logic
 """
 from src.stock_chat import StockChatAssistant
-from app.services.analysis_service import AnalysisService
+from src.web.services.analysis_service import AnalysisService
 import re
 
 
