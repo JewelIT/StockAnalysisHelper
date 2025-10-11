@@ -6,7 +6,7 @@ import sys
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from stock_chat import StockChatAssistant
+from src.ai.stock_chat import StockChatAssistant
 
 def test_conversation_memory():
     """Test conversation memory works"""
