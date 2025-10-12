@@ -32,7 +32,6 @@ let appConfig = {              // App configuration
     currency: 'USD',           // USD, EUR, or 'native'
     defaultChartType: 'candlestick',
     defaultTimeframe: '3mo',   // Default analysis timeframe
-    displayMode: 'accordion',   // accordion or tabs (for future)
     maxNews: 5,                // Maximum news articles to display
     maxSocial: 5,              // Maximum social media posts to display
     newsSort: 'relevance',     // How to sort news: relevance, date_desc, date_asc
