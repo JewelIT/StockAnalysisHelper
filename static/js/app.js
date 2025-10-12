@@ -966,8 +966,17 @@ async function analyzePortfolio() {
     // Detect current theme
     const theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
     
-    // Show loading
-    document.getElementById('loadingIndicator').style.display = 'block';
+    // Show full-screen loading overlay
+    document.getElementById('fullScreenLoader').style.display = 'block';
+    
+    // Switch to Market Analysis tab
+    const analysisTabButton = document.getElementById('analysis-tab');
+    if (analysisTabButton) {
+        const tab = new bootstrap.Tab(analysisTabButton);
+        tab.show();
+    }
+    
+    // Hide results and disable button
     document.getElementById('results').style.display = 'none';
     document.getElementById('analyzeBtn').disabled = true;
     
@@ -1024,7 +1033,7 @@ async function analyzePortfolio() {
         showToast('Error analyzing portfolio: ' + error.message, 'error');
         console.error('Error:', error);
     } finally {
-        document.getElementById('loadingIndicator').style.display = 'none';
+        document.getElementById('fullScreenLoader').style.display = 'none';
         document.getElementById('analyzeBtn').disabled = false;
     }
 }
