@@ -1,276 +1,913 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Analysis - FinBERT</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>MyStock &amp; Portfolio Analyzer - AI-Powered Stock Analysis</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" 
+          integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
+    <!-- Plotly for charts -->
     <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ cache_bust }}">
 </head>
 <body>
-    <!-- Toast Notification Container -->
-    <div id="toastContainer" class="toast-container"></div>
-    
-    <div class="container">
-        <header>
-            <h1>📊 Portfolio Analysis</h1>
-            <p class="subtitle">AI-Powered Stock Analysis with FinBERT & Technical Indicators</p>
-            <!-- Settings Button - Top Right -->
-            <button class="settings-btn" onclick="togglePortfolioConfig()" title="Settings">
-                ⚙️
+    <!-- Main Layout: Side-by-side content and chat -->
+    <div class="d-flex flex-column vh-100">
+        
+        <!-- Top Navbar -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+            <div class="container-fluid">
+                <a class="navbar-brand fw-bold" href="/">
+                    <i class="bi bi-graph-up-arrow me-2"></i>
+                    MyStock Analyzer
+                </a>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-light text-dark">
+                        <i class="bi bi-robot me-1"></i>
+                        AI-Powered
+                    </span>
+                    <button class="btn btn-sm btn-outline-light" onclick="toggleChatPanel()" title="Toggle AI Chat">
+                        <i class="bi bi-chat-dots"></i>
+                        <span class="d-none d-md-inline ms-1">Chat</span>
+                    </button>
+                    <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#settingsModal">
+                        <i class="bi bi-gear"></i>
+                        <span class="d-none d-md-inline ms-1">Settings</span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content Area with Side Panel Chat -->
+        <div class="d-flex flex-grow-1 overflow-hidden">
+            
+            <!-- Left: Main Content Area -->
+            <div class="flex-grow-1 overflow-auto p-4" id="mainContent">
+                
+                <!-- Navigation Tabs -->
+                <ul class="nav nav-tabs mb-4" id="mainTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="home-tab" data-bs-toggle="tab" data-bs-target="#home-pane" 
+                                type="button" role="tab" aria-controls="home-pane" aria-selected="true">
+                            <i class="bi bi-house-door me-1"></i> Home
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis-pane" 
+                                type="button" role="tab" aria-controls="analysis-pane" aria-selected="false">
+                            <i class="bi bi-graph-up me-1"></i> Market Analysis
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content" id="mainTabContent">
+                    
+                    <!-- Home Tab -->
+                    <div class="tab-pane fade show active" id="home-pane" role="tabpanel" aria-labelledby="home-tab" tabindex="0">
+                        
+                        <!-- Market Sentiment Section -->
+                        <div class="card shadow-sm mb-4" id="marketSentimentCard">
+                            <div class="card-header bg-gradient d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                <h5 class="mb-0 text-white">
+                                    <i class="bi bi-activity me-2"></i>
+                                    Daily Market Sentiment
+                                </h5>
+                                <button class="btn btn-sm btn-light" onclick="refreshMarketSentiment()" title="Refresh data">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                </button>
+                            </div>
+                            <div class="card-body" id="marketSentimentContent">
+                                <!-- Loading spinner -->
+                                <div class="text-center py-4" id="marketSentimentLoading">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2 text-muted">Loading market sentiment...</p>
+                                </div>
+                                <!-- Content will be loaded here -->
+                            </div>
+                        </div>
+                        
+                    </div>
+                    
+                    <!-- Market Analysis Tab -->
+                    <div class="tab-pane fade" id="analysis-pane" role="tabpanel" aria-labelledby="analysis-tab" tabindex="0">
+                
+                <!-- Ticker Selection Section -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-graph-up text-primary me-2"></i>
+                            Select Stocks to Analyze
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Compact Input Row -->
+                        <div class="row g-2 mb-3 align-items-end">
+                            <!-- Ticker Input with Autocomplete -->
+                            <div class="col-auto flex-grow-1">
+                                <label for="tickerInput" class="form-label small mb-1">
+                                    <i class="bi bi-search me-1"></i> Stock Ticker or Company
+                                </label>
+                                <div style="position: relative;">
+                                    <input type="text" class="form-control form-control-sm" id="tickerInput" 
+                                           placeholder="e.g., AAPL or Apple" 
+                                           aria-label="Ticker symbol"
+                                           autocomplete="off">
+                                    <!-- Autocomplete dropdown -->
+                                    <div id="tickerAutocomplete" class="autocomplete-dropdown" style="display: none;"></div>
+                                </div>
+                            </div>
+                            
+                            <!-- Timeframe Selector -->
+                            <div class="col-auto" style="min-width: 120px;">
+                                <label for="timeframeSelect" class="form-label small mb-1">
+                                    <i class="bi bi-calendar-range me-1"></i> Timeframe
+                                </label>
+                                <select class="form-select form-select-sm" id="timeframeSelect" aria-label="Select analysis timeframe">
+                                    <option value="1d">1 Day</option>
+                                    <option value="5d">5 Days</option>
+                                    <option value="1wk">1 Week</option>
+                                    <option value="1mo">1 Month</option>
+                                    <option value="3mo" selected>3 Months</option>
+                                    <option value="6mo">6 Months</option>
+                                    <option value="1y">1 Year</option>
+                                    <option value="2y">2 Years</option>
+                                    <option value="5y">5 Years</option>
+                                    <option value="max">Max</option>
+                                </select>
+                            </div>
+                            
+                            <!-- Add Button -->
+                            <div class="col-auto">
+                                <button class="btn btn-primary btn-sm" type="button" onclick="addTicker()" style="white-space: nowrap;">
+                                    <i class="bi bi-plus-circle me-1"></i> Add
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Ticker Chips -->
+                        <div id="tickerChips" class="mb-3">
+                            <!-- Dynamically populated -->
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="d-flex flex-wrap gap-2">
+                            <button class="btn btn-success" id="analyzeBtn" onclick="analyzePortfolio()">
+                                <i class="bi bi-lightning-charge me-1"></i> Analyze Selected
+                            </button>
+                            <button class="btn btn-outline-success" id="analyzePortfolioBtn" 
+                                    onclick="analyzeSavedPortfolio()" 
+                                    title="Analyze your saved portfolio">
+                                <i class="bi bi-briefcase me-1"></i> Analyze My Portfolio
+                            </button>
+                            <button class="btn btn-outline-primary" onclick="loadPortfolioToSession()" 
+                                    title="Load portfolio tickers">
+                                <i class="bi bi-folder-open me-1"></i> Load Portfolio
+                            </button>
+                            <button class="btn btn-outline-secondary" id="clearBtn" 
+                                    onclick="clearSessionTickers()" 
+                                    title="Clear all tickers">
+                                <i class="bi bi-trash me-1"></i> Clear All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Section -->
+                <div id="results" style="display: none;">
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="bi bi-bar-chart text-success me-2"></i>
+                                Analysis Results
+                            </h5>
+                            <span id="timestamp" class="badge bg-light text-dark"></span>
+                        </div>
+                        <div class="card-body">
+                            <!-- Portfolio Stats -->
+                            <div id="portfolioStats" class="mb-4">
+                                <!-- Dynamically populated with CSS Grid layout -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Summary Table -->
+                    <div class="card shadow-sm mb-4">
+                        <div class="card-header bg-white">
+                            <h5 class="mb-0">
+                                <i class="bi bi-table text-info me-2"></i>
+                                Summary & Recommendations
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="summaryTable" class="table-responsive">
+                                <!-- Dynamically populated -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Detailed Analysis -->
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-white">
+                            <h5 class="mb-0">
+                                <i class="bi bi-graph-up text-warning me-2"></i>
+                                Detailed Analysis
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="detailsContainer">
+                                <!-- Dynamically populated -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                    </div> <!-- End Market Analysis Tab -->
+                    
+                </div> <!-- End Tab Content -->
+                
+            </div> <!-- End Main Content -->
+
+            <!-- Right: Chat Side Panel (Always Visible) -->
+            <div class="chat-side-panel d-flex flex-column shadow-lg" id="chatPanel">
+                
+                <!-- Chat Header -->
+                <div class="chat-header bg-primary text-white p-3 d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="mb-0 fw-bold">
+                            <i class="bi bi-robot me-2"></i>
+                            AI Financial Advisor
+                        </h6>
+                        <small class="opacity-75">Ask me anything about investing</small>
+                    </div>
+                    <button class="btn btn-sm btn-link text-white" onclick="toggleChatPanel()" title="Hide chat">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+                
+                <!-- Chat Messages Area -->
+                <div class="chat-messages flex-grow-1 overflow-auto p-3" id="chatMessages">
+                    <!-- Welcome Message -->
+                    <div class="chat-message assistant-message mb-3">
+                        <div class="message-avatar bg-primary text-white">
+                            <i class="bi bi-robot"></i>
+                        </div>
+                        <div class="message-content">
+                            <div class="message-text">
+                                <strong>👋 Welcome!</strong> I'm your AI Financial Advisor & Investment Mentor.
+                                <br><br>
+                                <strong>💡 I can help you with:</strong>
+                                <ul class="mb-2">
+                                    <li>📊 Stock & crypto analysis (mention any ticker)</li>
+                                    <li>🎓 Investment education and strategies</li>
+                                    <li>⚖️ Risk management guidance</li>
+                                    <li>📈 Technical indicators explained</li>
+                                </ul>
+                                <strong>🛡️ Important:</strong>
+                                <ul class="mb-0 small">
+                                    <li>This is for educational purposes only</li>
+                                    <li>Always do your own research (DYOR)</li>
+                                    <li>Capital is at risk - invest wisely</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Chat Input Area -->
+                <div class="chat-input-area p-3 border-top">
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="chatInput" 
+                               placeholder="Ask me anything..." 
+                               aria-label="Chat message"
+                               onkeypress="if(event.key==='Enter') sendChatMessage()">
+                        <button class="btn btn-primary" type="button" onclick="sendChatMessage()">
+                            <i class="bi bi-send-fill"></i>
+                        </button>
+                    </div>
+                    <div class="mt-2 d-flex justify-content-between align-items-center">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Press Enter to send
+                        </small>
+                        <button class="btn btn-sm btn-link text-muted" onclick="clearChatHistory()" title="Start a new conversation">
+                            <i class="bi bi-plus-circle me-1"></i> New Chat
+                        </button>
+                    </div>
+                </div>
+                
+            </div>
+            
+            <!-- Chat Toggle Button (when panel is hidden) -->
+            <button class="btn btn-primary chat-toggle-btn shadow" id="chatToggleBtn" 
+                    onclick="toggleChatPanel()" style="display: none;">
+                <i class="bi bi-chat-dots-fill"></i>
+                <span class="badge bg-danger position-absolute top-0 start-100 translate-middle">
+                    New
+                </span>
             </button>
-        </header>
-
-        <div class="ticker-input-section">
-            <h2>🎯 Select Stocks to Analyze</h2>
-            <div class="input-group">
-                <input type="text" id="tickerInput" placeholder="Enter ticker symbol (e.g., AAPL)" />
-                <button onclick="addTicker()" class="btn btn-primary">Add Ticker</button>
-            </div>
             
-            <div class="ticker-chips" id="tickerChips">
-                <!-- Ticker chips will be added here -->
-            </div>
-            
-            <div class="action-buttons">
-                <button onclick="analyzePortfolio()" class="btn btn-success" id="analyzeBtn">
-                    🔍 Analyze Selected
-                </button>
-                <button onclick="analyzeSavedPortfolio()" class="btn btn-success" id="analyzePortfolioBtn" title="Analyze your saved portfolio without adding to the list">
-                    💼 Analyze My Portfolio
-                </button>
-                <button onclick="loadPortfolioToSession()" class="btn btn-primary" title="Load portfolio tickers to the selection list">
-                    📂 Load Portfolio
-                </button>
-                <button onclick="clearSessionTickers()" class="btn btn-secondary" id="clearBtn" title="Clear all tickers from selection list">
-                    🗑️ Clear All
-                </button>
-            </div>
         </div>
-
-        <div id="loadingIndicator" class="loading-indicator" style="display: none;">
-            <div class="spinner"></div>
-            <p>Analyzing portfolio... This may take a few minutes.</p>
-        </div>
-
-        <div id="results" style="display: none;">
-            <h2>📈 Analysis Results</h2>
-            <div id="timestamp" class="timestamp"></div>
-            
-            <!-- Overall Portfolio Performance -->
-            <div class="portfolio-overview">
-                <div id="portfolioStats" class="portfolio-stats-grid">
-                    <!-- Stats will be populated here -->
-                </div>
-            </div>
-            
-            <div class="summary-section">
-                <h3>Summary & Recommendations</h3>
-                <div id="summaryTable"></div>
-            </div>
-
-            <div class="details-section">
-                <h3>Detailed Analysis</h3>
-                <div id="detailsContainer"></div>
-            </div>
-        </div>
-        
-        <!-- Configuration Modal -->
-        <div id="portfolioModal" class="modal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2>⚙️ Settings</h2>
-                    <button class="modal-close" onclick="togglePortfolioConfig()">×</button>
-                </div>
-                
-                <!-- Tabs -->
-                <div class="modal-tabs">
-                    <button class="tab-btn active" onclick="switchTab('display')">
-                        📊 Display
-                    </button>
-                    <button class="tab-btn" onclick="switchTab('portfolio')">
-                        💼 Portfolio
-                    </button>
-                    <button class="tab-btn" onclick="switchTab('about')">
-                        ℹ️ About
-                    </button>
-                </div>
-                
-                <div class="modal-body">
-                    <!-- Display Settings Tab -->
-                    <div id="displayTab" class="tab-content active">
-                        <h3>📊 Display Settings</h3>
-                        <div style="margin-bottom: 15px;">
-                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Default Chart Type:</label>
-                            <select id="configChartType" class="chart-type-select" onchange="saveConfigSettings()" style="width: 100%;">
-                                <option value="candlestick">🕯️ Candlestick</option>
-                                <option value="line">📈 Line Chart</option>
-                                <option value="ohlc">📊 OHLC Bars</option>
-                                <option value="area">📉 Area Chart</option>
-                                <option value="mountain">⛰️ Mountain Chart</option>
-                                <option value="volume">📊 Volume Analysis</option>
-                            </select>
-                        </div>
-                        <div style="margin-bottom: 15px;">
-                            <label style="display: block; margin-bottom: 5px; font-weight: 600;">Currency Display:</label>
-                            <select id="configCurrency" class="chart-type-select" onchange="saveConfigSettings()" style="width: 100%;">
-                                <option value="native">Native Currency (Stock's Market)</option>
-                                <option value="USD">🇺🇸 US Dollar (USD)</option>
-                                <option value="EUR">🇪🇺 Euro (EUR)</option>
-                            </select>
-                            <small style="color: #888; font-size: 0.85em;">Note: Currency conversion not yet implemented</small>
-                        </div>
-                    </div>
-                    
-                    <!-- Portfolio Management Tab -->
-                    <div id="portfolioTab" class="tab-content">
-                        <h3>💼 Portfolio Management</h3>
-                        <p style="color: #666; margin-bottom: 20px;">Manage your saved portfolio tickers. These persist across sessions.</p>
-                        
-                        <h4 style="margin-top: 15px;">Add Ticker to Portfolio</h4>
-                        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                            <input 
-                                type="text" 
-                                id="portfolioTickerInput" 
-                                placeholder="Enter ticker (e.g., AAPL, MSFT, TSM)"
-                                style="flex: 1; padding: 10px; border: 2px solid #ddd; border-radius: 8px;"
-                                onkeypress="if(event.key==='Enter') addTickerToPortfolio()"
-                            >
-                            <button onclick="addTickerToPortfolio()" class="btn btn-primary">
-                                ➕ Add
-                            </button>
-                        </div>
-                        
-                        <h4>Saved Portfolio Tickers</h4>
-                        <div id="savedTickersList" class="saved-tickers-list">
-                            <!-- Saved tickers will be listed here -->
-                        </div>
-                        
-                        <div class="modal-actions">
-                            <button onclick="savePortfolioPreferences()" class="btn btn-success">
-                                💾 Save Portfolio
-                            </button>
-                            <button onclick="clearAllTickers()" class="btn btn-danger">
-                                🗑️ Clear All Tickers
-                            </button>
-                        </div>
-                        
-                        <div class="help-section">
-                            <p><strong>International Tickers:</strong></p>
-                            <ul style="font-size: 0.9em; margin-left: 20px; color: #666;">
-                                <li>🇺🇸 US: AAPL, MSFT, GOOGL</li>
-                                <li>🇮🇪 Irish: UPL.IR, RYA.IR</li>
-                                <li>🇬🇧 London: HSBA.L, BP.L</li>
-                                <li>🇩🇪 German: SAP.DE, VOW3.DE</li>
-                                <li>🇯🇵 Tokyo: 7203.T (Toyota), 6758.T (Sony)</li>
-                                <li>🇫🇷 Paris: MC.PA, OR.PA</li>
-                            </ul>
-                        </div>
-                    </div>
-                    
-                    <!-- About Tab -->
-                    <div id="aboutTab" class="tab-content">
-                        <h3>ℹ️ About This Application</h3>
-                        <p style="color: #666; margin-bottom: 25px;">Built with powerful AI models to help you make informed investment decisions.</p>
-                        
-                        <h4 style="margin-top: 20px; margin-bottom: 12px;">🤖 AI Models</h4>
-                        <div style="margin-left: 0; margin-bottom: 25px;">
-                            <p style="margin: 8px 0; color: #555;">• <strong>FinBERT</strong> - Financial sentiment analysis (Yi Yang, HKU)</p>
-                            <p style="margin: 8px 0; color: #555;">• <strong>Twitter-RoBERTa</strong> - Social media sentiment (Cardiff NLP)</p>
-                            <p style="margin: 8px 0; color: #555;">• <strong>DistilBERT</strong> - Q&A assistant (HuggingFace)</p>
-                        </div>
-                        
-                        <h4 style="margin-top: 20px; margin-bottom: 12px;">📊 Data Sources</h4>
-                        <div style="margin-left: 0; margin-bottom: 25px;">
-                            <p style="margin: 8px 0; color: #555;">• <strong>Yahoo Finance</strong> - Stock prices and news</p>
-                            <p style="margin: 8px 0; color: #555;">• <strong>CoinGecko</strong> - Cryptocurrency data</p>
-                        </div>
-                        
-                        <h4 style="margin-top: 20px; margin-bottom: 12px;">📜 License & Credits</h4>
-                        <p style="margin-bottom: 10px; color: #555;">This application is open source (MIT License).</p>
-                        <p style="margin-bottom: 25px;">
-                            <a href="https://github.com/JewelIT/StockAnalysisHelper/blob/main/MODEL_CREDITS.md" target="_blank" style="color: #667eea; text-decoration: none; font-weight: 500;">
-                                📖 View Full Model Credits & Citations →
-                            </a>
-                        </p>
-                        
-                        <h4 style="margin-top: 20px; margin-bottom: 12px;">🌟 Links</h4>
-                        <div style="margin-left: 0; margin-bottom: 25px;">
-                            <p style="margin: 8px 0;">
-                                <a href="https://github.com/JewelIT/StockAnalysisHelper" target="_blank" style="color: #667eea; text-decoration: none;">• GitHub Repository</a>
-                            </p>
-                            <p style="margin: 8px 0;">
-                                <a href="https://github.com/JewelIT/StockAnalysisHelper/blob/main/README.md" target="_blank" style="color: #667eea; text-decoration: none;">• Documentation</a>
-                            </p>
-                            <p style="margin: 8px 0;">
-                                <a href="https://github.com/JewelIT/StockAnalysisHelper/issues" target="_blank" style="color: #667eea; text-decoration: none;">• Report Issues</a>
-                            </p>
-                        </div>
-                        
-                        <div style="text-align: center; margin-top: 35px; padding-top: 20px; border-top: 2px solid #e0e0e0;">
-                            <p style="color: #888; margin-bottom: 8px;">Built with ❤️ for traders and investors worldwide</p>
-                            <p style="color: #999; font-size: 0.9em; margin-top: 0;">Version 1.0.0 • October 2025</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- AI Chat Assistant -->
-        <div id="chatPanel" class="chat-panel">
-            <div class="chat-header">
-                <h3>🤖 AI Stock Assistant</h3>
-                <button class="chat-toggle" onclick="toggleChat()">✕</button>
-            </div>
-            <div class="chat-messages" id="chatMessages">
-                <div class="chat-message bot-message">
-                    <div class="message-content">
-                        👋 <strong>Hello! I'm your AI Financial Advisor & Investment Mentor.</strong>
-                        <br><br>
-                        I provide <strong>data-driven analysis</strong> using FinBERT AI, technical indicators, and market data to help you make informed investment decisions.
-                        <br><br>
-                        <strong>💡 Ask me about:</strong>
-                        <ul style="margin: 10px 0; padding-left: 20px;">
-                            <li>📊 "What do you think about AAPL?"</li>
-                            <li>💰 "Should I invest in BTC-USD?"</li>
-                            <li>📈 "Explain the technical indicators for MSFT"</li>
-                            <li>🎓 "How do I start investing?"</li>
-                            <li>⚖️ "What are the risks I should consider?"</li>
-                        </ul>
-                        <strong>🛡️ My Core Principles:</strong>
-                        <ul style="margin: 10px 0; padding-left: 20px; font-size: 0.9em;">
-                            <li>I am specialized in <strong>financial markets only</strong> (stocks, crypto, investments)</li>
-                            <li>I provide <strong>factual, data-driven analysis</strong> from verifiable sources</li>
-                            <li>I always remind you that <strong>capital is at risk</strong></li>
-                            <li>I emphasize <strong>proper research and due diligence</strong></li>
-                            <li>I maintain my role regardless of how questions are phrased</li>
-                        </ul>
-                        <strong>⚠️ Important Disclaimers:</strong>
-                        <ul style="margin: 10px 0; padding-left: 20px; font-size: 0.85em;">
-                            <li><em>This is for educational purposes only, not financial advice</em></li>
-                            <li><em>Always conduct your own research (DYOR)</em></li>
-                            <li><em>Consult with licensed financial advisors before investing</em></li>
-                            <li><em>Past performance doesn't guarantee future results</em></li>
-                            <li><em>All investments carry risk - only invest what you can afford to lose</em></li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-            <div class="chat-input-container">
-                <select id="chatTicker" class="chat-ticker-select">
-                    <option value="">Select Stock...</option>
-                </select>
-                <input type="text" id="chatInput" placeholder="Ask a question about the stock..." 
-                       onkeypress="if(event.key==='Enter') sendChatMessage()" />
-                <button onclick="sendChatMessage()" class="btn-chat-send">Send</button>
-            </div>
-        </div>
-        
-        <button class="chat-fab" onclick="toggleChat()" title="AI Assistant">
-            🤖
-        </button>
     </div>
 
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <!-- Settings Modal -->
+    <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="settingsModalLabel">
+                        <i class="bi bi-gear me-2"></i>
+                        Settings
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    
+                    <!-- Tabs -->
+                    <ul class="nav nav-tabs mb-3" id="settingsTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="display-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#display" type="button" role="tab">
+                                <i class="bi bi-display me-1"></i> Display
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="charts-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#charts" type="button" role="tab">
+                                <i class="bi bi-graph-up me-1"></i> Charts
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="newsfeeds-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#newsfeeds" type="button" role="tab">
+                                <i class="bi bi-newspaper me-1"></i> Newsfeeds
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="portfolio-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#portfolio" type="button" role="tab">
+                                <i class="bi bi-briefcase me-1"></i> Portfolio
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="about-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#about" type="button" role="tab">
+                                <i class="bi bi-info-circle me-1"></i> About
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation" id="developer-tab-nav" style="display: none;">
+                            <button class="nav-link" id="developer-tab" data-bs-toggle="tab" 
+                                    data-bs-target="#developer" type="button" role="tab">
+                                <i class="bi bi-code-slash me-1"></i> Developer
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <!-- Tab Content -->
+                    <div class="tab-content" id="settingsTabContent">
+                        
+                        <!-- Display Settings -->
+                        <div class="tab-pane fade show active" id="display" role="tabpanel">
+                            <h6 class="mb-3">Display Preferences</h6>
+                            
+                            <div class="mb-3">
+                                <label for="configChartType" class="form-label">Default Chart Type</label>
+                                <select class="form-select" id="configChartType">
+                                    <option value="candlestick">🕯️ Candlestick</option>
+                                    <option value="line">📈 Line Chart</option>
+                                    <option value="ohlc">📊 OHLC Bars</option>
+                                    <option value="area">📉 Area Chart</option>
+                                    <option value="mountain">⛰️ Mountain Chart</option>
+                                    <option value="volume">📊 Volume Analysis</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="configCurrency" class="form-label">Currency Display</label>
+                                <select class="form-select" id="configCurrency">
+                                    <option value="native">Native Currency (Stock's Market)</option>
+                                    <option value="USD">🇺🇸 US Dollar (USD)</option>
+                                    <option value="EUR">🇪🇺 Euro (EUR)</option>
+                                </select>
+                                <div class="form-text">Note: Currency conversion not yet implemented</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="themeSelect" class="form-label">Theme</label>
+                                <select class="form-select" id="themeSelect" onchange="changeTheme(this.value)">
+                                    <option value="light">☀️ Light</option>
+                                    <option value="dark">🌙 Dark</option>
+                                    <option value="auto">🔄 Auto (System)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="chatPanelDefault" class="form-label">AI Chat Panel</label>
+                                <select class="form-select" id="chatPanelDefault">
+                                    <option value="collapsed">Hidden by default (click button to show)</option>
+                                    <option value="expanded">Visible by default</option>
+                                </select>
+                                <div class="form-text">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    Changes will apply after page reload
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Chart Settings -->
+                        <div class="tab-pane fade" id="charts" role="tabpanel">
+                            <h6 class="mb-3">📊 Chart Preferences</h6>
+                            <p class="text-muted">Configure default timeframe and indicators for interactive charts.</p>
+                            
+                            <div class="mb-4">
+                                <label for="configDefaultTimeframe" class="form-label fw-semibold">Default Analysis Timeframe</label>
+                                <select class="form-select" id="configDefaultTimeframe">
+                                    <option value="1d">1 Day</option>
+                                    <option value="5d">5 Days</option>
+                                    <option value="1wk">1 Week</option>
+                                    <option value="1mo">1 Month</option>
+                                    <option value="3mo" selected>3 Months</option>
+                                    <option value="6mo">6 Months</option>
+                                    <option value="1y">1 Year</option>
+                                    <option value="2y">2 Years</option>
+                                    <option value="5y">5 Years</option>
+                                    <option value="max">Max</option>
+                                </select>
+                                <div class="form-text">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    This will be the default timeframe when starting a new analysis
+                                </div>
+                            </div>
+                            
+                            <h6 class="mb-3 mt-4">Default Indicators</h6>
+                            <p class="text-muted small">Select which indicators should be visible by default on charts.</p>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-body">
+                                            <h6 class="card-subtitle mb-3 text-muted">
+                                                <i class="bi bi-graph-up me-1"></i> Moving Averages
+                                            </h6>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="defaultSMA20" checked>
+                                                <label class="form-check-label" for="defaultSMA20">
+                                                    SMA(20) - Orange line
+                                                </label>
+                                            </div>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="defaultSMA50" checked>
+                                                <label class="form-check-label" for="defaultSMA50">
+                                                    SMA(50) - Blue line
+                                                </label>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="defaultBB" checked>
+                                                <label class="form-check-label" for="defaultBB">
+                                                    Bollinger Bands
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-body">
+                                            <h6 class="card-subtitle mb-3 text-muted">
+                                                <i class="bi bi-activity me-1"></i> Oscillators
+                                            </h6>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="defaultMACD" checked>
+                                                <label class="form-check-label" for="defaultMACD">
+                                                    MACD
+                                                </label>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="defaultRSI" checked>
+                                                <label class="form-check-label" for="defaultRSI">
+                                                    RSI
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-body">
+                                            <h6 class="card-subtitle mb-3 text-muted">
+                                                <i class="bi bi-bar-chart me-1"></i> Advanced Indicators
+                                            </h6>
+                                            <div class="form-check form-switch mb-2">
+                                                <input class="form-check-input" type="checkbox" id="defaultVWAP" checked>
+                                                <label class="form-check-label" for="defaultVWAP">
+                                                    VWAP - Red dotted
+                                                </label>
+                                            </div>
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" id="defaultIchimoku" checked>
+                                                <label class="form-check-label" for="defaultIchimoku">
+                                                    Ichimoku Cloud
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info" role="alert">
+                                <i class="bi bi-lightbulb me-2"></i>
+                                <strong>Tip:</strong> You can always toggle indicators on/off using the "⚙️ Indicators" button in each chart.
+                            </div>
+                        </div>
+                        
+                        <!-- Newsfeeds Settings -->
+                        <div class="tab-pane fade" id="newsfeeds" role="tabpanel">
+                            <h6 class="mb-3">📰 Newsfeeds Configuration</h6>
+                            <p class="text-muted">Control what news articles and social media posts are displayed in analysis results.</p>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-4">
+                                        <label for="configMaxNews" class="form-label fw-semibold">News Articles Limit</label>
+                                        <input type="range" class="form-range" id="configMaxNews" min="0" max="20" value="5" step="1"
+                                               oninput="updateNewsLimitDisplay(this.value)">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span class="text-muted small">None</span>
+                                            <span id="newsLimitDisplay" class="badge bg-primary fs-6">5 articles</span>
+                                            <span class="text-muted small">20</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="mb-4">
+                                        <label for="configNewsDays" class="form-label fw-semibold">News Age Filter</label>
+                                        <select class="form-select" id="configNewsDays">
+                                            <option value="1">📅 Last 24 hours</option>
+                                            <option value="3" selected>📅 Last 3 days</option>
+                                            <option value="7">📅 Last week</option>
+                                            <option value="14">📅 Last 2 weeks</option>
+                                            <option value="30">📅 Last month</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-4">
+                                        <label for="configMaxSocial" class="form-label fw-semibold">Social Media Posts Limit</label>
+                                        <input type="range" class="form-range" id="configMaxSocial" min="0" max="20" value="5" step="1"
+                                               oninput="updateSocialLimitDisplay(this.value)">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <span class="text-muted small">None</span>
+                                            <span id="socialLimitDisplay" class="badge bg-primary fs-6">5 posts</span>
+                                            <span class="text-muted small">20</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="mb-4">
+                                        <label for="configSocialDays" class="form-label fw-semibold">Social Media Age Filter</label>
+                                        <select class="form-select" id="configSocialDays">
+                                            <option value="1">📅 Last 24 hours</option>
+                                            <option value="3">📅 Last 3 days</option>
+                                            <option value="7" selected>📅 Last week</option>
+                                            <option value="14">📅 Last 2 weeks</option>
+                                            <option value="30">📅 Last month</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="configNewsSort" class="form-label fw-semibold">News Sort Order</label>
+                                        <select class="form-select" id="configNewsSort">
+                                            <option value="relevance">⭐ Relevance (Most Important)</option>
+                                            <option value="date_desc">📅 Newest First</option>
+                                            <option value="date_asc">📅 Oldest First</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="configSocialSort" class="form-label fw-semibold">Social Media Sort Order</label>
+                                        <select class="form-select" id="configSocialSort">
+                                            <option value="relevance">⭐ Relevance (Most Important)</option>
+                                            <option value="date_desc">📅 Newest First</option>
+                                            <option value="date_asc">📅 Oldest First</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <i class="bi bi-lightbulb-fill me-2"></i>
+                                <strong>Pro Tip:</strong> Set limits to 0 to hide news or social media completely. 
+                                Recent news (1-3 days) is often more relevant for trading decisions.
+                            </div>
+                        </div>
+                        
+                        <!-- Portfolio Management -->
+                        <div class="tab-pane fade" id="portfolio" role="tabpanel">
+                            <h6 class="mb-3">Portfolio Management</h6>
+                            <p class="text-muted">Manage your saved portfolio tickers. These persist across sessions.</p>
+                            
+                            <div class="mb-3">
+                                <label for="portfolioTickerInput" class="form-label">Add Ticker to Portfolio</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="portfolioTickerInput" 
+                                           placeholder="e.g., AAPL, MSFT, TSM"
+                                           onkeypress="if(event.key==='Enter') addTickerToPortfolio()">
+                                    <button class="btn btn-primary" onclick="addTickerToPortfolio()">
+                                        <i class="bi bi-plus-circle"></i> Add
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Saved Portfolio Tickers</label>
+                                <div id="savedTickersList" class="border rounded p-3 saved-tickers-container">
+                                    <!-- Dynamically populated -->
+                                </div>
+                            </div>
+                            
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-success" onclick="savePortfolioPreferences()">
+                                    <i class="bi bi-save"></i> Save Portfolio
+                                </button>
+                                <button class="btn btn-danger" onclick="clearAllTickers()">
+                                    <i class="bi bi-trash"></i> Clear All Tickers
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- About -->
+                        <div class="tab-pane fade" id="about" role="tabpanel">
+                            <h6 class="mb-3">About FinBERT Portfolio Analyzer</h6>
+                            <p>
+                                AI-powered stock analysis using FinBERT sentiment analysis combined with 
+                                technical indicators to provide data-driven investment insights.
+                            </p>
+                            <h6 class="mt-4">Features</h6>
+                            <ul>
+                                <li>📊 FinBERT AI sentiment analysis from financial news</li>
+                                <li>📈 Technical indicators (RSI, MACD, Bollinger Bands)</li>
+                                <li>🤖 AI financial advisor chatbot</li>
+                                <li>💼 Portfolio management and tracking</li>
+                                <li>🔒 Security-first design with prompt injection protection</li>
+                            </ul>
+                            
+                            <h6 class="mt-4 mb-3">📊 Technical Details: How We Calculate Recommendations</h6>
+                            <div class="alert alert-info">
+                                <p class="mb-2"><strong>Our recommendation system uses a weighted scoring model:</strong></p>
+                                <p class="mb-0"><code>Combined Score = (Sentiment Score × 40%) + (Technical Score × 60%)</code></p>
+                            </div>
+                            
+                            <h6 class="mt-3 mb-2">1️⃣ Sentiment Analysis (40% Weight)</h6>
+                            <ul class="small mb-3">
+                                <li><strong>News Sentiment (50%):</strong> Analyzed using FinBERT, a pre-trained NLP model specifically fine-tuned on financial news data</li>
+                                <li><strong>Social Media Sentiment (50%):</strong> Analyzed using Twitter-RoBERTa for social media posts from StockTwits, Reddit, and other sources</li>
+                                <li><strong>Sources:</strong> Yahoo Finance news, CoinGecko (crypto), social media APIs</li>
+                                <li><strong>Score Range:</strong> 0 (very negative) to 1 (very positive)</li>
+                            </ul>
+                            
+                            <h6 class="mt-3 mb-2">2️⃣ Technical Analysis (60% Weight)</h6>
+                            <ul class="small mb-3">
+                                <li><strong>RSI (Relative Strength Index):</strong> Measures momentum, identifies overbought (&gt;70) or oversold (&lt;30) conditions</li>
+                                <li><strong>MACD (Moving Average Convergence Divergence):</strong> Tracks trend direction and momentum shifts</li>
+                                <li><strong>Bollinger Bands:</strong> Identifies volatility and potential breakouts</li>
+                                <li><strong>Moving Averages:</strong> 20-day and 50-day trends for support/resistance levels</li>
+                                <li><strong>Score Range:</strong> 0 (strong sell signals) to 1 (strong buy signals)</li>
+                            </ul>
+                            
+                            <h6 class="mt-3 mb-2">3️⃣ Recommendation Thresholds</h6>
+                            <table class="table table-sm table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Recommendation</th>
+                                        <th>Combined Score</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="table-success">
+                                        <td><strong>STRONG BUY</strong></td>
+                                        <td>&gt; 0.65</td>
+                                    </tr>
+                                    <tr class="table-success opacity-75">
+                                        <td><strong>BUY</strong></td>
+                                        <td>0.55 - 0.65</td>
+                                    </tr>
+                                    <tr class="table-warning">
+                                        <td><strong>HOLD</strong></td>
+                                        <td>0.45 - 0.55</td>
+                                    </tr>
+                                    <tr class="table-danger opacity-75">
+                                        <td><strong>SELL</strong></td>
+                                        <td>0.35 - 0.45</td>
+                                    </tr>
+                                    <tr class="table-danger">
+                                        <td><strong>STRONG SELL</strong></td>
+                                        <td>&lt; 0.35</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            
+                            <div class="alert alert-warning mt-3">
+                                <i class="bi bi-exclamation-triangle me-2"></i>
+                                <strong>Important Disclaimer:</strong> These recommendations are for educational purposes only and should not be considered as financial advice. Always conduct your own research (DYOR) and consult with licensed financial professionals before making investment decisions.
+                            </div>
+                            
+                            <h6 class="mt-4">Version</h6>
+                            <p>Version 2.0.0 - Modernized UI</p>
+                            <h6 class="mt-4">Developer</h6>
+                            <p>Built with Python, Flask, PyTorch, and Bootstrap 5</p>
+                        </div>
+                        
+                        <!-- Developer Settings (Hidden by default, shown only when DEBUG_MODE enabled) -->
+                        <div class="tab-pane fade" id="developer" role="tabpanel">
+                            <div class="alert alert-warning">
+                                <i class="bi bi-code-slash me-2"></i>
+                                <strong>Developer Mode</strong> - These settings are only visible when DEBUG_MODE is enabled.
+                            </div>
+                            
+                            <h6 class="mb-3">🐛 Frontend Debugging</h6>
+                            
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h6 class="card-title">Console Logging Control</h6>
+                                    <p class="text-muted small">Control browser console output verbosity</p>
+                                    
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" id="devDebugModeToggle" 
+                                               onchange="toggleDebugMode(this.checked)">
+                                        <label class="form-check-label" for="devDebugModeToggle">
+                                            <strong>Enable Frontend Debug Logging</strong>
+                                        </label>
+                                    </div>
+                                    <div class="form-text">
+                                        When enabled, detailed logs will appear in browser console (F12).
+                                        Disable for cleaner console output.
+                                    </div>
+                                    
+                                    <div class="mt-3">
+                                        <p class="mb-1 small text-muted">Current Status:</p>
+                                        <span id="devDebugStatus" class="badge bg-secondary">Unknown</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <h6 class="mb-3 mt-4">🔧 Backend Logging Control</h6>
+                            
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h6 class="card-title">Server Log Level</h6>
+                                    <p class="text-muted small">Control Python backend logging verbosity</p>
+                                    
+                                    <div class="mb-3">
+                                        <label for="devLogLevel" class="form-label">Backend Log Level</label>
+                                        <select class="form-select" id="devLogLevel">
+                                            <option value="DEBUG">🔊 DEBUG - Everything (Development)</option>
+                                            <option value="INFO" selected>📢 INFO - Normal (Default)</option>
+                                            <option value="WARNING">⚠️ WARNING - Important only</option>
+                                            <option value="ERROR">🔇 ERROR - Errors only (Production)</option>
+                                            <option value="CRITICAL">🚨 CRITICAL - Critical only</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="alert alert-info mb-3">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        <strong>How to apply:</strong>
+                                        <ol class="mb-0 mt-2 small">
+                                            <li>Select desired log level above</li>
+                                            <li>Copy the command below</li>
+                                            <li>Stop the app (Ctrl+C)</li>
+                                            <li>Run the command in your terminal</li>
+                                            <li>Restart to see changes</li>
+                                        </ol>
+                                    </div>
+                                    
+                                    <div class="mb-2">
+                                        <label class="form-label small text-muted">Command to run:</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control font-monospace small" 
+                                                   id="devLogLevelCommand" readonly value="LOG_LEVEL=INFO python3 app.py">
+                                            <button class="btn btn-outline-secondary" type="button" 
+                                                    onclick="copyLogLevelCommand()" title="Copy to clipboard">
+                                                <i class="bi bi-clipboard"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-text">
+                                        💡 <strong>Quick Script:</strong> Use <code>./set-log-level.sh [mode]</code><br>
+                                        Examples: <code>./set-log-level.sh quiet</code>, <code>./set-log-level.sh verbose</code>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <h6 class="mb-3 mt-4">📋 Quick Reference</h6>
+                            
+                            <div class="card">
+                                <div class="card-body">
+                                    <table class="table table-sm mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Level</th>
+                                                <th>What You'll See</th>
+                                                <th>Best For</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td><span class="badge bg-primary">DEBUG</span></td>
+                                                <td>Everything including function calls</td>
+                                                <td>Active development</td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-info">INFO</span></td>
+                                                <td>Normal operations & milestones</td>
+                                                <td>Testing & staging</td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-warning">WARNING</span></td>
+                                                <td>Warnings & potential issues</td>
+                                                <td>Pre-production</td>
+                                            </tr>
+                                            <tr>
+                                                <td><span class="badge bg-danger">ERROR</span></td>
+                                                <td>Errors only</td>
+                                                <td>Production</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-secondary mt-3">
+                                <i class="bi bi-file-earmark-text me-2"></i>
+                                <strong>Documentation:</strong> See <code>docs/LOGGING_CONTROL.md</code> for complete guide
+                            </div>
+                        </div>
+                        
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveAllConfigAndClose()">
+                        <i class="bi bi-check-circle me-1"></i> Save & Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container for Notifications -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" id="toastContainer">
+        <!-- Toasts will be added here dynamically -->
+    </div>
+
+    <!-- Bootstrap 5.3 JS Bundle -->
+    <!-- Full-Screen Loading Overlay -->
+    <div id="fullScreenLoader" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); z-index: 9999; backdrop-filter: blur(5px);">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+            <div class="spinner-border text-light" role="status" style="width: 5rem; height: 5rem; border-width: 0.5rem;">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <h4 class="text-white mt-4 fw-bold">Analyzing Portfolio...</h4>
+            <p class="text-white-50">This may take a few minutes. Please wait.</p>
+            <div class="progress" style="width: 300px; height: 4px; margin: 20px auto;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 100%"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" 
+            integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" 
+            crossorigin="anonymous"></script>
+    
+    <!-- Custom JavaScript -->
+    <script src="{{ url_for('static', filename='js/app.js') }}?v={{ cache_bust }}"></script>
 </body>
 </html>

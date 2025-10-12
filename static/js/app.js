@@ -1,4 +1,26 @@
 // Portfolio Analysis App
+
+// ===== DEBUG CONFIGURATION =====
+// Set DEBUG_MODE in localStorage to enable console logging
+// Usage: localStorage.setItem('DEBUG_MODE', 'true')  // Enable
+// To disable: localStorage.removeItem('DEBUG_MODE')  // Remove completely
+// Note: Setting to 'false' won't work - must remove it!
+const DEBUG_MODE = localStorage.getItem('DEBUG_MODE') === 'true';
+
+// Smart console wrapper - only logs if DEBUG_MODE is enabled
+const debug = {
+    log: (...args) => DEBUG_MODE && console.log(...args),
+    info: (...args) => DEBUG_MODE && console.info(...args),
+    warn: (...args) => console.warn(...args),  // Always show warnings
+    error: (...args) => console.error(...args)  // Always show errors
+};
+
+// Show debug mode status on load
+if (DEBUG_MODE) {
+    console.log('%c🐛 DEBUG MODE ENABLED', 'background: #ff9800; color: white; padding: 2px 8px; border-radius: 3px;');
+    console.log('To disable: localStorage.removeItem("DEBUG_MODE"); location.reload();');
+}
+
 const PORTFOLIO_STORAGE_KEY = 'saved_portfolio_tickers';  // Persistent portfolio
 const SESSION_STORAGE_KEY = 'session_analysis_tickers';    // Current session
 const CONFIG_STORAGE_KEY = 'app_configuration';             // App settings
@@ -9,7 +31,23 @@ let portfolioTickers = [];    // Saved portfolio tickers (persistent)
 let appConfig = {              // App configuration
     currency: 'USD',           // USD, EUR, or 'native'
     defaultChartType: 'candlestick',
-    displayMode: 'accordion'   // accordion or tabs (for future)
+    defaultTimeframe: '3mo',   // Default analysis timeframe
+    maxNews: 5,                // Maximum news articles to display
+    maxSocial: 5,              // Maximum social media posts to display
+    newsSort: 'relevance',     // How to sort news: relevance, date_desc, date_asc
+    socialSort: 'relevance',   // How to sort social media: relevance, date_desc, date_asc
+    newsDays: 3,               // How many days back for news
+    socialDays: 7,             // How many days back for social media
+    // Default indicator visibility
+    defaultIndicators: {
+        sma20: true,
+        sma50: true,
+        bb: true,
+        macd: true,
+        rsi: true,
+        vwap: true,
+        ichimoku: true
+    }
 };
 
 // Conversation context for chat
@@ -25,6 +63,104 @@ let exchangeRates = {
     GBP: 0.79,  // 1 USD = 0.79 GBP
     USD: 1.0
 };
+
+// ===== EXCHANGE RATE FETCHING =====
+
+/**
+ * Fetch live exchange rates from external API
+ * Caches rates in localStorage for 24 hours
+ */
+async function fetchExchangeRates() {
+    try {
+        // Check cache first
+        const cached = localStorage.getItem('exchange_rates_cache');
+        if (cached) {
+            const { rates, timestamp } = JSON.parse(cached);
+            const age = Date.now() - timestamp;
+            const MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+            
+            if (age < MAX_AGE) {
+                debug.log('Using cached exchange rates (age: ' + Math.round(age / 3600000) + ' hours)');
+                exchangeRates = rates;
+                return rates;
+            }
+        }
+        
+        // Fetch fresh rates
+        debug.log('Fetching live exchange rates...');
+        const response = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
+        
+        if (!response.ok) {
+            throw new Error('Exchange rate API returned ' + response.status);
+        }
+        
+        const data = await response.json();
+        
+        // Update global rates
+        exchangeRates = {
+            USD: 1.0,
+            EUR: data.rates.EUR || 0.92,
+            GBP: data.rates.GBP || 0.79
+        };
+        
+        // Cache for 24 hours
+        localStorage.setItem('exchange_rates_cache', JSON.stringify({
+            rates: exchangeRates,
+            timestamp: Date.now()
+        }));
+        
+        debug.log('Exchange rates updated:', exchangeRates);
+        return exchangeRates;
+        
+    } catch (error) {
+        console.warn('Failed to fetch exchange rates, using fallbacks:', error.message);
+        // Keep fallback values already set
+        return exchangeRates;
+    }
+}
+
+// ===== TIMESTAMP FORMATTING =====
+
+function formatTimestamp(timestamp) {
+    if (!timestamp) return '';
+    
+    try {
+        let date;
+        
+        // Check if it's a Unix timestamp (number) or ISO string
+        if (typeof timestamp === 'number') {
+            // Unix timestamp (in seconds) - convert to milliseconds
+            date = new Date(timestamp * 1000);
+        } else if (typeof timestamp === 'string') {
+            // ISO date string or other format
+            date = new Date(timestamp);
+        } else {
+            return '';
+        }
+        
+        // Check if valid date
+        if (isNaN(date.getTime())) return '';
+        
+        const now = new Date();
+        const diffMs = now - date;
+        const diffSec = Math.floor(diffMs / 1000);
+        const diffMin = Math.floor(diffSec / 60);
+        const diffHour = Math.floor(diffMin / 60);
+        const diffDay = Math.floor(diffHour / 24);
+        
+        // Relative time for recent items
+        if (diffSec < 60) return 'Just now';
+        if (diffMin < 60) return `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+        if (diffHour < 24) return `${diffHour} hour${diffHour === 1 ? '' : 's'} ago`;
+        if (diffDay < 7) return `${diffDay} day${diffDay === 1 ? '' : 's'} ago`;
+        
+        // Absolute date for older items
+        const options = { year: 'numeric', month: 'short', day: 'numeric' };
+        return date.toLocaleDateString('en-US', options);
+    } catch (e) {
+        return '';
+    }
+}
 
 // ===== CURRENCY FORMATTING =====
 
@@ -56,7 +192,7 @@ function formatPrice(priceUSD, ticker = null) {
 function showToast(message, type = 'info', title = null) {
     const container = document.getElementById('toastContainer');
     const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
+    toast.className = `custom-toast toast-${type}`;
     
     const icons = {
         success: '✅',
@@ -65,22 +201,22 @@ function showToast(message, type = 'info', title = null) {
         info: 'ℹ️'
     };
     
-    const defaultTitles = {
-        success: 'Success',
-        error: 'Error',
-        warning: 'Warning',
-        info: 'Information'
-    };
-    
-    toast.innerHTML = `
+    // Build toast HTML - only show title if explicitly provided
+    let toastHTML = `
         <div class="toast-icon">${icons[type] || icons.info}</div>
-        <div class="toast-content">
-            <div class="toast-title">${title || defaultTitles[type]}</div>
-            <div class="toast-message">${message}</div>
+        <div class="toast-content">`;
+    
+    if (title) {
+        toastHTML += `<div class="toast-title">${title}</div>`;
+    }
+    
+    toastHTML += `
+            <div class="toast-message ${title ? '' : 'toast-message-only'}">${message}</div>
         </div>
         <button class="toast-close" onclick="this.parentElement.remove()">×</button>
     `;
     
+    toast.innerHTML = toastHTML;
     container.appendChild(toast);
     
     // Auto-remove after 5 seconds
@@ -111,13 +247,27 @@ document.addEventListener('DOMContentLoaded', function() {
     loadAppConfig();
     loadPortfolioFromStorage();
     loadSessionTickers();
+    loadIndicatorSettings();  // Load saved indicator settings
+    
+    // Apply default timeframe to dropdown if set
+    if (appConfig.defaultTimeframe) {
+        const timeframeSelect = document.getElementById('timeframeSelect');
+        if (timeframeSelect) {
+            timeframeSelect.value = appConfig.defaultTimeframe;
+        }
+    }
+    
     updateTickerChips();
     updateChatTickers();  // Populate chat with portfolio tickers
+    initTickerAutocomplete();  // Initialize autocomplete
     
-    // Enter key support for analysis
+    // Enter key support for analysis (handled in autocomplete now, but keep as fallback)
     document.getElementById('tickerInput').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
-            addTicker();
+            const dropdown = document.getElementById('tickerAutocomplete');
+            if (dropdown.style.display === 'none') {
+                addTicker();
+            }
         }
     });
 });
@@ -131,6 +281,22 @@ function loadPortfolioFromStorage() {
         } catch (e) {
             portfolioTickers = [];
         }
+    }
+}
+
+// Load saved indicator settings from localStorage
+function loadIndicatorSettings() {
+    const stored = localStorage.getItem('indicator_settings');
+    if (stored) {
+        try {
+            window.indicatorSettings = JSON.parse(stored);
+            debug.log('Loaded indicator settings from localStorage:', window.indicatorSettings);
+        } catch (e) {
+            console.error('Failed to load indicator settings:', e);
+            window.indicatorSettings = {};
+        }
+    } else {
+        window.indicatorSettings = {};
     }
 }
 
@@ -157,9 +323,132 @@ function saveSessionTickers() {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionTickers));
 }
 
+// Ticker autocomplete functionality
+let autocompleteTimeout = null;
+let selectedAutocompleteIndex = -1;
+
+function initTickerAutocomplete() {
+    const input = document.getElementById('tickerInput');
+    const dropdown = document.getElementById('tickerAutocomplete');
+    
+    if (!input || !dropdown) return;
+    
+    // Handle input changes
+    input.addEventListener('input', function() {
+        const query = this.value.trim();
+        
+        // Clear existing timeout
+        if (autocompleteTimeout) {
+            clearTimeout(autocompleteTimeout);
+        }
+        
+        // Hide dropdown if query too short
+        if (query.length < 1) {
+            dropdown.style.display = 'none';
+            return;
+        }
+        
+        // Debounce search
+        autocompleteTimeout = setTimeout(() => {
+            searchTickers(query);
+        }, 300);
+    });
+    
+    // Handle keyboard navigation
+    input.addEventListener('keydown', function(e) {
+        const items = dropdown.querySelectorAll('.autocomplete-item');
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            selectedAutocompleteIndex = Math.min(selectedAutocompleteIndex + 1, items.length - 1);
+            updateAutocompleteSelection(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            selectedAutocompleteIndex = Math.max(selectedAutocompleteIndex - 1, -1);
+            updateAutocompleteSelection(items);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (selectedAutocompleteIndex >= 0 && items[selectedAutocompleteIndex]) {
+                const ticker = items[selectedAutocompleteIndex].dataset.ticker;
+                selectTicker(ticker);
+            } else {
+                addTicker();
+            }
+        } else if (e.key === 'Escape') {
+            dropdown.style.display = 'none';
+            selectedAutocompleteIndex = -1;
+        }
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+            dropdown.style.display = 'none';
+            selectedAutocompleteIndex = -1;
+        }
+    });
+}
+
+async function searchTickers(query) {
+    const dropdown = document.getElementById('tickerAutocomplete');
+    
+    try {
+        dropdown.innerHTML = '<div class="autocomplete-loading"><i class="bi bi-search"></i> Searching...</div>';
+        dropdown.style.display = 'block';
+        
+        const response = await fetch(`/search_ticker?q=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        if (data.results && data.results.length > 0) {
+            dropdown.innerHTML = data.results.map(item => `
+                <div class="autocomplete-item" data-ticker="${item.ticker}" onclick="selectTicker('${item.ticker}')">
+                    <span class="autocomplete-ticker">${item.ticker}</span>
+                    <span class="autocomplete-name">${item.name || ''}</span>
+                    ${item.exchange ? `<span class="autocomplete-exchange">${item.exchange}</span>` : ''}
+                </div>
+            `).join('');
+        } else {
+            dropdown.innerHTML = `
+                <div class="autocomplete-no-results">
+                    No results found. Try entering the exact ticker symbol.
+                </div>
+            `;
+        }
+        
+        selectedAutocompleteIndex = -1;
+    } catch (error) {
+        console.error('Ticker search error:', error);
+        dropdown.innerHTML = '<div class="autocomplete-no-results">Search unavailable. Enter ticker directly.</div>';
+    }
+}
+
+function updateAutocompleteSelection(items) {
+    items.forEach((item, index) => {
+        if (index === selectedAutocompleteIndex) {
+            item.classList.add('active');
+            item.scrollIntoView({ block: 'nearest' });
+        } else {
+            item.classList.remove('active');
+        }
+    });
+}
+
+function selectTicker(ticker) {
+    const input = document.getElementById('tickerInput');
+    const dropdown = document.getElementById('tickerAutocomplete');
+    
+    input.value = ticker;
+    dropdown.style.display = 'none';
+    selectedAutocompleteIndex = -1;
+    
+    // Automatically add the ticker
+    addTicker();
+}
+
 // Add ticker to analysis session
 function addTicker() {
     const input = document.getElementById('tickerInput');
+    const dropdown = document.getElementById('tickerAutocomplete');
     const ticker = input.value.trim().toUpperCase();
     
     if (!ticker) {
@@ -169,11 +458,14 @@ function addTicker() {
     
     if (sessionTickers.includes(ticker)) {
         showToast(`${ticker} is already in your analysis session`, 'info');
+        input.value = '';
+        dropdown.style.display = 'none';
         return;
     }
     
     sessionTickers.push(ticker);
     input.value = '';
+    dropdown.style.display = 'none';
     saveSessionTickers();
     updateTickerChips();
     showToast(`${ticker} added to analysis session`, 'success');
@@ -288,9 +580,12 @@ function switchTab(tabName) {
     // Highlight selected tab button
     const tabButtons = document.querySelectorAll('.tab-btn');
     tabButtons.forEach(btn => {
-        if (btn.textContent.includes(tabName === 'display' ? 'Display' : tabName === 'portfolio' ? 'Portfolio' : 'About')) {
-            btn.classList.add('active');
-        }
+        const tabText = btn.textContent.trim().toLowerCase();
+        const targetText = tabName.toLowerCase();
+        if (tabText.includes('display') && targetText === 'display') btn.classList.add('active');
+        else if (tabText.includes('newsfeeds') && targetText === 'newsfeeds') btn.classList.add('active');
+        else if (tabText.includes('portfolio') && targetText === 'portfolio') btn.classList.add('active');
+        else if (tabText.includes('about') && targetText === 'about') btn.classList.add('active');
     });
 }
 
@@ -298,21 +593,146 @@ function switchTab(tabName) {
 function loadConfigToUI() {
     document.getElementById('configChartType').value = appConfig.defaultChartType;
     document.getElementById('configCurrency').value = appConfig.currency;
+    
+    // Load default timeframe
+    const defaultTimeframeEl = document.getElementById('configDefaultTimeframe');
+    if (defaultTimeframeEl) {
+        defaultTimeframeEl.value = appConfig.defaultTimeframe || '3mo';
+    }
+    
+    // Load default indicators
+    const indicators = appConfig.defaultIndicators || {};
+    const indicatorElements = {
+        sma20: 'defaultSMA20',
+        sma50: 'defaultSMA50',
+        bb: 'defaultBB',
+        macd: 'defaultMACD',
+        rsi: 'defaultRSI',
+        vwap: 'defaultVWAP',
+        ichimoku: 'defaultIchimoku'
+    };
+    
+    for (const [key, elementId] of Object.entries(indicatorElements)) {
+        const el = document.getElementById(elementId);
+        if (el) {
+            el.checked = indicators[key] !== false; // Default to true if not set
+        }
+    }
+    
+    // Load chat panel default state
+    const chatPanelDefaultEl = document.getElementById('chatPanelDefault');
+    if (chatPanelDefaultEl) {
+        const savedState = localStorage.getItem('chatPanelState') || 'collapsed';
+        chatPanelDefaultEl.value = savedState;
+    }
+    
+    // Load newsfeed settings if elements exist
+    const maxNewsEl = document.getElementById('configMaxNews');
+    const maxSocialEl = document.getElementById('configMaxSocial');
+    const newsSortEl = document.getElementById('configNewsSort');
+    const socialSortEl = document.getElementById('configSocialSort');
+    const newsDaysEl = document.getElementById('configNewsDays');
+    const socialDaysEl = document.getElementById('configSocialDays');
+    
+    if (maxNewsEl) {
+        maxNewsEl.value = appConfig.maxNews || 5;
+        updateNewsLimitDisplay(maxNewsEl.value);
+    }
+    if (maxSocialEl) {
+        maxSocialEl.value = appConfig.maxSocial || 5;
+        updateSocialLimitDisplay(maxSocialEl.value);
+    }
+    if (newsSortEl) newsSortEl.value = appConfig.newsSort || 'relevance';
+    if (socialSortEl) socialSortEl.value = appConfig.socialSort || 'relevance';
+    if (newsDaysEl) newsDaysEl.value = appConfig.newsDays || 3;
+    if (socialDaysEl) socialDaysEl.value = appConfig.socialDays || 7;
 }
 
-// Save config settings from UI
-function saveConfigSettings() {
+// Save all config settings from UI and close modal (called by Save & Close button)
+function saveAllConfigAndClose() {
     const oldCurrency = appConfig.currency;
+    
+    // Save display settings
     appConfig.defaultChartType = document.getElementById('configChartType').value;
     appConfig.currency = document.getElementById('configCurrency').value;
+    
+    // Save default timeframe
+    const defaultTimeframeEl = document.getElementById('configDefaultTimeframe');
+    if (defaultTimeframeEl) {
+        appConfig.defaultTimeframe = defaultTimeframeEl.value;
+        // Update the main timeframe selector
+        document.getElementById('timeframeSelect').value = appConfig.defaultTimeframe;
+    }
+    
+    // Save default indicators
+    appConfig.defaultIndicators = {
+        sma20: document.getElementById('defaultSMA20')?.checked !== false,
+        sma50: document.getElementById('defaultSMA50')?.checked !== false,
+        bb: document.getElementById('defaultBB')?.checked !== false,
+        macd: document.getElementById('defaultMACD')?.checked !== false,
+        rsi: document.getElementById('defaultRSI')?.checked !== false,
+        vwap: document.getElementById('defaultVWAP')?.checked !== false,
+        ichimoku: document.getElementById('defaultIchimoku')?.checked !== false
+    };
+    
+    // Save chat panel default state
+    const chatPanelDefaultEl = document.getElementById('chatPanelDefault');
+    if (chatPanelDefaultEl) {
+        appConfig.chatPanelDefault = chatPanelDefaultEl.value;
+        // Update localStorage directly for chat panel state
+        localStorage.setItem('chatPanelState', chatPanelDefaultEl.value);
+    }
+    
+    // Save newsfeed settings if they exist
+    const maxNewsEl = document.getElementById('configMaxNews');
+    const maxSocialEl = document.getElementById('configMaxSocial');
+    const newsSortEl = document.getElementById('configNewsSort');
+    const socialSortEl = document.getElementById('configSocialSort');
+    const newsDaysEl = document.getElementById('configNewsDays');
+    const socialDaysEl = document.getElementById('configSocialDays');
+    
+    if (maxNewsEl) appConfig.maxNews = parseInt(maxNewsEl.value);
+    if (maxSocialEl) appConfig.maxSocial = parseInt(maxSocialEl.value);
+    if (newsSortEl) appConfig.newsSort = newsSortEl.value;
+    if (socialSortEl) appConfig.socialSort = socialSortEl.value;
+    if (newsDaysEl) appConfig.newsDays = parseInt(newsDaysEl.value);
+    if (socialDaysEl) appConfig.socialDays = parseInt(socialDaysEl.value);
+    
+    // Persist to localStorage
     saveAppConfig();
     
-    // If currency changed and we have results, re-render to update prices
-    if (oldCurrency !== appConfig.currency && window.analysisResults && window.analysisResults.length > 0) {
-        displayResults(window.analysisResults);
-        showToast(`Settings saved! Prices updated to ${appConfig.currency}`, 'success');
-    } else {
-        showToast('Settings saved successfully', 'success');
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('settingsModal'));
+    if (modal) modal.hide();
+    
+    // Show success message
+    showToast('✅ Settings saved successfully', 'success');
+    
+    // If currency changed, refresh data to update all prices
+    if (oldCurrency !== appConfig.currency) {
+        // Re-render existing analysis results
+        if (window.analysisResults && window.analysisResults.length > 0) {
+            displayResults(window.analysisResults);
+        }
+        
+        // 💱 Refresh market sentiment with new currency
+        loadMarketSentiment(true);
+    }
+}
+
+// Update news limit display label
+function updateNewsLimitDisplay(value) {
+    const display = document.getElementById('newsLimitDisplay');
+    if (display) {
+        display.textContent = value === '0' ? 'Disabled' : `${value} article${value === '1' ? '' : 's'}`;
+    }
+}
+
+// Update social media limit display label
+function updateSocialLimitDisplay(value) {
+    const display = document.getElementById('socialLimitDisplay');
+    if (display) {
+        display.textContent = value === '0' ? 'Disabled' : `${value} post${value === '1' ? '' : 's'}`;
     }
 }
 
@@ -452,6 +872,7 @@ async function analyzeSingleTicker(ticker) {
      * Analyze a single ticker without showing UI - for chat background analysis
      */
     const chartType = appConfig.defaultChartType;
+    const theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
     
     try {
         const response = await fetch('/analyze', {
@@ -461,7 +882,14 @@ async function analyzeSingleTicker(ticker) {
             },
             body: JSON.stringify({ 
                 tickers: [ticker],  // Only analyze this one ticker
-                chart_type: chartType
+                chart_type: chartType,
+                theme: theme,
+                max_news: appConfig.maxNews,
+                max_social: appConfig.maxSocial,
+                news_sort: appConfig.newsSort,
+                social_sort: appConfig.socialSort,
+                news_days: appConfig.newsDays,
+                social_days: appConfig.socialDays
             })
         });
         
@@ -481,9 +909,6 @@ async function analyzeSingleTicker(ticker) {
             // Add new result
             window.analysisResults.push(...data.results);
             
-            // Update chat ticker dropdown
-            updateChatTickerSelect();
-            
             return data.results[0];
         } else {
             throw new Error(`No analysis data received for ${ticker}`);
@@ -492,6 +917,34 @@ async function analyzeSingleTicker(ticker) {
         console.error('Single ticker analysis error:', error);
         throw error;
     }
+}
+
+// Calculate news/social days based on timeframe
+// Match the actual time window being displayed (not the fetch period)
+function getDaysFromTimeframe(timeframe) {
+    const timeframeMap = {
+        // Intraday timeframes - match the actual window shown (very recent data)
+        '5m': { news: 1, social: 1 },      // Last 5 minutes - use today's news
+        '15m': { news: 1, social: 1 },     // Last 15 minutes - use today's news
+        '30m': { news: 1, social: 1 },     // Last 30 minutes - use today's news
+        '1h': { news: 1, social: 1 },      // Last 1 hour - use today's news
+        '3h': { news: 1, social: 1 },      // Last 3 hours - use today's news
+        '6h': { news: 1, social: 1 },      // Last 6 hours - use today's news
+        '12h': { news: 1, social: 1 },     // Last 12 hours - use today's news
+        // Daily and longer
+        '1d': { news: 1, social: 1 },
+        '5d': { news: 5, social: 5 },
+        '1wk': { news: 7, social: 7 },
+        '1mo': { news: 30, social: 30 },
+        '3mo': { news: 7, social: 14 },
+        '6mo': { news: 14, social: 30 },
+        '1y': { news: 30, social: 60 },
+        '2y': { news: 60, social: 90 },
+        '5y': { news: 90, social: 180 },
+        'max': { news: 180, social: 365 }
+    };
+    
+    return timeframeMap[timeframe] || { news: 7, social: 14 };
 }
 
 async function analyzePortfolio() {
@@ -503,8 +956,26 @@ async function analyzePortfolio() {
     // Use configured default chart type
     const chartType = appConfig.defaultChartType;
     
-    // Show loading
-    document.getElementById('loadingIndicator').style.display = 'block';
+    // Get selected timeframe
+    const timeframe = document.getElementById('timeframeSelect').value || '3mo';
+    
+    // Calculate appropriate news/social days based on timeframe
+    const days = getDaysFromTimeframe(timeframe);
+    
+    // Detect current theme
+    const theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+    
+    // Show full-screen loading overlay
+    document.getElementById('fullScreenLoader').style.display = 'block';
+    
+    // Switch to Market Analysis tab
+    const analysisTabButton = document.getElementById('analysis-tab');
+    if (analysisTabButton) {
+        const tab = new bootstrap.Tab(analysisTabButton);
+        tab.show();
+    }
+    
+    // Hide results and disable button
     document.getElementById('results').style.display = 'none';
     document.getElementById('analyzeBtn').disabled = true;
     
@@ -516,7 +987,15 @@ async function analyzePortfolio() {
             },
             body: JSON.stringify({ 
                 tickers: sessionTickers,
-                chart_type: chartType  // Initial chart type for all
+                chart_type: chartType,  // Initial chart type for all
+                timeframe: timeframe,    // Analysis timeframe
+                theme: theme,            // Chart theme (dark/light)
+                max_news: appConfig.maxNews,
+                max_social: appConfig.maxSocial,
+                news_sort: appConfig.newsSort,
+                social_sort: appConfig.socialSort,
+                news_days: days.news,      // Dynamic based on timeframe
+                social_days: days.social   // Dynamic based on timeframe
             })
         });
         
@@ -553,7 +1032,7 @@ async function analyzePortfolio() {
         showToast('Error analyzing portfolio: ' + error.message, 'error');
         console.error('Error:', error);
     } finally {
-        document.getElementById('loadingIndicator').style.display = 'none';
+        document.getElementById('fullScreenLoader').style.display = 'none';
         document.getElementById('analyzeBtn').disabled = false;
     }
 }
@@ -722,7 +1201,17 @@ function displaySummaryTable(results) {
                 <tr>
                     <th>Ticker</th>
                     <th>Name</th>
-                    <th>Recommendation</th>
+                    <th>
+                        Recommendation
+                        ${results.length > 0 && results[0].recommendation_explanation ? `
+                            <i class="bi bi-info-circle ms-1" 
+                               style="cursor: pointer; color: #6c757d; font-size: 0.85rem; opacity: 0.7;" 
+                               onclick="showRecommendationExplanation('${results[0].ticker}')" 
+                               data-bs-toggle="tooltip"
+                               data-bs-placement="top"
+                               title="How are recommendations calculated?"></i>
+                        ` : ''}
+                    </th>
                     <th>Combined Score</th>
                     <th>Current Price</th>
                     <th>Change (3mo)</th>
@@ -754,6 +1243,9 @@ function displaySummaryTable(results) {
     `;
     
     document.getElementById('summaryTable').innerHTML = html;
+    
+    // Initialize Bootstrap tooltips
+    initializeTooltips();
 }
 
 // Display detailed analysis
@@ -807,6 +1299,15 @@ function displayDetailedAnalysis(results) {
     
     // Store results globally
     window.analysisResults = results;
+    
+    // Initialize Bootstrap tooltips
+    initializeTooltips();
+}
+
+// Initialize Bootstrap tooltips
+function initializeTooltips() {
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
 }
 
 // ===== ACCORDION FUNCTIONS =====
@@ -833,6 +1334,60 @@ function toggleStockDetails(ticker, resultIndex) {
     }
 }
 
+// Generate gauge chart for analyst recommendation
+function generateAnalystGauge(recommendationMean, containerId) {
+    // Convert 1-5 scale to 0-100 for display (inverted: 1=best, 5=worst)
+    const value = ((5 - recommendationMean) / 4) * 100;
+    
+    const data = [{
+        type: "indicator",
+        mode: "gauge+number+delta",
+        value: value,
+        number: { 
+            suffix: "%", 
+            font: { size: 24 }
+        },
+        gauge: {
+            axis: { 
+                range: [0, 100],
+                tickwidth: 1,
+                tickcolor: "darkgray"
+            },
+            bar: { color: "rgba(0,0,0,0)" },
+            bgcolor: "white",
+            borderwidth: 2,
+            bordercolor: "gray",
+            steps: [
+                { range: [0, 20], color: "#ef4444" },    // Strong Sell - Red
+                { range: [20, 40], color: "#fb923c" },   // Sell - Orange  
+                { range: [40, 60], color: "#fbbf24" },   // Hold - Yellow
+                { range: [60, 80], color: "#86efac" },   // Buy - Light Green
+                { range: [80, 100], color: "#22c55e" }   // Strong Buy - Green
+            ],
+            threshold: {
+                line: { color: "#1e40af", width: 4 },
+                thickness: 0.75,
+                value: value
+            }
+        }
+    }];
+    
+    const layout = {
+        width: 280,
+        height: 180,
+        margin: { t: 10, r: 10, b: 10, l: 10 },
+        paper_bgcolor: "rgba(0,0,0,0)",
+        font: { color: "darkgray", family: "Arial" }
+    };
+    
+    const config = {
+        displayModeBar: false,
+        responsive: true
+    };
+    
+    Plotly.newPlot(containerId, data, layout, config);
+}
+
 function renderStockDetails(ticker, resultIndex) {
     const r = window.analysisResults[resultIndex];
     const body = document.getElementById(`body_${ticker}`);
@@ -840,7 +1395,7 @@ function renderStockDetails(ticker, resultIndex) {
     
     const html = `
         <div class="stock-details-content">
-            <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
                 ${!isInPortfolio ? `
                     <button onclick="addToPortfolioFromAnalysis('${ticker}')" class="btn-small btn-primary" style="display: flex; align-items: center; gap: 5px;">
                         ⭐ Add to Portfolio
@@ -849,31 +1404,190 @@ function renderStockDetails(ticker, resultIndex) {
                     <span style="color: #22c55e; font-weight: 600;">⭐ In Portfolio</span>
                 `}
             </div>
-            <div class="metrics-grid">
-                <div class="metric-box">
-                    <div class="metric-label">Combined Score</div>
-                    <div class="metric-value">${r.combined_score.toFixed(3)}</div>
+            
+            <!-- Compact Dashboard Layout -->
+            <div class="row g-3">
+                <!-- Left Column: Key Metrics & Recommendation -->
+                <div class="col-lg-6">
+                    <!-- Recommendation Comparison (Compact) -->
+                    ${r.analyst_consensus ? `
+                    <div class="card border-0 shadow-sm mb-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <div class="card-body p-3">
+                            <div class="row align-items-center text-white">
+                                <div class="col-6 border-end border-white border-opacity-25">
+                                    <small class="d-block opacity-75 mb-1">📊 Wall Street</small>
+                                    <strong style="font-size: 1.1rem;">${r.analyst_consensus.signal}</strong>
+                                    <small class="d-block opacity-75 mt-1">${r.analyst_consensus.num_analysts} analysts</small>
+                                </div>
+                                <div class="col-6">
+                                    <small class="d-block opacity-75 mb-1">🤖 AI Powered</small>
+                                    <strong style="font-size: 1.1rem;">${r.recommendation}</strong>
+                                    <small class="d-block opacity-75 mt-1">Score: ${r.combined_score.toFixed(2)}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    ` : `
+                    <div class="card border-0 shadow-sm mb-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <div class="card-body p-3 text-center text-white">
+                            <small class="d-block opacity-75 mb-1">🤖 AI Recommendation</small>
+                            <strong style="font-size: 1.3rem;">${r.recommendation}</strong>
+                            <small class="d-block opacity-75 mt-1">Score: ${r.combined_score.toFixed(2)}</small>
+                        </div>
+                    </div>
+                    `}
+                    
+                    <!-- Compact Score Metrics -->
+                    <div class="card border-0 shadow-sm mb-3">
+                        <div class="card-body p-3">
+                            <h6 class="card-title mb-3" style="font-size: 0.9rem; color: #6c757d;">
+                                <i class="bi bi-speedometer2"></i> Analysis Scores
+                            </h6>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <div class="p-2 bg-light rounded text-center">
+                                        <small class="d-block text-muted" style="font-size: 0.75rem;">Sentiment</small>
+                                        <strong style="font-size: 1rem;">${r.sentiment_score.toFixed(2)}</strong>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="p-2 bg-light rounded text-center">
+                                        <small class="d-block text-muted" style="font-size: 0.75rem;">Technical</small>
+                                        <strong style="font-size: 1rem;">${r.technical_score.toFixed(2)}</strong>
+                                    </div>
+                                </div>
+                                ${r.analyst_score !== null && r.analyst_score !== undefined ? `
+                                <div class="col-6">
+                                    <div class="p-2 bg-light rounded text-center">
+                                        <small class="d-block text-muted" style="font-size: 0.75rem;">Analyst</small>
+                                        <strong style="font-size: 1rem;">${r.analyst_score.toFixed(2)}</strong>
+                                    </div>
+                                </div>
+                                ` : ''}
+                                <div class="col-6">
+                                    <div class="p-2 bg-primary bg-opacity-10 rounded text-center">
+                                        <small class="d-block text-primary" style="font-size: 0.75rem;">Combined</small>
+                                        <strong class="text-primary" style="font-size: 1rem;">${r.combined_score.toFixed(2)}</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Price Information (Current + Pre-Market Side by Side) -->
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body p-3">
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <h6 class="mb-2" style="font-size: 0.85rem; color: #6c757d;">
+                                        <i class="bi bi-currency-dollar"></i> Current Price
+                                    </h6>
+                                    <div class="h4 mb-0">${formatPrice(r.current_price, r.ticker)}</div>
+                                    <small class="text-muted">Last traded</small>
+                                </div>
+                                ${r.pre_market_data && r.pre_market_data.has_data ? `
+                                <div class="col-6 border-start">
+                                    <h6 class="mb-2" style="font-size: 0.85rem; color: #ffc107;">
+                                        <i class="bi bi-clock-history"></i> Pre-Market
+                                    </h6>
+                                    <div class="h4 mb-0">${formatPrice(r.pre_market_data.price, r.ticker)}</div>
+                                    <small class="${r.pre_market_data.change >= 0 ? 'text-success' : 'text-danger'}">
+                                        ${r.pre_market_data.change >= 0 ? '↗ +' : '↘ '}${r.pre_market_data.change_percent.toFixed(2)}%
+                                    </small>
+                                </div>
+                                ` : `
+                                <div class="col-6 border-start text-center">
+                                    <div class="text-muted" style="padding-top: 20px;">
+                                        <i class="bi bi-moon" style="font-size: 1.5rem;"></i>
+                                        <small class="d-block mt-2">Market Closed</small>
+                                    </div>
+                                </div>
+                                `}
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="metric-box">
-                    <div class="metric-label">Overall Sentiment</div>
-                    <div class="metric-value">${r.sentiment_score.toFixed(3)}</div>
+                
+                <!-- Right Column: Analyst Gauge & Price Targets -->
+                <div class="col-lg-6">
+                    ${r.analyst_consensus ? `
+                    <!-- Analyst Gauge Chart -->
+                    <div class="card border-0 shadow-sm mb-3">
+                        <div class="card-body p-3">
+                            <h6 class="card-title mb-2" style="font-size: 0.9rem;">
+                                📊 Wall Street Consensus
+                                ${r.analyst_coverage_level === 'limited' ? `
+                                <span class="badge bg-warning text-dark ms-2" title="Limited analyst coverage" style="font-size: 0.7rem;">
+                                    <i class="bi bi-exclamation-triangle"></i> Limited
+                                </span>
+                                ` : ''}
+                            </h6>
+                            <div id="analystGauge_${ticker}" style="display: flex; justify-content: center;"></div>
+                            <div class="text-center mt-2">
+                                <small class="text-muted">${r.analyst_consensus.num_analysts} analysts · Rating: ${r.analyst_consensus.recommendation_mean.toFixed(2)}/5.0</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Price Targets (Compact) -->
+                    ${r.analyst_data && r.analyst_data.target_mean_price ? `
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body p-3">
+                            <h6 class="card-title mb-3" style="font-size: 0.9rem;">
+                                <i class="bi bi-bullseye"></i> Price Targets
+                            </h6>
+                            <div class="row g-2 mb-2">
+                                <div class="col-4">
+                                    <div class="text-center p-2 bg-danger bg-opacity-10 rounded">
+                                        <small class="d-block text-danger" style="font-size: 0.7rem;">LOW</small>
+                                        <strong class="text-danger" style="font-size: 0.95rem;">${r.analyst_data.target_low_price ? formatPrice(r.analyst_data.target_low_price, r.ticker) : 'N/A'}</strong>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-center p-2 bg-primary bg-opacity-10 rounded">
+                                        <small class="d-block text-primary" style="font-size: 0.7rem;">TARGET</small>
+                                        <strong class="text-primary" style="font-size: 0.95rem;">${formatPrice(r.analyst_data.target_mean_price, r.ticker)}</strong>
+                                    </div>
+                                </div>
+                                <div class="col-4">
+                                    <div class="text-center p-2 bg-success bg-opacity-10 rounded">
+                                        <small class="d-block text-success" style="font-size: 0.7rem;">HIGH</small>
+                                        <strong class="text-success" style="font-size: 0.95rem;">${r.analyst_data.target_high_price ? formatPrice(r.analyst_data.target_high_price, r.ticker) : 'N/A'}</strong>
+                                    </div>
+                                </div>
+                            </div>
+                            ${r.analyst_data.current_price ? `
+                            <div class="mt-2 p-2 rounded bg-gradient text-white text-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                <small class="d-block opacity-75" style="font-size: 0.75rem;">Projected Return</small>
+                                <strong style="font-size: 1.2rem;">
+                                    ${(((r.analyst_data.target_mean_price - r.analyst_data.current_price) / r.analyst_data.current_price) * 100) >= 0 ? '↗' : '↘'}
+                                    ${Math.abs(((r.analyst_data.target_mean_price - r.analyst_data.current_price) / r.analyst_data.current_price) * 100).toFixed(1)}%
+                                </strong>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    ` : ''}
+                    ` : `
+                    <div class="card border-0 shadow-sm">
+                        <div class="card-body p-4 text-center text-muted">
+                            <i class="bi bi-info-circle" style="font-size: 2rem;"></i>
+                            <p class="mt-2 mb-0" style="font-size: 0.9rem;">No analyst coverage available</p>
+                        </div>
+                    </div>
+                    `}
                 </div>
-                <div class="metric-box">
-                    <div class="metric-label">News Sentiment</div>
-                    <div class="metric-value">${r.news_sentiment_score ? r.news_sentiment_score.toFixed(3) : 'N/A'}</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label">Social Sentiment</div>
-                    <div class="metric-value">${r.social_sentiment_score ? r.social_sentiment_score.toFixed(3) : 'N/A'}</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label">Technical Score</div>
-                    <div class="metric-value">${r.technical_score.toFixed(3)}</div>
-                </div>
-                <div class="metric-box">
-                    <div class="metric-label">Current Price</div>
-                    <div class="metric-value">${formatPrice(r.current_price, r.ticker)}</div>
-                </div>
+            </div>
+            
+            <!-- Our AI-Powered Analysis Section -->
+            <div class="section-title" style="border-top: 2px solid #dee2e6; padding-top: 1.5rem; margin-top: 1.5rem;">
+                🤖 Our AI-Powered Analysis
+            </div>
+            <div class="alert alert-secondary" style="border-left: 4px solid #6c757d;">
+                <small class="text-muted">
+                    <i class="bi bi-cpu me-1"></i>
+                    Based on FinBERT sentiment analysis, social media trends, and technical indicators
+                </small>
             </div>
             
             <div class="section-title">🔍 Technical Indicators</div>
@@ -897,6 +1611,7 @@ function renderStockDetails(ticker, resultIndex) {
                                 ${sent.publisher ? `<span class="news-publisher">- ${sent.publisher}</span>` : ''}
                                 ${sent.link ? `<a href="${sent.link}" target="_blank" rel="noopener" class="news-link-icon" title="Read full article">🔗</a>` : ''}
                             </div>
+                            ${sent.published ? `<div class="news-timestamp">📅 ${formatTimestamp(sent.published)}</div>` : ''}
                             <div class="news-sentiment">
                                 ${emoji} <strong>${sent.label.toUpperCase()}</strong> | 
                                 😊 ${posPercent}% · 😐 ${neuPercent}% · 😞 ${negPercent}%
@@ -917,8 +1632,11 @@ function renderStockDetails(ticker, resultIndex) {
                         <div class="news-item sentiment-${sent.label}">
                             <div class="news-title">
                                 <strong>${sent.source || 'Social Media'}</strong>: ${textPreview}
-                                ${sent.link ? `<a href="${sent.link}" target="_blank" rel="noopener" class="news-link-icon" title="View post">🔗</a>` : ''}
+                                ${sent.link && !sent.link.includes('message/undefined') && !sent.link.includes('message/') ? 
+                                    `<a href="${sent.link}" target="_blank" rel="noopener" class="news-link-icon" title="View post">🔗</a>` : 
+                                    `<span class="news-link-icon" title="No link available" style="cursor: default;">⛓️‍💥</span>`}
                             </div>
+                            ${sent.created_at ? `<div class="news-timestamp">📅 ${formatTimestamp(sent.created_at)}</div>` : ''}
                             <div class="news-sentiment">
                                 ${emoji} <strong>${sent.label.toUpperCase()}</strong> | 
                                 😊 ${posPercent}% · 😐 ${neuPercent}% · 😞 ${negPercent}%
@@ -945,20 +1663,108 @@ function renderStockDetails(ticker, resultIndex) {
                     <label for="timeframe_${r.ticker}" style="margin-left: 15px;">Timeframe:</label>
                     <select id="timeframe_${r.ticker}" class="chart-type-select-inline" 
                             onchange="updateChart('${r.ticker}', ${resultIndex})">
-                        <option value="1d">1 Day</option>
-                        <option value="5d">1 Week</option>
-                        <option value="1mo">1 Month</option>
-                        <option value="3mo" selected>3 Months</option>
-                        <option value="6mo">6 Months</option>
-                        <option value="1y">1 Year</option>
-                        <option value="2y">2 Years</option>
-                        <option value="5y">5 Years</option>
-                        <option value="max">All Time</option>
+                        <optgroup label="Intraday">
+                            <option value="5m" ${r.timeframe_used === '5m' ? 'selected' : ''}>5 Minutes</option>
+                            <option value="15m" ${r.timeframe_used === '15m' ? 'selected' : ''}>15 Minutes</option>
+                            <option value="30m" ${r.timeframe_used === '30m' ? 'selected' : ''}>30 Minutes</option>
+                            <option value="1h" ${r.timeframe_used === '1h' ? 'selected' : ''}>1 Hour</option>
+                            <option value="3h" ${r.timeframe_used === '3h' ? 'selected' : ''}>3 Hours</option>
+                            <option value="6h" ${r.timeframe_used === '6h' ? 'selected' : ''}>6 Hours</option>
+                            <option value="12h" ${r.timeframe_used === '12h' ? 'selected' : ''}>12 Hours</option>
+                        </optgroup>
+                        <optgroup label="Daily & Longer">
+                            <option value="1d" ${r.timeframe_used === '1d' ? 'selected' : ''}>1 Day</option>
+                            <option value="5d" ${r.timeframe_used === '5d' ? 'selected' : ''}>5 Days</option>
+                            <option value="1wk" ${r.timeframe_used === '1wk' ? 'selected' : ''}>1 Week</option>
+                            <option value="1mo" ${r.timeframe_used === '1mo' ? 'selected' : ''}>1 Month</option>
+                            <option value="3mo" ${!r.timeframe_used || r.timeframe_used === '3mo' ? 'selected' : ''}>3 Months</option>
+                            <option value="6mo" ${r.timeframe_used === '6mo' ? 'selected' : ''}>6 Months</option>
+                            <option value="1y" ${r.timeframe_used === '1y' ? 'selected' : ''}>1 Year</option>
+                            <option value="2y" ${r.timeframe_used === '2y' ? 'selected' : ''}>2 Years</option>
+                            <option value="5y" ${r.timeframe_used === '5y' ? 'selected' : ''}>5 Years</option>
+                            <option value="max" ${r.timeframe_used === 'max' ? 'selected' : ''}>Max</option>
+                        </optgroup>
                     </select>
+                    
+                    <button class="btn-small btn-secondary" onclick="toggleIndicators('${r.ticker}')" 
+                            style="margin-left: 15px;" title="Show/Hide Indicators">
+                        <i class="bi bi-sliders"></i> Indicators
+                    </button>
                     
                     <button class="btn-small btn-refresh" id="refreshBtn_${r.ticker}" onclick="refreshChart('${r.ticker}', ${resultIndex})">
                         🔄 Refresh
                     </button>
+                </div>
+                
+                <!-- Indicator Controls (Hidden by default) -->
+                <div id="indicatorControls_${r.ticker}" class="indicator-controls" style="display: none; margin-top: 10px; padding: 15px; border-radius: 8px;">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <h6 style="font-size: 0.9rem; margin-bottom: 10px;">
+                                <i class="bi bi-graph-up"></i> Moving Averages
+                            </h6>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showSMA20_${r.ticker}" ${appConfig.defaultIndicators?.sma20 !== false ? 'checked' : ''}>
+                                <label class="form-check-label" for="showSMA20_${r.ticker}">
+                                    SMA(20) - Orange
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showSMA50_${r.ticker}" ${appConfig.defaultIndicators?.sma50 !== false ? 'checked' : ''}>
+                                <label class="form-check-label" for="showSMA50_${r.ticker}">
+                                    SMA(50) - Blue
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showBB_${r.ticker}" ${appConfig.defaultIndicators?.bb !== false ? 'checked' : ''}>
+                                <label class="form-check-label" for="showBB_${r.ticker}">
+                                    Bollinger Bands
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 style="font-size: 0.9rem; margin-bottom: 10px;">
+                                <i class="bi bi-activity"></i> Oscillators
+                            </h6>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showMACD_${r.ticker}" ${appConfig.defaultIndicators?.macd !== false ? 'checked' : ''}>
+                                <label class="form-check-label" for="showMACD_${r.ticker}">
+                                    MACD
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showRSI_${r.ticker}" ${appConfig.defaultIndicators?.rsi !== false ? 'checked' : ''}>
+                                <label class="form-check-label" for="showRSI_${r.ticker}">
+                                    RSI
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <h6 style="font-size: 0.9rem; margin-bottom: 10px;">
+                                <i class="bi bi-bar-chart"></i> Advanced
+                            </h6>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showVWAP_${r.ticker}" ${appConfig.defaultIndicators?.vwap !== false ? 'checked' : ''}>
+                                <label class="form-check-label" for="showVWAP_${r.ticker}">
+                                    VWAP - Red dotted
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="showIchimoku_${r.ticker}" ${appConfig.defaultIndicators?.ichimoku !== false ? 'checked' : ''}>
+                                <label class="form-check-label" for="showIchimoku_${r.ticker}">
+                                    Ichimoku Cloud
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-center">
+                        <button class="btn-small btn-primary" onclick="applyIndicatorSettings('${r.ticker}', ${resultIndex})">
+                            <i class="bi bi-check-lg"></i> Apply Settings
+                        </button>
+                        <button class="btn-small btn-secondary" onclick="toggleIndicators('${r.ticker}')">
+                            Cancel
+                        </button>
+                    </div>
                 </div>
                 <div class="chart-container" id="chart_${r.ticker}"></div>
             ` : ''}
@@ -966,6 +1772,13 @@ function renderStockDetails(ticker, resultIndex) {
     `;
     
     body.innerHTML = html;
+    
+    // Render analyst gauge if available
+    if (r.analyst_consensus) {
+        setTimeout(() => {
+            generateAnalystGauge(r.analyst_consensus.recommendation_mean, `analystGauge_${ticker}`);
+        }, 100);
+    }
     
     // Render chart if available and mark button as "Refresh" after first render
     if (r.chart_data) {
@@ -986,8 +1799,16 @@ function renderStockDetails(ticker, resultIndex) {
             }
         }
         
-        console.log(`Rendering ${r.ticker} with chart type: ${r.chart_type_used || initialChartType}`);
+        debug.log(`Rendering ${r.ticker} with chart type: ${r.chart_type_used || initialChartType}`);
         renderChart(r.ticker, r.chart_data);
+        
+        // Apply saved indicator settings after initial render
+        if (window.indicatorSettings && window.indicatorSettings[ticker]) {
+            debug.log(`Applying saved indicator settings for ${ticker} after initial render`);
+            setTimeout(() => {
+                applyIndicatorSettings(ticker, resultIndex, true); // Silent mode
+            }, 200);
+        }
         
         // After rendering, change button to "Refresh"
         setTimeout(() => {
@@ -1019,7 +1840,7 @@ function renderChart(ticker, chartDataJson) {
             displaylogo: false,
             modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
         }).then(() => {
-            console.log(`✓ Chart rendered successfully for ${ticker}`);
+            debug.log(`✓ Chart rendered successfully for ${ticker}`);
         }).catch(err => {
             console.error(`✗ Failed to render chart for ${ticker}:`, err);
             chartDiv.innerHTML = '<div class="chart-error">Failed to render chart</div>';
@@ -1035,16 +1856,41 @@ function renderChart(ticker, chartDataJson) {
 }
 
 // Update chart type for a specific ticker
-async function updateChart(ticker, resultIndex) {
-    const chartType = document.getElementById(`chartType_${ticker}`).value;
-    const timeframe = document.getElementById(`timeframe_${ticker}`).value;
-    console.log(`Updating ${ticker} to ${chartType} chart with ${timeframe} timeframe`);
+async function updateChart(ticker, resultIndex, chartType = null, timeframe = null) {
+    // Get values from controls if not provided
+    if (!chartType) {
+        const chartTypeSelect = document.getElementById(`chartType_${ticker}`);
+        chartType = chartTypeSelect ? chartTypeSelect.value : 'candlestick';
+    }
+    if (!timeframe) {
+        const timeframeSelect = document.getElementById(`timeframe_${ticker}`);
+        timeframe = timeframeSelect ? timeframeSelect.value : '3mo';
+    }
     
-    // Show loading on this specific chart
+    debug.log(`Updating ${ticker} to ${chartType} chart with ${timeframe} timeframe`);
+    
+    // Show loading placeholder with spinner (preserve layout)
     const chartDiv = document.getElementById(`chart_${ticker}`);
-    chartDiv.innerHTML = '<div class="chart-loading">⏳ Regenerating chart...</div>';
+    const currentHeight = chartDiv.offsetHeight || 800;
+    chartDiv.innerHTML = `
+        <div class="chart-loading-placeholder" style="height: ${currentHeight}px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.02); border-radius: 8px; position: relative;">
+            <div style="filter: blur(8px); opacity: 0.3; position: absolute; width: 100%; height: 100%; background: linear-gradient(180deg, rgba(33,150,243,0.1) 0%, rgba(156,39,176,0.1) 100%);"></div>
+            <div style="position: relative; z-index: 1; text-align: center;">
+                <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3 text-muted" style="font-size: 1.1rem;">
+                    <i class="bi bi-graph-up-arrow"></i> Regenerating ${chartType} chart...
+                </p>
+                <small class="text-muted">Timeframe: ${timeframe}</small>
+            </div>
+        </div>
+    `;
     
     try {
+        // Detect current theme
+        const theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+        
         const response = await fetch('/analyze', {
             method: 'POST',
             headers: {
@@ -1054,7 +1900,14 @@ async function updateChart(ticker, resultIndex) {
                 tickers: [ticker],
                 chart_type: chartType,
                 timeframe: timeframe,
-                use_cache: false
+                theme: theme,
+                use_cache: false,
+                max_news: appConfig.maxNews,
+                max_social: appConfig.maxSocial,
+                news_sort: appConfig.newsSort,
+                social_sort: appConfig.socialSort,
+                news_days: appConfig.newsDays,
+                social_days: appConfig.socialDays
             })
         });
         
@@ -1068,6 +1921,14 @@ async function updateChart(ticker, resultIndex) {
             const result = data.results[0];
             window.analysisResults[resultIndex] = result;
             renderChart(ticker, result.chart_data);
+            
+            // Re-apply saved indicator settings after chart refresh (silent mode)
+            if (window.indicatorSettings && window.indicatorSettings[ticker]) {
+                debug.log(`Re-applying saved indicator settings for ${ticker} after chart update`);
+                setTimeout(() => {
+                    applyIndicatorSettings(ticker, resultIndex, true); // Silent mode: no toast, no panel close
+                }, 100);
+            }
         }
     } catch (error) {
         console.error(`Error updating chart for ${ticker}:`, error);
@@ -1092,6 +1953,111 @@ function refreshChart(ticker, resultIndex) {
             refreshBtn.disabled = false;
         }
     }, 1000);
+}
+
+// Toggle indicator controls visibility
+function toggleIndicators(ticker) {
+    const controlsDiv = document.getElementById(`indicatorControls_${ticker}`);
+    if (controlsDiv) {
+        controlsDiv.style.display = controlsDiv.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+// Apply indicator settings by showing/hiding traces
+function applyIndicatorSettings(ticker, resultIndex, silent = false) {
+    // Get default settings from config
+    const defaults = appConfig.defaultIndicators || {};
+    
+    const settings = {
+        showSMA20: document.getElementById(`showSMA20_${ticker}`)?.checked ?? (defaults.sma20 !== false),
+        showSMA50: document.getElementById(`showSMA50_${ticker}`)?.checked ?? (defaults.sma50 !== false),
+        showBB: document.getElementById(`showBB_${ticker}`)?.checked ?? (defaults.bb !== false),
+        showMACD: document.getElementById(`showMACD_${ticker}`)?.checked ?? (defaults.macd !== false),
+        showRSI: document.getElementById(`showRSI_${ticker}`)?.checked ?? (defaults.rsi !== false),
+        showVWAP: document.getElementById(`showVWAP_${ticker}`)?.checked ?? (defaults.vwap !== false),
+        showIchimoku: document.getElementById(`showIchimoku_${ticker}`)?.checked ?? (defaults.ichimoku !== false)
+    };
+    
+    if (!silent) {
+        debug.log(`Applying indicator settings for ${ticker}:`, settings);
+    }
+    
+    // Store settings for future use (in memory and localStorage)
+    if (!window.indicatorSettings) {
+        window.indicatorSettings = {};
+    }
+    window.indicatorSettings[ticker] = settings;
+    
+    // Save to localStorage for persistence across page refreshes
+    try {
+        localStorage.setItem('indicator_settings', JSON.stringify(window.indicatorSettings));
+    } catch (e) {
+        console.error('Failed to save indicator settings to localStorage:', e);
+    }
+    
+    // Get the chart div
+    const chartDiv = document.getElementById(`chart_${ticker}`);
+    if (!chartDiv || !chartDiv.data) {
+        console.error('Chart not found or not initialized');
+        return;
+    }
+    
+    // Map indicator names to trace names in the chart
+    const updates = [];
+    const traceIndices = [];
+    
+    chartDiv.data.forEach((trace, index) => {
+        const traceName = trace.name || '';
+        let visible = true; // Default to visible (keep price and volume)
+        let shouldUpdate = false;
+        
+        // Determine visibility based on trace name
+        if (traceName.includes('SMA(20)')) {
+            visible = settings.showSMA20;
+            shouldUpdate = true;
+        } else if (traceName.includes('SMA(50)')) {
+            visible = settings.showSMA50;
+            shouldUpdate = true;
+        } else if (traceName.includes('BB Upper') || traceName.includes('BB Lower')) {
+            visible = settings.showBB;
+            shouldUpdate = true;
+        } else if (traceName.includes('MACD') || traceName.includes('Signal') || traceName.includes('MACD Histogram')) {
+            visible = settings.showMACD;
+            shouldUpdate = true;
+        } else if (traceName.includes('RSI')) {
+            visible = settings.showRSI;
+            shouldUpdate = true;
+        } else if (traceName.includes('VWAP')) {
+            visible = settings.showVWAP;
+            shouldUpdate = true;
+        } else if (traceName.includes('Tenkan-sen') || traceName.includes('Kijun-sen') || 
+                   traceName.includes('Senkou A') || traceName.includes('Senkou B') || 
+                   traceName.includes('Chikou Span')) {
+            visible = settings.showIchimoku;
+            shouldUpdate = true;
+        }
+        
+        if (shouldUpdate) {
+            updates.push(visible);
+            traceIndices.push(index);
+        }
+    });
+    
+    // Update trace visibility using batch update
+    if (traceIndices.length > 0) {
+        if (!silent) {
+            debug.log(`Updating visibility for ${traceIndices.length} traces`);
+        }
+        traceIndices.forEach((traceIndex, i) => {
+            Plotly.restyle(chartDiv, { visible: updates[i] }, [traceIndex]);
+        });
+    }
+    
+    // Hide controls and show toast only if not silent
+    if (!silent) {
+        toggleIndicators(ticker);
+        showToast(`Indicator settings applied for ${ticker}`, 'success');
+    }
 }
 
 // ===== AI CHAT FUNCTIONS =====
@@ -1286,13 +2252,11 @@ async function sendChatMessage() {
             try {
                 await analyzeSingleTicker(extractedTicker);
                 
-                // After analysis completes, answer the original question
+                // After analysis completes, send question to backend WITHOUT re-analyzing
                 addChatMessage(`✅ Analysis complete! Now let me answer your question...`, false);
                 
-                // Wait a moment for analysis to be cached, then re-ask the question
-                setTimeout(async () => {
-                    await sendChatWithTicker(question, extractedTicker);
-                }, 1000);
+                // Send the question with ticker context (backend won't re-analyze)
+                await sendChatWithTicker(question, extractedTicker);
                 
             } catch (error) {
                 addChatMessage(`❌ Sorry, there was an error analyzing ${extractedTicker}. Please try again manually.`, false);
@@ -1359,29 +2323,35 @@ async function sendChatWithTicker(question, ticker) {
         if (data.needs_background_analysis && data.pending_ticker) {
             addChatMessage(data.answer, false);
             
-            // Auto-trigger background analysis after 3 seconds if no response
-            setTimeout(async () => {
-                addChatMessage(`⏳ Running background analysis for ${data.pending_ticker}...`, false);
-                
-                // Add to session without updating UI
-                if (!sessionTickers.includes(data.pending_ticker)) {
-                    sessionTickers.push(data.pending_ticker);
-                    saveSessionTickers();
-                }
-                
-                try {
-                    // Silent analysis - SINGLE TICKER ONLY
-                    await analyzeSingleTicker(data.pending_ticker);
-                    addChatMessage(`✅ Analysis complete! Now let me answer your question...`, false);
+            // SECURITY: Check if already analyzed to prevent infinite loop
+            const alreadyAnalyzed = window.analysisResults && 
+                window.analysisResults.some(r => r.ticker.toUpperCase() === data.pending_ticker.toUpperCase());
+            
+            if (!alreadyAnalyzed) {
+                // Auto-trigger background analysis after 2 seconds
+                setTimeout(async () => {
+                    addChatMessage(`⏳ Running background analysis for ${data.pending_ticker}...`, false);
                     
-                    // Re-ask the original question
-                    setTimeout(async () => {
-                        await sendChatWithTicker(question, data.pending_ticker);
-                    }, 500);
-                } catch (error) {
-                    addChatMessage(`❌ Sorry, I encountered an error. You can try analyzing ${data.pending_ticker} manually.`, false);
-                }
-            }, 3000);
+                    // Add to session without updating UI
+                    if (!sessionTickers.includes(data.pending_ticker)) {
+                        sessionTickers.push(data.pending_ticker);
+                        saveSessionTickers();
+                    }
+                    
+                    try {
+                        // Silent analysis - SINGLE TICKER ONLY
+                        await analyzeSingleTicker(data.pending_ticker);
+                        addChatMessage(`✅ Analysis complete for ${data.pending_ticker}! Feel free to ask more questions about it.`, false);
+                        
+                        // DON'T re-ask the question - this prevents infinite loop
+                        // User can ask follow-up questions manually
+                    } catch (error) {
+                        addChatMessage(`❌ Sorry, I encountered an error analyzing ${data.pending_ticker}.`, false);
+                    }
+                }, 2000);
+            } else {
+                addChatMessage(`ℹ️  ${data.pending_ticker} is already analyzed. You can ask me questions about it!`, false);
+            }
             return;
         }
         
@@ -1443,7 +2413,7 @@ function changeTheme(theme) {
         localStorage.setItem('theme', theme);
     }
     
-    console.log(`Theme changed to: ${theme}`);
+    debug.log(`Theme changed to: ${theme}`);
 }
 
 function initializeTheme() {
@@ -1473,28 +2443,35 @@ function initializeTheme() {
 function toggleChatPanel() {
     const chatPanel = document.getElementById('chatPanel');
     const toggleBtn = document.getElementById('chatToggleBtn');
+    const body = document.body;
     
     if (chatPanel.classList.contains('hidden')) {
         // Show chat panel
         chatPanel.classList.remove('hidden');
         chatPanel.classList.add('show');
+        body.classList.remove('chat-collapsed');
         if (toggleBtn) {
             toggleBtn.style.display = 'none';
         }
+        // Save state
+        localStorage.setItem('chatPanelState', 'open');
     } else {
         // Hide chat panel
         chatPanel.classList.add('hidden');
         chatPanel.classList.remove('show');
+        body.classList.add('chat-collapsed');
         if (toggleBtn) {
             toggleBtn.style.display = 'flex';
         }
+        // Save state
+        localStorage.setItem('chatPanelState', 'collapsed');
     }
 }
 
-// ===== CLEAR CHAT HISTORY =====
+// ===== START NEW CHAT =====
 
 function clearChatHistory() {
-    if (!confirm('Clear entire conversation history?')) {
+    if (!confirm('Start a new conversation? This will clear your current chat history.')) {
         return;
     }
     
@@ -1605,22 +2582,143 @@ async function loadChatHistory() {
             }
         }
         
-        console.log('✅ Chat history loaded:', data.history.length, 'messages');
+        debug.log('✅ Chat history loaded:', data.history.length, 'messages');
     } catch (error) {
         console.error('Failed to load chat history:', error);
     }
 }
 
+// Show recommendation explanation modal
+function showRecommendationExplanation(ticker) {
+    const result = window.analysisResults.find(r => r.ticker === ticker);
+    if (!result || !result.recommendation_explanation) {
+        showToast('Recommendation explanation not available', 'info');
+        return;
+    }
+    
+    const exp = result.recommendation_explanation;
+    const sentComponents = exp.sentiment_components;
+    const analystComponents = exp.analyst_components;
+    
+    // Build explanation HTML
+    let explanationHTML = `
+        <div style="text-align: left;">
+            <h5 class="mb-3">📊 How ${ticker}'s ${result.recommendation} Recommendation was Calculated</h5>
+            
+            <div class="alert alert-info mb-3">
+                <strong>Formula:</strong> ${exp.formula}
+            </div>
+            
+            <h6 class="mt-3 mb-2">🔢 Final Score: ${exp.final_score}</h6>
+            
+            <h6 class="mt-3 mb-2">📰 Sentiment Analysis (${exp.sentiment_weight} weight)</h6>
+            <ul>
+                <li><strong>News Sentiment:</strong> ${sentComponents.news_sentiment} (${sentComponents.news_weight})</li>
+                <li><strong>Social Media Sentiment:</strong> ${sentComponents.social_sentiment} (${sentComponents.social_weight})</li>
+                <li><strong>Combined Sentiment Score:</strong> ${result.sentiment_score.toFixed(2)}</li>
+            </ul>
+            
+            <h6 class="mt-3 mb-2">📈 Technical Analysis (${exp.technical_weight} weight)</h6>
+            <ul>
+                ${exp.technical_components.map(reason => `<li>${reason}</li>`).join('')}
+                <li><strong>Technical Score:</strong> ${result.technical_score.toFixed(2)}</li>
+            </ul>
+            
+            ${analystComponents ? `
+            <h6 class="mt-3 mb-2">👔 Analyst Consensus (${exp.analyst_weight} weight)</h6>
+            <ul>
+                <li><strong>Consensus:</strong> ${analystComponents.consensus} (${analystComponents.num_analysts} analyst${analystComponents.num_analysts !== 1 ? 's' : ''})</li>
+                <li><strong>Recommendation Mean:</strong> ${analystComponents.recommendation_mean} (1=Strong Buy, 5=Strong Sell)</li>
+                <li><strong>Price Target:</strong> ${analystComponents.target_price} (Current: ${analystComponents.current_price})</li>
+                <li><strong>Upside Potential:</strong> ${analystComponents.upside}</li>
+                <li><strong>Analyst Score:</strong> ${analystComponents.analyst_score}</li>
+                <li style="font-size: 0.9em; color: #6c757d;">
+                    Note: Analyst score is ${analystComponents.recommendation_weight} from consensus ratings, ${analystComponents.target_weight} from price targets
+                </li>
+            </ul>
+            ` : `
+            <div class="alert alert-warning mt-3">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Note:</strong> No analyst coverage available for this stock (requires at least 3 analysts). Recommendation based on sentiment and technical analysis only.
+            </div>
+            `}
+            
+            <h6 class="mt-3 mb-2">🎯 Recommendation Thresholds</h6>
+            <table class="table table-sm table-bordered">
+                <thead>
+                    <tr>
+                        <th>Recommendation</th>
+                        <th>Score Range</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${Object.entries(exp.thresholds).map(([rec, range]) => `
+                        <tr ${rec === result.recommendation ? 'class="table-success"' : ''}>
+                            <td><strong>${rec}</strong></td>
+                            <td>${range}</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+            
+            <div class="alert alert-warning mt-3">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <strong>Disclaimer:</strong> This recommendation is for educational purposes only. Always conduct your own research and consult with financial professionals before making investment decisions.
+            </div>
+        </div>
+    `;
+    
+    // Create and show modal (using Bootstrap if available, otherwise alert)
+    const modalId = 'recommendationExplanationModal';
+    let modal = document.getElementById(modalId);
+    
+    if (!modal) {
+        // Create modal
+        modal = document.createElement('div');
+        modal.id = modalId;
+        modal.className = 'modal fade';
+        modal.innerHTML = `
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Recommendation Calculation</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body" id="${modalId}Body">
+                        ${explanationHTML}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } else {
+        // Update existing modal
+        document.getElementById(`${modalId}Body`).innerHTML = explanationHTML;
+    }
+    
+    // Show modal
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+}
+
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 FinBERT Portfolio Analyzer - Modern UI Loaded');
+    debug.log('🚀 FinBERT Portfolio Analyzer - Modern UI Loaded');
     
     initializeTheme();
+    initializeChatPanel();  // Initialize chat panel state
+    fetchExchangeRates();   // 💱 Fetch live exchange rates
     loadSessionTickers();
     loadChatHistory();  // Load previous conversation
+    loadMarketSentiment();  // Load daily market sentiment
     
     const settingsModal = document.getElementById('settingsModal');
     if (settingsModal) {
-        settingsModal.addEventListener('shown.bs.modal', function() {
+        // Load config immediately when modal is about to show (before animation)
+        settingsModal.addEventListener('show.bs.modal', function() {
+            loadConfigToUI();  // 🔧 FIX: Load saved settings before modal animation
             updateSavedTickersList();
         });
     }
@@ -1635,5 +2733,648 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    console.log('✅ Theme, portfolio, and chat initialized');
+    debug.log('✅ Theme, portfolio, chat, and market sentiment initialized');
+    
+    // Listen for theme changes and refresh charts
+    setupThemeChangeListener();
+});
+
+// Setup theme change listener to refresh charts automatically
+function setupThemeChangeListener() {
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'data-bs-theme') {
+                const newTheme = document.documentElement.getAttribute('data-bs-theme');
+                debug.log(`🎨 Theme changed to: ${newTheme}`);
+                refreshAllChartsForTheme();
+            }
+        });
+    });
+
+    observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-bs-theme']
+    });
+    
+    debug.log('👀 Theme change observer activated');
+}
+
+// Refresh all visible charts when theme changes
+function refreshAllChartsForTheme() {
+    if (!window.analysisResults || window.analysisResults.length === 0) {
+        debug.log('No charts to refresh');
+        return;
+    }
+    
+    const theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
+    debug.log(`🔄 Refreshing ${window.analysisResults.length} chart(s) for ${theme} theme`);
+    
+    window.analysisResults.forEach((result, index) => {
+        const chartDiv = document.getElementById(`chart_${result.ticker}`);
+        
+        // Only refresh if chart exists and has been rendered
+        if (chartDiv && chartDiv.innerHTML.trim() !== '') {
+            debug.log(`  ↻ Refreshing chart for ${result.ticker}`);
+            
+            // Get current chart type and timeframe from controls
+            const chartTypeSelect = document.getElementById(`chartType_${result.ticker}`);
+            const timeframeSelect = document.getElementById(`timeframe_${result.ticker}`);
+            
+            const chartType = chartTypeSelect ? chartTypeSelect.value : result.chart_type_used;
+            const timeframe = timeframeSelect ? timeframeSelect.value : result.timeframe_used;
+            
+            // Update chart with new theme
+            updateChart(result.ticker, index, chartType, timeframe);
+        }
+    });
+}
+
+// Initialize chat panel - start collapsed
+function initializeChatPanel() {
+    const chatPanel = document.getElementById('chatPanel');
+    const toggleBtn = document.getElementById('chatToggleBtn');
+    const body = document.body;
+    
+    // Check saved state or default to collapsed
+    const savedState = localStorage.getItem('chatPanelState') || 'collapsed';
+    
+    if (savedState === 'collapsed') {
+        chatPanel.classList.add('hidden');
+        chatPanel.classList.remove('show');
+        body.classList.add('chat-collapsed');
+        if (toggleBtn) {
+            toggleBtn.style.display = 'flex';
+        }
+    } else {
+        chatPanel.classList.remove('hidden');
+        chatPanel.classList.add('show');
+        body.classList.remove('chat-collapsed');
+        if (toggleBtn) {
+            toggleBtn.style.display = 'none';
+        }
+    }
+    
+    debug.log(`💬 Chat panel initialized: ${savedState}`);
+}
+
+// ===== MARKET SENTIMENT =====
+
+/**
+ * Load and display daily market sentiment
+ */
+async function loadMarketSentiment(forceRefresh = false) {
+    const contentDiv = document.getElementById('marketSentimentContent');
+    
+    if (!contentDiv) return;
+    
+    // Show loading state
+    contentDiv.innerHTML = `
+        <div class="text-center py-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Analyzing market sentiment...</p>
+        </div>
+    `;
+    
+    try {
+        const params = new URLSearchParams();
+        if (forceRefresh) params.append('refresh', 'true');
+        
+        // 💱 Pass user's currency preference to backend
+        params.append('currency', appConfig.currency || 'USD');
+        
+        const url = `/market-sentiment?${params.toString()}`;
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to load market sentiment');
+        }
+        
+        renderMarketSentiment(result.data);
+        
+    } catch (error) {
+        console.error('Error loading market sentiment:', error);
+        contentDiv.innerHTML = `
+            <div class="alert alert-warning mb-0">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                Unable to load market sentiment. Please try again later.
+            </div>
+        `;
+    }
+}
+
+/**
+ * Render market sentiment data
+ */
+function renderMarketSentiment(data) {
+    const contentDiv = document.getElementById('marketSentimentContent');
+    
+    if (!contentDiv || !data) return;
+    
+    const sentimentColor = {
+        'BULLISH': 'success',
+        'BEARISH': 'danger',
+        'NEUTRAL': 'warning'
+    }[data.sentiment] || 'secondary';
+    
+    const sentimentIcon = {
+        'BULLISH': 'arrow-up-circle-fill',
+        'BEARISH': 'arrow-down-circle-fill',
+        'NEUTRAL': 'dash-circle-fill'
+    }[data.sentiment] || 'circle-fill';
+    
+    const timestamp = data.timestamp ? new Date(data.timestamp).toLocaleString() : '';
+    
+    let html = `
+        <!-- Overall Sentiment -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="display-4">
+                            <i class="bi bi-${sentimentIcon} text-${sentimentColor}"></i>
+                        </div>
+                        <div>
+                            <h3 class="mb-1 text-${sentimentColor}">${data.sentiment}</h3>
+                            <div class="progress" style="width: 200px; height: 8px;">
+                                <div class="progress-bar bg-${sentimentColor}" role="progressbar" 
+                                     style="width: ${data.confidence}%" 
+                                     aria-valuenow="${data.confidence}" aria-valuemin="0" aria-valuemax="100"></div>
+                            </div>
+                            <small class="text-muted">Confidence: ${data.confidence}%</small>
+                        </div>
+                    </div>
+                    <small class="text-muted">
+                        <i class="bi bi-clock me-1"></i>${timestamp}
+                    </small>
+                </div>
+                
+                ${data.summary ? `
+                <div class="alert alert-${sentimentColor} alert-dismissible fade show mb-3" role="alert">
+                    <strong><i class="bi bi-megaphone me-2"></i>Market Summary:</strong> ${data.summary}
+                </div>
+                ` : ''}
+                
+                ${data.reasoning ? `
+                <div class="card border-0 bg-light mb-3">
+                    <div class="card-body">
+                        <h6 class="card-title">
+                            <i class="bi bi-lightbulb text-warning me-2"></i>Analysis
+                        </h6>
+                        <p class="mb-0">${data.reasoning}</p>
+                    </div>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+        
+        <!-- Market Indices -->
+        ${data.market_indices && Object.keys(data.market_indices).length > 0 ? `
+        <div class="row mb-4">
+            <div class="col-12">
+                <h6 class="mb-3">
+                    <i class="bi bi-graph-up text-primary me-2"></i>Market Indices
+                </h6>
+                <div class="row g-3">
+                    ${Object.entries(data.market_indices).map(([name, idx]) => `
+                        <div class="col-md-6 col-lg-3">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body">
+                                    <h6 class="card-title text-truncate" title="${name}">${name}</h6>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="h5 mb-0">${idx.current}</span>
+                                        <span class="badge bg-${idx.trend === 'up' ? 'success' : 'danger'}">
+                                            <i class="bi bi-arrow-${idx.trend === 'up' ? 'up' : 'down'} me-1"></i>${idx.change_pct}%
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+        ` : ''}
+        
+        <!-- Top Sectors -->
+        ${data.top_sectors && Object.keys(data.top_sectors).length > 0 ? `
+        <div class="row mb-4">
+            <div class="col-12">
+                <h6 class="mb-3">
+                    <i class="bi bi-pie-chart text-info me-2"></i>Top Performing Sectors
+                </h6>
+                <div class="list-group">
+                    ${Object.entries(data.top_sectors).map(([name, sector]) => `
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${name}</strong>
+                                <small class="text-muted ms-2">${sector.symbol}</small>
+                            </div>
+                            <span class="badge bg-${sector.trend === 'up' ? 'success' : 'danger'} fs-6">
+                                <i class="bi bi-arrow-${sector.trend === 'up' ? 'up' : 'down'} me-1"></i>${sector.change_pct}%
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        </div>
+        ` : ''}
+        
+        <!-- Key Factors -->
+        ${data.key_factors && data.key_factors.length > 0 ? `
+        <div class="row mb-4">
+            <div class="col-12">
+                <h6 class="mb-3">
+                    <i class="bi bi-key text-warning me-2"></i>Key Factors
+                </h6>
+                <ul class="list-group list-group-flush">
+                    ${data.key_factors.map(factor => `
+                        <li class="list-group-item">
+                            <i class="bi bi-chevron-right text-primary me-2"></i>${factor}
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        </div>
+        ` : ''}
+        
+        <!-- Stock Recommendations -->
+        <div class="row">
+            <!-- Buy Recommendations -->
+            <div class="col-md-6 mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-success">
+                        <i class="bi bi-cart-plus me-2"></i>Top Picks to Buy
+                    </h6>
+                    <button class="btn btn-sm btn-outline-success" id="refreshBuyRecsBtn" 
+                            onclick="refreshRecommendations()" 
+                            title="Get different recommendations">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                </div>
+                ${data.buy_recommendations && data.buy_recommendations.length > 0 ? 
+                    data.buy_recommendations.map((rec, idx) => `
+                        <div class="card border-success mb-2">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h6 class="mb-1">
+                                            <span class="badge bg-success me-2">${idx + 1}</span>
+                                            <strong>${rec.ticker}</strong>
+                                            ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker)}</span>` : ''}
+                                        </h6>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-success" 
+                                            onclick="addTickerFromRecommendation('${rec.ticker}')"
+                                            title="Add to analysis">
+                                        <i class="bi bi-plus-circle"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted d-block mb-2">
+                                    <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
+                                </small>
+                                <p class="mb-0 small">${rec.reason}</p>
+                            </div>
+                        </div>
+                    `).join('') 
+                : `
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        No buy recommendations available at this time.
+                    </div>
+                `}
+            </div>
+            
+            <!-- Sell Recommendations -->
+            <div class="col-md-6 mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-danger">
+                        <i class="bi bi-x-circle me-2"></i>Stocks to Avoid/Sell
+                    </h6>
+                    <button class="btn btn-sm btn-outline-danger" id="refreshSellRecsBtn" 
+                            onclick="refreshRecommendations()" 
+                            title="Get different recommendations">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                </div>
+                ${data.sell_recommendations && data.sell_recommendations.length > 0 ? 
+                    data.sell_recommendations.map((rec, idx) => `
+                        <div class="card border-danger mb-2">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h6 class="mb-1">
+                                        <span class="badge bg-danger me-2">${idx + 1}</span>
+                                        <strong>${rec.ticker}</strong>
+                                        ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker)}</span>` : ''}
+                                    </h6>
+                                </div>
+                                <small class="text-muted d-block mb-2">
+                                    <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
+                                </small>
+                                <p class="mb-0 small">${rec.reason}</p>
+                            </div>
+                        </div>
+                    `).join('')
+                : `
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        No sell recommendations available at this time.
+                    </div>
+                `}
+            </div>
+        </div>
+    `;
+    
+    contentDiv.innerHTML = html;
+}
+
+/**
+ * Refresh market sentiment (full dashboard)
+ */
+async function refreshMarketSentiment() {
+    const btn = document.getElementById('refreshSentimentBtn');
+    if (btn) {
+        btn.disabled = true;
+        // Use only spinner, not the arrow icon to avoid double spinning
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+    }
+    
+    await loadMarketSentiment(true);
+    
+    if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
+    }
+}
+
+/**
+ * Refresh only stock recommendations (not the entire sentiment analysis)
+ */
+async function refreshRecommendations() {
+    const buyBtn = document.getElementById('refreshBuyRecsBtn');
+    const sellBtn = document.getElementById('refreshSellRecsBtn');
+    
+    // Disable buttons and show loading
+    if (buyBtn) {
+        buyBtn.disabled = true;
+        buyBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+    }
+    if (sellBtn) {
+        sellBtn.disabled = true;
+        sellBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+    }
+    
+    try {
+        // Force refresh to get new recommendations
+        const params = new URLSearchParams();
+        params.append('refresh', 'true');
+        
+        const url = `/market-sentiment?${params.toString()}`;
+        const response = await fetch(url);
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to load recommendations');
+        }
+        
+        // Get the data
+        const data = result.data;
+        
+        // Find the recommendations row specifically (it's the last row with col-md-6 children)
+        const allRows = document.querySelectorAll('#marketSentimentContent .row');
+        let recommendationsRow = null;
+        
+        // Find the row that contains the buy/sell recommendations
+        for (let i = allRows.length - 1; i >= 0; i--) {
+            const cols = allRows[i].querySelectorAll('.col-md-6');
+            if (cols.length === 2) {
+                // Check if this row has the recommendations by looking for the specific buttons
+                const hasBuyBtn = allRows[i].querySelector('#refreshBuyRecsBtn');
+                const hasSellBtn = allRows[i].querySelector('#refreshSellRecsBtn');
+                if (hasBuyBtn || hasSellBtn) {
+                    recommendationsRow = allRows[i];
+                    break;
+                }
+            }
+        }
+        
+        if (!recommendationsRow) {
+            console.error('Could not find recommendations row');
+            return;
+        }
+        
+        const cols = recommendationsRow.querySelectorAll('.col-md-6');
+        const buyContainer = cols[0];
+        const sellContainer = cols[1];
+        
+        if (buyContainer && data.buy_recommendations) {
+            // Rebuild buy recommendations section
+            const buyHtml = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-success">
+                        <i class="bi bi-cart-plus me-2"></i>Top Picks to Buy
+                    </h6>
+                    <button class="btn btn-sm btn-outline-success" id="refreshBuyRecsBtn" 
+                            onclick="refreshRecommendations()" 
+                            title="Get different recommendations">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                </div>
+                ${data.buy_recommendations.map((rec, idx) => `
+                    <div class="card border-success mb-2">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <h6 class="mb-1">
+                                        <span class="badge bg-success me-2">${idx + 1}</span>
+                                        <strong>${rec.ticker}</strong>
+                                        ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price)}</span>` : ''}
+                                    </h6>
+                                </div>
+                                <button class="btn btn-sm btn-outline-success" 
+                                        onclick="addTickerFromRecommendation('${rec.ticker}')"
+                                        title="Add to analysis">
+                                    <i class="bi bi-plus-circle"></i>
+                                </button>
+                            </div>
+                            <small class="text-muted d-block mb-2">
+                                <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
+                            </small>
+                            <p class="mb-0 small">${rec.reason}</p>
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+            buyContainer.innerHTML = buyHtml;
+        }
+        
+        if (sellContainer && data.sell_recommendations) {
+            // Rebuild sell recommendations section
+            const sellHtml = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-danger">
+                        <i class="bi bi-x-circle me-2"></i>Stocks to Avoid/Sell
+                    </h6>
+                    <button class="btn btn-sm btn-outline-danger" id="refreshSellRecsBtn" 
+                            onclick="refreshRecommendations()" 
+                            title="Get different recommendations">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                </div>
+                ${data.sell_recommendations.map((rec, idx) => `
+                    <div class="card border-danger mb-2">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="mb-1">
+                                    <span class="badge bg-danger me-2">${idx + 1}</span>
+                                    <strong>${rec.ticker}</strong>
+                                    ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price)}</span>` : ''}
+                                </h6>
+                            </div>
+                            <small class="text-muted d-block mb-2">
+                                <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
+                            </small>
+                            <p class="mb-0 small">${rec.reason}</p>
+                        </div>
+                    </div>
+                `).join('')}
+            `;
+            sellContainer.innerHTML = sellHtml;
+        }
+        
+    } catch (error) {
+        console.error('Error refreshing recommendations:', error);
+        showToast('Failed to refresh recommendations', 'danger');
+    } finally {
+        // Re-enable buttons
+        if (buyBtn) {
+            buyBtn.disabled = false;
+            buyBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+        }
+        if (sellBtn) {
+            sellBtn.disabled = false;
+            sellBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+        }
+    }
+}
+
+
+
+/**
+ * Add ticker from recommendation to analysis
+ */
+function addTickerFromRecommendation(ticker) {
+    if (!ticker) return;
+    
+    const tickerInput = document.getElementById('tickerInput');
+    if (tickerInput) {
+        tickerInput.value = ticker.toUpperCase();
+        addTicker();  // addTicker() already shows a toast
+    }
+}
+
+
+// ===== DEVELOPER MODE FUNCTIONS =====
+
+/**
+ * Initialize developer mode UI elements
+ * Shows/hides developer tab based on DEBUG_MODE
+ */
+function initializeDeveloperMode() {
+    const devTabNav = document.getElementById('developer-tab-nav');
+    const devDebugToggle = document.getElementById('devDebugModeToggle');
+    const devDebugStatus = document.getElementById('devDebugStatus');
+    
+    if (DEBUG_MODE) {
+        // Show developer tab
+        if (devTabNav) {
+            devTabNav.style.display = 'block';
+        }
+        
+        // Update toggle state
+        if (devDebugToggle) {
+            devDebugToggle.checked = true;
+        }
+        
+        // Update status badge
+        if (devDebugStatus) {
+            devDebugStatus.textContent = 'Enabled';
+            devDebugStatus.className = 'badge bg-success';
+        }
+    } else {
+        // Hide developer tab
+        if (devTabNav) {
+            devTabNav.style.display = 'none';
+        }
+        
+        // Update toggle state
+        if (devDebugToggle) {
+            devDebugToggle.checked = false;
+        }
+        
+        // Update status badge
+        if (devDebugStatus) {
+            devDebugStatus.textContent = 'Disabled';
+            devDebugStatus.className = 'badge bg-secondary';
+        }
+    }
+}
+
+/**
+ * Toggle frontend debug mode
+ */
+function toggleDebugMode(enabled) {
+    if (enabled) {
+        localStorage.setItem('DEBUG_MODE', 'true');
+        showToast('Debug mode enabled. Reload page to see console logs.', 'info');
+    } else {
+        localStorage.removeItem('DEBUG_MODE');
+        showToast('Debug mode disabled. Reload page to apply.', 'info');
+    }
+    
+    // Update status
+    const devDebugStatus = document.getElementById('devDebugStatus');
+    if (devDebugStatus) {
+        devDebugStatus.textContent = enabled ? 'Enabled (reload needed)' : 'Disabled (reload needed)';
+        devDebugStatus.className = enabled ? 'badge bg-warning' : 'badge bg-secondary';
+    }
+}
+
+/**
+ * Update backend log level command display
+ */
+function updateLogLevelCommand() {
+    const logLevel = document.getElementById('devLogLevel')?.value || 'INFO';
+    const commandInput = document.getElementById('devLogLevelCommand');
+    
+    if (commandInput) {
+        commandInput.value = `LOG_LEVEL=${logLevel} python3 app.py`;
+    }
+}
+
+/**
+ * Copy log level command to clipboard
+ */
+function copyLogLevelCommand() {
+    const commandInput = document.getElementById('devLogLevelCommand');
+    
+    if (commandInput) {
+        commandInput.select();
+        document.execCommand('copy');
+        showToast('Command copied to clipboard!', 'success');
+    }
+}
+
+// Listen for log level changes
+document.addEventListener('DOMContentLoaded', function() {
+    const devLogLevelSelect = document.getElementById('devLogLevel');
+    if (devLogLevelSelect) {
+        devLogLevelSelect.addEventListener('change', updateLogLevelCommand);
+        updateLogLevelCommand(); // Initialize
+    }
+    
+    // Initialize developer mode UI
+    initializeDeveloperMode();
 });

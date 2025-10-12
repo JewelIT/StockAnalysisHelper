@@ -35,10 +35,24 @@ portfolio_report_*.html
 # Logs - contains security events and user interactions
 logs/
 *.log
+nohup.out
+
+# Backup files
+*.backup
+*.bak
+
+# Test output
+.pytest_cache/
+htmlcov/
+.coverage
+*.cover
 
 # Models cache
 .cache/
 transformers_cache/
+
+# Market sentiment cache
+cache/market_sentiment_cache.json
 
 # IDE
 .vscode/
@@ -60,3 +74,15 @@ enhanced_script.py
 
 # Archive and development notes
 docs/.archive/
+docs/summaries/
+
+# Test scripts (belong in tests/)
+test_*.py
+!tests/test_*.py
+
+# Temporary development files in root
+*.tmp
+*.temp
+debug_*.py
+*_summary.md
+*_SUMMARY.md

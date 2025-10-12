@@ -1,6 +1,6 @@
 # Vestor Project Structure & Architecture
 
-**Last Updated**: October 5, 2025  
+**Last Updated**: October 12, 2025  
 **Status**: Clean, Production-Ready Structure
 
 ---
@@ -11,73 +11,98 @@
 StockAnalysisHelper/
 │
 ├── run.py                          # 🚀 APPLICATION ENTRY POINT
-├── logging_config.py               # 📝 Centralized logging configuration
 ├── requirements.txt                # 📦 Python dependencies
 ├── README.md                       # 📖 Main documentation
-├── DISTRIBUTION.md                 # 📦 Packaging & deployment guide
-├── MODEL_CREDITS.md                # 🙏 AI model attributions
 ├── LICENSE                         # ⚖️ MIT License
 ├── .gitignore                      # 🚫 Git ignore rules
 │
-├── app/                            # 🏗️ FLASK APPLICATION PACKAGE
-│   ├── __init__.py                # Application factory (create_app)
+├── src/                            # 📂 SOURCE CODE (Organized by Layer)
 │   │
-│   ├── routes/                    # 🛣️ Route Blueprints
-│   │   ├── __init__.py
-│   │   ├── main.py               # Home, legacy, utility routes
-│   │   ├── analysis.py           # Stock/portfolio analysis endpoints
-│   │   └── chat.py               # Vestor AI chat endpoints
+│   ├── web/                       # 🌐 FLASK WEB APPLICATION
+│   │   ├── __init__.py           # Application factory (create_app)
+│   │   │
+│   │   ├── routes/               # 🛣️ Route Blueprints (HTTP Endpoints)
+│   │   │   ├── __init__.py
+│   │   │   ├── main.py          # Home, market sentiment, utility routes
+│   │   │   ├── analysis.py      # Stock/portfolio analysis endpoints
+│   │   │   └── chat.py          # Vestor AI chat endpoints
+│   │   │
+│   │   └── services/             # 💼 Business Logic Layer
+│   │       ├── __init__.py
+│   │       ├── analysis_service.py          # Analysis orchestration
+│   │       ├── vestor_service.py            # Vestor AI conversation
+│   │       └── market_sentiment_service.py  # Market overview
 │   │
-│   ├── services/                  # 💼 Business Logic Layer
-│   │   ├── __init__.py
-│   │   ├── analysis_service.py   # Analysis orchestration
-│   │   └── vestor_service.py     # Vestor AI conversation service
+│   ├── config/                    # ⚙️ CONFIGURATION
+│   │   ├── config.py             # Application constants & settings
+│   │   └── logging_config.py     # Centralized logging setup
 │   │
-│   ├── models/                    # 📊 Data Models (future)
-│   │   └── __init__.py
+│   ├── core/                      # 🧠 CORE BUSINESS LOGIC
+│   │   └── portfolio_analyzer.py # Main portfolio analysis orchestration
 │   │
-│   └── utils/                     # 🔧 Utility Functions (future)
-│       └── __init__.py
-│
-├── src/                            # 🧠 CORE ANALYSIS MODULES
-│   ├── __init__.py
-│   ├── portfolio_analyzer.py      # Main portfolio analysis orchestration
-│   ├── stock_chat.py              # StockChatAssistant (AI chat core)
-│   ├── sentiment_analyzer.py      # FinBERT & Twitter-RoBERTa sentiment
-│   ├── multi_model_sentiment.py   # Multi-model sentiment aggregation
-│   ├── technical_analyzer.py      # RSI, MACD, indicators
-│   ├── data_fetcher.py            # Yahoo Finance data fetching
-│   ├── coingecko_fetcher.py       # Cryptocurrency data (CoinGecko API)
-│   ├── social_media_fetcher.py    # Reddit/Twitter data (optional)
-│   └── chart_generator.py         # Plotly chart generation
+│   ├── data/                      # 📊 DATA FETCHERS
+│   │   ├── data_fetcher.py       # Yahoo Finance stock data
+│   │   ├── coingecko_fetcher.py  # Cryptocurrency data (CoinGecko API)
+│   │   └── social_media_fetcher.py  # Reddit/StockTwits (optional)
+│   │
+│   ├── ai/                        # 🤖 AI/ML MODELS & LOGIC
+│   │   ├── sentiment_analyzer.py         # FinBERT & Twitter-RoBERTa
+│   │   ├── multi_model_sentiment.py      # Multi-model aggregation
+│   │   ├── stock_chat.py                 # StockChatAssistant (AI core)
+│   │   └── natural_response_generator.py # Natural language generation
+│   │
+│   ├── utils/                     # 🔧 UTILITY FUNCTIONS
+│   │   ├── chart_generator.py    # Plotly chart generation
+│   │   ├── technical_analyzer.py # RSI, MACD, Bollinger Bands
+│   │   ├── analyst_consensus.py  # Analyst recommendations
+│   │   └── helpers.py            # Helper functions (formatting, etc.)
+│   │
+│   └── vestor/                    # 💬 VESTOR CHATBOT SUBSYSTEM
+│       ├── __init__.py
+│       ├── conversation/         # Conversation state management
+│       ├── knowledge/            # Knowledge base & prompts
+│       ├── responses/            # Response generation
+│       ├── core/                 # Core Vestor logic
+│       └── security/             # Input validation & safety
 │
 ├── templates/                      # 🎨 JINJA2 HTML TEMPLATES
-│   ├── index-modern.html          # Main modern UI
-│   └── index-legacy.html          # Legacy UI (for reference)
+│   └── index.html                 # Main web interface (single-page app)
 │
 ├── static/                         # 🖼️ FRONTEND ASSETS
 │   ├── css/
-│   │   ├── modern.css            # Modern theme (Bootstrap 5.3)
+│   │   ├── modern.css            # Modern theme styles
 │   │   └── style.css             # Legacy styles
-│   └── js/
-│       └── app.js                # Main frontend application logic
+│   ├── js/
+│   │   └── app.js                # Main frontend application logic
+│   └── favicon.svg               # Application icon
 │
 ├── docs/                           # 📚 DOCUMENTATION
-│   └── .archive/                  # 🗄️ Archived dev notes (git ignored)
-│       ├── app.py                 # Old monolithic app
-│       ├── vestor_chat.py         # Old chat logic
-│       ├── *.md                   # Old planning documents
-│       └── ...
+│   ├── README.md                  # Documentation index
+│   ├── ARCHITECTURE.md            # This file - system architecture
+│   ├── TESTING_GUIDE.md          # Testing documentation
+│   ├── LOGGING_CONTROL.md        # Logging features
+│   ├── VESTOR_MODULAR_ARCHITECTURE.md  # Vestor subsystem design
+│   └── ...                        # Feature implementation guides
 │
 ├── logs/                           # 📝 APPLICATION LOGS (git ignored)
 │   ├── flask.log                  # Main application log
 │   ├── security.log               # Security events
 │   ├── chat.log                   # Chat interactions
-│   ├── analysis.log               # Analysis requests
-│   └── unanswered_questions.log   # Chat questions needing improvement
+│   └── analysis.log               # Analysis requests
 │
 ├── exports/                        # 💾 ANALYSIS EXPORTS (git ignored)
 │   └── analysis_*.json            # Generated analysis files
+│
+├── tests/                          # 🧪 TEST SUITE
+│   ├── __init__.py
+│   ├── test_integration.py        # Integration tests
+│   ├── test_vestor_service.py     # Vestor AI tests
+│   ├── test_newsfeed_ui_integration.py  # Newsfeed tests
+│   ├── test_analyst_integration.py      # Analyst data tests
+│   ├── test_logging_config.py          # Logging tests
+│   ├── integration/              # Integration test suite
+│   ├── unit/                     # Unit tests
+│   └── conversation_scenarios/   # Conversation test scenarios
 │
 └── __pycache__/                    # 🗑️ Python bytecode (git ignored)
 ```
@@ -86,329 +111,458 @@ StockAnalysisHelper/
 
 ## 🏗️ Architecture Overview
 
+### Layered Architecture Pattern
+
+The application follows a clean **layered architecture**:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    PRESENTATION LAYER                    │
+│  (templates/index.html, static/js/app.js)              │
+│          User Interface & Frontend Logic                 │
+└────────────────────┬────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────┐
+│                      WEB LAYER                          │
+│              (src/web/routes/*.py)                      │
+│     HTTP Endpoints, Request/Response Handling           │
+└────────────────────┬────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────┐
+│                   SERVICE LAYER                         │
+│            (src/web/services/*.py)                      │
+│         Business Logic & Orchestration                  │
+└────────────────────┬────────────────────────────────────┘
+                     │
+┌────────────────────▼────────────────────────────────────┐
+│                    CORE LAYER                           │
+│    (src/core/, src/ai/, src/data/, src/utils/)        │
+│     Analysis, AI Models, Data Fetching, Utilities      │
+└─────────────────────────────────────────────────────────┘
+```
+
 ### Application Factory Pattern
 
-**`run.py`** → **`app/__init__.py:create_app()`** → Flask app instance
+**Entry Point**: `run.py` → **Factory**: `src/web/__init__.py:create_app()` → Flask app instance
 
 ```python
 # run.py
-from app import create_app
+from src.web import create_app
+from src.config.logging_config import setup_logging
+
+logger = setup_logging()
 app = create_app()
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
 ```
 
-### Blueprint Structure
+### Blueprint Registration
 
-| Blueprint | Prefix | File | Purpose |
-|-----------|--------|------|---------|
-| `main` | `/` | `routes/main.py` | Home, legacy, utilities |
-| `analysis` | `/analyze`, `/exports` | `routes/analysis.py` | Stock analysis |
-| `chat` | `/chat`, `/get-chat-history` | `routes/chat.py` | Vestor conversations |
+Routes are organized as Flask blueprints:
 
-### Service Layer Pattern
+```python
+# src/web/__init__.py
+from src.web.routes import analysis, chat, main
 
-Separates business logic from HTTP layer:
-
-```
-routes/chat.py → services/vestor_service.py → src/stock_chat.py
-                                              → src/sentiment_analyzer.py
-                                              → services/analysis_service.py
+app.register_blueprint(main.bp)
+app.register_blueprint(analysis.bp)
+app.register_blueprint(chat.bp)
 ```
 
 ---
 
-## 🎯 Key Components
+## 🔄 Request Flow
 
-### 1. Application Entry (`run.py`)
-
-- **Purpose**: Start Flask application
-- **Responsibilities**:
-  - Import `create_app()` factory
-  - Configure logging
-  - Run development server
-
-### 2. Application Factory (`app/__init__.py`)
-
-- **Pattern**: Factory pattern for testability
-- **Responsibilities**:
-  - Create Flask app instance
-  - Configure sessions, secrets
-  - Register blueprints
-  - Set up folders (exports)
-
-### 3. Routes (Blueprints)
-
-#### `routes/main.py`
-- `/` - Home page (modern UI)
-- `/legacy` - Legacy UI
-- `/clear-chat` - Clear session
-
-#### `routes/analysis.py`
-- `POST /analyze` - Analyze stocks/portfolio
-- `GET /exports/<filename>` - Download analysis
-
-#### `routes/chat.py`
-- `POST /chat` - Vestor conversation
-- `GET /get-chat-history` - Load chat history
-
-### 4. Services (Business Logic)
-
-#### `services/vestor_service.py`
-- **Class**: `VestorService`
-- **Methods**:
-  - `process_chat()` - Main conversation handler
-  - `_detect_tickers()` - Extract tickers from text
-  - `_build_vestor_prompt()` - Create AI system prompt
-  - `_resolve_ticker()` - Determine which stock to discuss
-
-#### `services/analysis_service.py`
-- **Class**: `AnalysisService`
-- **Methods**:
-  - `analyze_ticker()` - Single stock analysis
-  - `get_cached_analysis()` - Retrieve cached results
-  - Cache management
-
-### 5. Core Modules (`src/`)
-
-#### `stock_chat.py`
-- **Class**: `StockChatAssistant`
-- **AI Models**: DistilBERT for conversational Q&A
-- **Purpose**: Natural language understanding
-
-#### `sentiment_analyzer.py`
-- **Models**: FinBERT, Twitter-RoBERTa
-- **Purpose**: News and social media sentiment
-
-#### `technical_analyzer.py`
-- **Indicators**: RSI, MACD, SMA, EMA, Bollinger Bands
-- **Purpose**: Technical analysis signals
-
-#### `portfolio_analyzer.py`
-- **Purpose**: Orchestrate analysis pipeline
-- **Workflow**:
-  1. Fetch data (data_fetcher, coingecko_fetcher)
-  2. Sentiment analysis
-  3. Technical analysis
-  4. Score combination
-  5. Recommendation generation
-
----
-
-## 🔄 Request Flow Examples
-
-### Chat Request Flow
+### Stock Analysis Request
 
 ```
-User Message
-    ↓
-[Frontend: app.js] POST /chat
-    ↓
-[Blueprint: routes/chat.py] chat()
-    ↓
-[Service: vestor_service.py] VestorService.process_chat()
-    ↓
-    ├─ Detect tickers (company→ticker mapping)
-    ├─ Build conversation context
-    ├─ Determine mode (conversation vs analysis)
-    ↓
-    ├─ [If conversation] → src/stock_chat.py → AI response
-    ↓
-    └─ [If stock analysis] → services/analysis_service.py
-                            → src/portfolio_analyzer.py
-                            → sentiment + technical analysis
-                            → Generate insights
-    ↓
-[Response] JSON with answer, ticker, metadata
-    ↓
-[Frontend] Display in chat interface
+1. User clicks "Analyze Portfolio" 
+   ↓
+2. Frontend (app.js) → POST /analyze
+   ↓
+3. Route (src/web/routes/analysis.py) → Validates request
+   ↓
+4. Service (src/web/services/analysis_service.py) → Orchestrates
+   ↓
+5. Core (src/core/portfolio_analyzer.py) → Analyzes
+   ├─ Data Layer (src/data/) → Fetches stock/crypto data
+   ├─ AI Layer (src/ai/) → Sentiment analysis
+   └─ Utils Layer (src/utils/) → Technical indicators & charts
+   ↓
+6. Response JSON → Frontend
+   ↓
+7. Frontend renders results (charts, sentiment, recommendations)
 ```
 
-### Analysis Request Flow
+### Chat Request
 
 ```
-User clicks "Analyze"
-    ↓
-[Frontend: app.js] POST /analyze {tickers: [...]}
-    ↓
-[Blueprint: routes/analysis.py] analyze()
-    ↓
-[Service: analysis_service.py] AnalysisService.analyze_ticker()
-    ↓
-[Core: portfolio_analyzer.py] PortfolioAnalyzer.analyze()
-    ↓
-    ├─ data_fetcher.py → Yahoo Finance
-    ├─ coingecko_fetcher.py → Crypto data
-    ├─ sentiment_analyzer.py → FinBERT + RoBERTa
-    ├─ technical_analyzer.py → RSI, MACD, etc.
-    └─ chart_generator.py → Plotly charts
-    ↓
-[Cache] Store in analysis_cache
-    ↓
-[Response] JSON with analysis results
-    ↓
-[Frontend] Display in accordion cards
+1. User types question
+   ↓
+2. Frontend (app.js) → POST /chat
+   ↓
+3. Route (src/web/routes/chat.py) → Validates & logs
+   ↓
+4. Service (src/web/services/vestor_service.py) → Processes
+   ├─ Vestor Subsystem (src/vestor/) → Conversation logic
+   ├─ Stock Chat (src/ai/stock_chat.py) → AI response generation
+   └─ Analysis Service → If stock analysis needed
+   ↓
+5. Response JSON → Frontend
+   ↓
+6. Frontend renders message in chat panel
 ```
 
 ---
 
-## 🔐 Security & Logging
+## 📦 Key Components
 
-### Logging Configuration (`logging_config.py`)
+### 1. Web Layer (`src/web/`)
 
-**Log Files**:
-- `logs/flask.log` - General application logs
-- `logs/security.log` - Security events (prompt injection attempts)
-- `logs/chat.log` - All chat interactions
-- `logs/analysis.log` - Analysis requests
-- `logs/unanswered_questions.log` - Chat questions needing improvement
+**Purpose**: HTTP interface, request/response handling
 
-**Functions**:
-- `setup_logging()` - Configure handlers
-- `log_security_event()` - Log security incidents
-- `log_chat_interaction()` - Track conversations
-- `log_analysis_request()` - Track analyses
-- `log_unanswered_question()` - Track unhandled queries
+**Components**:
+- **Routes** (`src/web/routes/`):
+  - `main.py`: Home page, market sentiment overview
+  - `analysis.py`: Portfolio/stock analysis endpoints
+  - `chat.py`: Vestor AI chat endpoints
+  
+- **Services** (`src/web/services/`):
+  - `analysis_service.py`: Analysis orchestration & caching
+  - `vestor_service.py`: Vestor conversation management
+  - `market_sentiment_service.py`: Market overview data
 
-### Session Management
+**Key Features**:
+- Blueprint-based routing
+- Request validation
+- Error handling
+- Logging integration
 
-- **Storage**: Flask server-side sessions
-- **Data**:
-  - `conversation_history` - Last 30 messages
-  - `last_ticker` - Context for follow-ups
-- **Security**: HttpOnly cookies, SameSite=Lax
+### 2. Config Layer (`src/config/`)
+
+**Purpose**: Application configuration & logging
+
+**Components**:
+- `config.py`: Constants, API endpoints, model configurations
+- `logging_config.py`: Centralized logging setup with file rotation
+
+**Features**:
+- Environment variable support
+- Per-module log level control
+- Structured logging (JSON-ready)
+
+### 3. Core Layer (`src/core/`)
+
+**Purpose**: Core business logic
+
+**Components**:
+- `portfolio_analyzer.py`: Main portfolio analysis orchestration
+  - Coordinates data fetching, sentiment analysis, technical analysis
+  - Generates combined scores and recommendations
+  - Handles multi-ticker analysis
+
+**Responsibilities**:
+- Business logic encapsulation
+- Data aggregation
+- Score calculation algorithms
+
+### 4. Data Layer (`src/data/`)
+
+**Purpose**: External data retrieval
+
+**Components**:
+- `data_fetcher.py`: Yahoo Finance integration (stocks)
+- `coingecko_fetcher.py`: CoinGecko API (cryptocurrencies)
+- `social_media_fetcher.py`: Reddit/StockTwits (social media)
+
+**Features**:
+- API client abstraction
+- Error handling & retries
+- Data normalization
+
+### 5. AI Layer (`src/ai/`)
+
+**Purpose**: AI/ML models and logic
+
+**Components**:
+- `sentiment_analyzer.py`: FinBERT & Twitter-RoBERTa models
+- `multi_model_sentiment.py`: Multi-model sentiment aggregation
+- `stock_chat.py`: StockChatAssistant (conversational AI)
+- `natural_response_generator.py`: Natural language generation
+
+**Features**:
+- Model loading & caching
+- GPU/CPU detection
+- Batch processing
+- Sentiment scoring
+
+### 6. Utils Layer (`src/utils/`)
+
+**Purpose**: Utility functions & helpers
+
+**Components**:
+- `chart_generator.py`: Plotly chart generation (all chart types)
+- `technical_analyzer.py`: Technical indicators (RSI, MACD, etc.)
+- `analyst_consensus.py`: Analyst ratings & price targets
+- `helpers.py`: Helper functions (formatting, validation)
+
+**Features**:
+- Reusable utilities
+- No business logic
+- Pure functions
+
+### 7. Vestor Subsystem (`src/vestor/`)
+
+**Purpose**: Vestor chatbot subsystem (modular architecture)
+
+**Components**:
+- `conversation/`: Conversation state management
+- `knowledge/`: Knowledge base & prompts
+- `responses/`: Response generation logic
+- `core/`: Core Vestor logic
+- `security/`: Input validation & safety
+
+**Features**:
+- Context-aware conversations
+- Educational content
+- Ticker extraction
+- Safety controls
 
 ---
 
-## 🧪 Testing Strategy (Future)
+## 🔐 Security Architecture
+
+### Input Validation
+
+- **Routes**: Basic validation (required fields, types)
+- **Services**: Business logic validation (ticker format, limits)
+- **Vestor Security**: Prompt injection protection, content filtering
+
+### Logging & Monitoring
+
+- **Security Log**: Authentication, rate limiting, suspicious activity
+- **Chat Log**: All conversations (for improvement & monitoring)
+- **Analysis Log**: Analysis requests & performance
+- **Unanswered Questions**: Questions Vestor couldn't answer (for training)
+
+### Rate Limiting
+
+- Implemented in `src/web/__init__.py`
+- Per-endpoint limits
+- IP-based tracking
+
+---
+
+## 📊 Data Flow
+
+### Analysis Pipeline
+
+```
+User Request
+    ↓
+[Validation]
+    ↓
+[Data Fetching] (Yahoo Finance / CoinGecko)
+    ├─ Price data
+    ├─ News articles
+    └─ Social media (optional)
+    ↓
+[Sentiment Analysis] (FinBERT + Twitter-RoBERTa)
+    ├─ News sentiment: 0.0 - 1.0
+    └─ Social sentiment: 0.0 - 1.0
+    ↓
+[Technical Analysis] (RSI, MACD, SMA, Bollinger)
+    ├─ Indicators
+    ├─ Signals (Bullish/Bearish/Neutral)
+    └─ Technical score: 0.0 - 1.0
+    ↓
+[Analyst Consensus] (Yahoo Finance)
+    ├─ Buy/Hold/Sell ratings
+    ├─ Price targets
+    └─ Coverage depth
+    ↓
+[Combined Scoring]
+    ├─ 40% Sentiment weight
+    ├─ 60% Technical weight
+    └─ Final score: 0.0 - 1.0
+    ↓
+[Recommendation] (BUY / HOLD / SELL)
+    ↓
+[Chart Generation] (Plotly)
+    ↓
+Response JSON
+```
+
+### Chat Pipeline
+
+```
+User Question
+    ↓
+[Input Sanitization]
+    ↓
+[Ticker Extraction] (if mentioned)
+    ↓
+[Context Retrieval] (analyzed stocks)
+    ↓
+[Vestor Processing]
+    ├─ Knowledge base query
+    ├─ Conversation context
+    └─ Response generation
+    ↓
+[AI Response] (StockChatAssistant)
+    ↓
+[Post-processing]
+    ├─ Currency conversion (if requested)
+    ├─ Formatting
+    └─ Suggestions
+    ↓
+Response JSON
+```
+
+---
+
+## 🧪 Testing Architecture
+
+### Test Organization
 
 ```
 tests/
-├── __init__.py
-├── conftest.py                 # Pytest fixtures
-├── unit/
-│   ├── test_vestor_service.py # Service layer tests
-│   ├── test_analysis_service.py
-│   └── test_stock_chat.py     # AI model tests
-├── integration/
-│   ├── test_chat_routes.py    # Route integration tests
-│   └── test_analysis_routes.py
-└── e2e/
-    └── test_user_workflows.py # End-to-end scenarios
+├── test_integration.py              # Full integration tests
+├── test_vestor_service.py           # Vestor AI tests
+├── test_newsfeed_ui_integration.py  # Newsfeed feature tests
+├── test_logging_config.py           # Logging tests
+├── test_analyst_integration.py      # Analyst data tests
+├── integration/                     # Integration test suite
+│   └── test_market_sentiment_api.py
+├── unit/                            # Unit tests
+│   └── test_currency_conversion.py
+└── conversation_scenarios/          # Conversation test data
 ```
 
-**Run tests**:
-```bash
-pytest tests/
-pytest --cov=app --cov=src tests/
-```
+### Test Strategy
+
+- **Unit Tests**: Individual functions & classes
+- **Integration Tests**: Multi-component workflows
+- **End-to-End Tests**: Full request/response cycles
+- **Conversation Tests**: Vestor dialogue scenarios
 
 ---
 
-## 📦 Deployment
-
-### Docker
-
-```bash
-docker-compose up -d
-```
-
-### Production (Gunicorn)
-
-```bash
-pip install gunicorn
-gunicorn -w 4 -b 0.0.0.0:5000 "app:create_app()"
-```
+## 📝 Configuration Management
 
 ### Environment Variables
 
 ```bash
+# Required
 export SECRET_KEY="production-secret-key"
 export FLASK_ENV="production"
+
+# Optional: Social Media APIs
+export REDDIT_CLIENT_ID="your_client_id"
+export REDDIT_CLIENT_SECRET="your_client_secret"
+
+# Optional: Logging
+export LOG_LEVEL="INFO"  # DEBUG, INFO, WARNING, ERROR
+```
+
+### Application Config
+
+Located in `src/config/config.py`:
+
+```python
+class Config:
+    # API Endpoints
+    COINGECKO_API = "https://api.coingecko.com/api/v3"
+    
+    # Model Configurations
+    FINBERT_MODEL = "ProsusAI/finbert"
+    TWITTER_MODEL = "cardiffnlp/twitter-roberta-base-sentiment-latest"
+    
+    # Analysis Defaults
+    DEFAULT_TIMEFRAME = "3mo"
+    DEFAULT_CHART_TYPE = "candlestick"
+    DEFAULT_CURRENCY = "USD"
+    
+    # Limits
+    MAX_TICKERS = 10
+    MAX_NEWS = 10
+    MAX_SOCIAL = 10
 ```
 
 ---
 
-## 🧹 Code Quality Standards
+## 🚀 Deployment Considerations
 
-### Python Style
-- **PEP 8** compliance
-- **Type hints** for function signatures
-- **Docstrings** for all modules, classes, methods
+### Production Checklist
 
-### File Organization
-- **No dead code** - All code actively used
-- **Single Responsibility** - Each module has clear purpose
-- **DRY** (Don't Repeat Yourself)
-- **Service layer** for business logic
-- **Blueprints** for route organization
+- [ ] Set `FLASK_ENV=production`
+- [ ] Use strong `SECRET_KEY`
+- [ ] Configure reverse proxy (nginx/Apache)
+- [ ] Enable HTTPS
+- [ ] Set up log rotation
+- [ ] Configure database (if needed)
+- [ ] Set resource limits
+- [ ] Enable rate limiting
+- [ ] Monitor logs
 
-### Naming Conventions
-- **snake_case** for functions, variables
-- **PascalCase** for classes
-- **UPPER_CASE** for constants
-- **Descriptive names** - No abbreviations
+### Docker Deployment
 
----
+```bash
+# Build
+docker build -t vestor-ai .
 
-## 🗂️ Archive Policy
+# Run
+docker run -p 5000:5000 \
+  -e SECRET_KEY="your-secret" \
+  -e FLASK_ENV="production" \
+  vestor-ai
+```
 
-**`docs/.archive/`** contains:
-- Old monolithic `app.py`
-- Planning documents (CRITICAL_BUGS.md, etc.)
-- Development notes
-- Intermediate implementations
+### Scaling Considerations
 
-**Purpose**: Historical reference, not production code
-
-**Git**: Ignored via `.gitignore`
-
----
-
-## 📝 Documentation Standards
-
-### README.md
-- User-facing documentation
-- Quick start guide
-- Feature overview
-
-### DISTRIBUTION.md
-- Packaging instructions
-- Deployment guides
-- Platform-specific notes
-
-### MODEL_CREDITS.md
-- AI model attributions
-- License compliance
-
-### Code Comments
-- **Why**, not what
-- Complex logic explanations
-- TODO/FIXME markers
+- **Stateless Design**: No server-side sessions (uses client localStorage)
+- **Model Caching**: AI models loaded once, shared across requests
+- **API Rate Limits**: Respect external API limits (Yahoo Finance, CoinGecko)
+- **Memory**: ~4GB per worker (due to AI models)
 
 ---
 
-## 🎯 Vestor Persona
+## 📈 Performance Optimization
 
-**Name**: Vestor  
-**Role**: AI Financial Advisor
+### Caching Strategy
 
-**Personality Traits**:
-- Friendly and approachable
-- Knowledgeable but not condescending
-- Patient with beginners
-- Context-aware
-- Proactive (offers to analyze stocks)
+- **AI Models**: Loaded once, cached in memory
+- **Analysis Results**: Optional caching in analysis service
+- **API Responses**: Client-side caching (localStorage)
 
-**Capabilities**:
-- Natural conversation
-- Investment education
-- Stock/crypto analysis
-- Portfolio advice
-- Risk management guidance
+### GPU Acceleration
 
-**Implementation**: `app/services/vestor_service.py` + `src/stock_chat.py`
+- **PyTorch**: Automatic GPU detection
+- **FinBERT & RoBERTa**: 5-10x faster on GPU
+- **Fallback**: CPU mode (slower but reliable)
 
 ---
 
-**This document reflects the clean, production-ready structure as of October 5, 2025.**
+## 🔄 Future Architecture
+
+### Planned Enhancements
+
+1. **Database Layer**: PostgreSQL/MongoDB for persistent storage
+2. **Message Queue**: Celery for background analysis
+3. **WebSocket**: Real-time data streaming
+4. **Microservices**: Split into analysis, chat, data services
+5. **API Gateway**: RESTful API for external integrations
+
+---
+
+## 📚 Additional Documentation
+
+- **[TESTING_GUIDE.md](TESTING_GUIDE.md)**: Testing strategies & examples
+- **[LOGGING_CONTROL.md](LOGGING_CONTROL.md)**: Logging features & usage
+- **[VESTOR_MODULAR_ARCHITECTURE.md](VESTOR_MODULAR_ARCHITECTURE.md)**: Vestor subsystem design
+
+---
+
+**Last Updated**: October 12, 2025  
+**Architecture Version**: 2.0 (Post-Reorganization)
