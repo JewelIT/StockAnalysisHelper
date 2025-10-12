@@ -412,13 +412,25 @@ Just say the company name and I'll look it up for you! 📊""",
         if mentioned:
             return mentioned[0]
         
-        # Priority 3: Check for follow-up indicators about previous ticker
-        # Only use context ticker if NO new ticker was mentioned
+        # Priority 3: Check if this is a GENERAL educational question (should NOT use context)
+        general_question_keywords = [
+            'what is', 'what are', 'how do i', 'how to', 'explain', 'tell me about investing',
+            'should i invest', 'how does', 'can you explain', 'what does',
+            'dividend', 'p/e ratio', 'pe ratio', 'rsi', 'macd', 'diversif',
+            'getting started', 'start investing', 'begin invest', 'volatil', 'crypto',
+            'sector', 'portfolio', 'strategy', 'risk management'
+        ]
+        if any(keyword in question_lower for keyword in general_question_keywords):
+            print(f"📚 General educational question - clearing context ticker")
+            return None
+        
+        # Priority 4: Check for follow-up indicators about previous ticker
+        # Only use context ticker if NO new ticker was mentioned AND not a general question
         if context_ticker and not mentioned:
             follow_up_phrases = [
                 'is it', 'worth it', 'what about it', 'tell me more',
                 'more info', 'thoughts on that', 'opinion on it', 'the stock', 'that stock',
-                'analyze it', 'buy it', 'sell it'
+                'analyze it', 'buy it', 'sell it', 'how about that', 'good investment'
             ]
             # More specific follow-up: requires at least one phrase AND short question
             if any(phrase in question_lower for phrase in follow_up_phrases) and len(question_lower) < 100:
