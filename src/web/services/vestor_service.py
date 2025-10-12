@@ -5,6 +5,10 @@ Handles all Vestor AI interactions and business logic
 from src.ai.stock_chat import StockChatAssistant
 from src.web.services.analysis_service import AnalysisService
 import re
+import json
+import logging
+from datetime import datetime
+from pathlib import Path
 
 
 class VestorService:
@@ -13,6 +17,11 @@ class VestorService:
     def __init__(self):
         self.chat_assistant = None
         self.analysis_service = AnalysisService()
+        self.logger = logging.getLogger(__name__)
+        
+        # Ensure chat logs directory exists
+        self.chat_logs_dir = Path('logs/chat_interactions')
+        self.chat_logs_dir.mkdir(parents=True, exist_ok=True)
         
         # Company to ticker mapping
         self.company_to_ticker = {
@@ -58,6 +67,36 @@ class VestorService:
             'dogecoin': 'DOGE-USD', 'solana': 'SOL-USD', 'bnb': 'BNB-USD',
             'binance coin': 'BNB-USD', 'polkadot': 'DOT-USD'
         }
+    
+    def _log_conversation(self, question, answer, ticker, vestor_mode, metadata=None):
+        """
+        Log conversation to JSONL file for later analysis
+        Each line is a separate JSON object for easy processing
+        """
+        try:
+            # Create log entry
+            log_entry = {
+                'timestamp': datetime.now().isoformat(),
+                'question': question,
+                'answer': answer[:500] if answer else None,  # Truncate long answers
+                'answer_length': len(answer) if answer else 0,
+                'ticker': ticker,
+                'vestor_mode': vestor_mode,
+                'metadata': metadata or {}
+            }
+            
+            # Log to daily file
+            today = datetime.now().strftime('%Y%m%d')
+            log_file = self.chat_logs_dir / f'conversations_{today}.jsonl'
+            
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(log_entry) + '\n')
+                
+            # Also log to application logger
+            self.logger.info(f"Chat logged: Q='{question[:50]}...' T={ticker} M={vestor_mode}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to log conversation: {e}")
     
     def _get_chat_assistant(self):
         """Lazy load Vestor AI"""
@@ -271,7 +310,7 @@ Just say the company name and I'll look it up for you! 📊""",
                 print(f"🤖 Vestor Mode: Stock Analysis (with data for {final_ticker})")
                 print("="*80 + "\n")
                 # Generate response with analysis context
-                return self._handle_stock_conversation(
+                response = self._handle_stock_conversation(
                     question, 
                     final_ticker, 
                     cached_analysis, 
@@ -281,7 +320,7 @@ Just say the company name and I'll look it up for you! 📊""",
                 print(f"🤖 Vestor Mode: Stock Conversation (no data yet for {final_ticker})")
                 print("="*80 + "\n")
                 # Answer the question anyway, and suggest analysis
-                return self._handle_conversation_with_ticker(
+                response = self._handle_conversation_with_ticker(
                     question,
                     final_ticker,
                     vestor_prompt
@@ -290,7 +329,22 @@ Just say the company name and I'll look it up for you! 📊""",
             print(f"🤖 Vestor Mode: General Conversation")
             print("="*80 + "\n")
             # Pure conversational response
-            return self._handle_conversation(question, vestor_prompt, mentioned_tickers)
+            response = self._handle_conversation(question, vestor_prompt, mentioned_tickers)
+        
+        # Log the conversation
+        self._log_conversation(
+            question=question,
+            answer=response.get('answer', ''),
+            ticker=response.get('ticker'),
+            vestor_mode=response.get('vestor_mode', 'unknown'),
+            metadata={
+                'mentioned_tickers': mentioned_tickers,
+                'is_conversational': response.get('is_conversational', False),
+                'success': response.get('success', True)
+            }
+        )
+        
+        return response
     
     def _build_conversation_context(self, history):
         """Build context string from conversation history"""

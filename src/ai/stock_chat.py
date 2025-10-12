@@ -358,18 +358,25 @@ and always emphasize risk management and due diligence.
     
     def _generate_advisor_response(self, question, context, ticker):
         """
-        Generate a comprehensive financial advisor response based on analysis data
+        Generate a comprehensive financial advisor response based on analysis data.
+        Prioritizes knowledge-based educational responses over stock-specific analysis.
         """
         question_lower = question.lower()
         
-        # Parse context to extract key data points
+        # FIRST: Check if this is a general educational question (knowledge base)
+        # These should be answered even without stock data
+        knowledge_response = self._get_knowledge_based_answer(question_lower)
+        if knowledge_response:
+            return knowledge_response
+        
+        # Parse context to extract key data points for stock-specific questions
         try:
             # Extract data from context string
             data = self._parse_context_data(context)
         except:
             data = {}
         
-        # Build response based on question type
+        # Build response based on question type (stock-specific questions)
         response = ""
         
         # Investment recommendation questions
@@ -392,15 +399,15 @@ and always emphasize risk management and due diligence.
         elif any(word in question_lower for word in ['price', 'cost', 'trading at', 'current', 'value']):
             response = self._answer_price_question(question, data, ticker)
         
-        # Risk questions
-        elif any(word in question_lower for word in ['risk', 'safe', 'dangerous', 'volatile', 'volatility']):
+        # Risk questions (stock-specific)
+        elif any(word in question_lower for word in ['risk', 'safe', 'dangerous']):
             response = self._answer_risk_question(question, data, ticker)
         
         # Performance/change questions
         elif any(word in question_lower for word in ['performance', 'return', 'gain', 'loss', 'change', 'went up', 'went down', 'rose', 'fell']):
             response = self._answer_performance_question(question, data, ticker)
         
-        # General/overview questions
+        # General/overview questions (includes fallback to knowledge base)
         else:
             response = self._answer_general_question(question, data, ticker)
         
@@ -446,14 +453,17 @@ and always emphasize risk management and due diligence.
     
     def _answer_recommendation_question(self, question, data, ticker):
         """Answer investment recommendation questions"""
-        ticker_str = ticker.upper() if ticker else "this asset"
         rec = data.get('recommendation', 'HOLD')
         score = data.get('score', 0.5)
         sentiment = data.get('sentiment', 'Neutral')
         rsi = data.get('rsi')
         
-        response = f"## 📊 Investment Analysis for {ticker_str.upper()}\n\n"
-        response += f"Based on my comprehensive analysis using **FinBERT sentiment analysis**, **technical indicators**, and **market data**, here's my assessment:\n\n"
+        if ticker:
+            response = f"## 📊 Investment Analysis for {ticker.upper()}\n\n"
+            response += f"Great question about {ticker.upper()}! Based on my comprehensive analysis using **FinBERT sentiment analysis**, **technical indicators**, and **market data**, here's what I found:\n\n"
+        else:
+            response = "## 📊 Investment Analysis\n\n"
+            response += "To give you a proper investment recommendation, I'll need to analyze a specific stock first. However, let me explain what goes into my analysis:\n\n"
         response += f"### Current Recommendation: **{rec}**\n"
         response += f"**Confidence Level:** {score*100:.0f}%\n\n"
         
@@ -485,12 +495,15 @@ and always emphasize risk management and due diligence.
     
     def _answer_why_question(self, question, data, ticker):
         """Answer 'why' questions with detailed reasoning"""
-        ticker_str = ticker.upper() if ticker else "this asset"
         rec = data.get('recommendation', 'HOLD')
         sentiment = data.get('sentiment', 'Neutral')
         
-        response = f"## 🔍 Understanding the Analysis for {ticker_str.upper()}\n\n"
-        response += f"Let me explain the reasoning behind my {rec} recommendation:\n\n"
+        if ticker:
+            response = f"## 🔍 Understanding the Analysis for {ticker.upper()}\n\n"
+            response += f"Good question! Let me explain the reasoning behind my {rec} recommendation for {ticker.upper()}:\n\n"
+        else:
+            response = "## 🔍 Understanding Investment Analysis\n\n"
+            response += "Great question! Let me explain how I analyze investments and what goes into my recommendations:\n\n"
         
         response += f"### Data Sources I Analyzed:\n\n"
         response += f"1. **📰 Financial News Sentiment**\n"
@@ -532,11 +545,14 @@ and always emphasize risk management and due diligence.
     
     def _answer_sentiment_question(self, question, data, ticker):
         """Answer sentiment-related questions"""
-        ticker_str = ticker.upper() if ticker else "this asset"
         sentiment = data.get('sentiment', 'Neutral')
         
-        response = f"## 🎭 Market Sentiment Analysis for {ticker_str.upper()}\n\n"
-        response += f"### Current Sentiment: **{sentiment}**\n\n"
+        if ticker:
+            response = f"## 🎭 Market Sentiment Analysis for {ticker.upper()}\n\n"
+            response += f"Great question! The current market sentiment for {ticker.upper()} is: **{sentiment}**\n\n"
+        else:
+            response = "## 🎭 Understanding Market Sentiment\n\n"
+            response += "Excellent question! Market sentiment is crucial for understanding investor psychology. Let me explain:\n\n"
         
         response += f"#### How I Determined This:\n\n"
         response += f"I analyzed recent financial news articles using **FinBERT**, an AI model specifically trained on financial texts. "
@@ -552,15 +568,26 @@ and always emphasize risk management and due diligence.
         response += f"- It doesn't guarantee price movement, but it shows market psychology\n\n"
         
         response += f"#### 🔍 What People Are Saying:\n\n"
-        if sentiment == "Positive":
-            response += f"Investors and analysts are generally optimistic about {ticker_str}. "
-            response += f"This could be due to strong earnings, positive guidance, or favorable market conditions.\n\n"
-        elif sentiment == "Negative":
-            response += f"There's concern in the market about {ticker_str}. "
-            response += f"This might stem from poor earnings, regulatory issues, or broader market fears.\n\n"
+        if ticker:
+            if sentiment == "Positive":
+                response += f"Investors and analysts are generally optimistic about {ticker.upper()}. "
+                response += f"This could be due to strong earnings, positive guidance, or favorable market conditions.\n\n"
+            elif sentiment == "Negative":
+                response += f"There's concern in the market about {ticker.upper()}. "
+                response += f"This might stem from poor earnings, regulatory issues, or broader market fears.\n\n"
+            else:
+                response += f"The market sentiment for {ticker.upper()} is neutral or mixed. "
+                response += f"This could mean conflicting signals or a wait-and-see attitude from investors.\n\n"
         else:
-            response += f"The market sentiment is neutral or mixed. "
-            response += f"This could mean conflicting signals or a wait-and-see attitude from investors.\n\n"
+            if sentiment == "Positive":
+                response += f"When sentiment is positive, investors are generally optimistic. "
+                response += f"This often leads to increased buying pressure and potential price increases.\n\n"
+            elif sentiment == "Negative":
+                response += f"When sentiment is negative, there's typically concern in the market. "
+                response += f"This can lead to selling pressure and potential price declines.\n\n"
+            else:
+                response += f"Neutral sentiment suggests the market is undecided. "
+                response += f"This could mean conflicting signals or a wait-and-see attitude from investors.\n\n"
         
         response += f"### ⚖️ Remember:\n\n"
         response += f"Sentiment alone isn't enough for investment decisions. Combine it with:\n"
@@ -574,12 +601,15 @@ and always emphasize risk management and due diligence.
     
     def _answer_technical_question(self, question, data, ticker):
         """Answer technical analysis questions"""
-        ticker_str = ticker.upper() if ticker else "this asset"
         rsi = data.get('rsi')
         macd = data.get('macd')
         
-        response = f"## 📈 Technical Analysis for {ticker_str.upper()}\n\n"
-        response += f"Let me break down the technical indicators I'm tracking:\n\n"
+        if ticker:
+            response = f"## 📈 Technical Analysis for {ticker.upper()}\n\n"
+            response += f"Good question! Let me break down the technical indicators I'm tracking for {ticker.upper()}:\n\n"
+        else:
+            response = "## 📈 Understanding Technical Analysis\n\n"
+            response += "Great question! Technical analysis uses price patterns and indicators to forecast potential moves. Let me explain:\n\n"
         
         if rsi:
             response += f"### RSI (Relative Strength Index): {rsi:.1f}\n\n"
@@ -625,21 +655,25 @@ and always emphasize risk management and due diligence.
     
     def _answer_price_question(self, question, data, ticker):
         """Answer price-related questions"""
-        ticker_str = ticker.upper() if ticker else "this asset"
         price = data.get('price')
         
-        response = f"## 💰 Price Analysis for {ticker_str.upper()}\n\n"
+        if ticker:
+            response = f"## 💰 Price Analysis for {ticker.upper()}\n\n"
+            if price:
+                response += f"The current price for {ticker.upper()} is **${price:,.2f}**.\n\n"
+            else:
+                response += f"Let me analyze the price for {ticker.upper()}...\n\n"
+        else:
+            response = "## 💰 Understanding Stock Prices\n\n"
+            response += "Good question! Let me explain what stock prices mean and how to interpret them:\n\n"
         
         if price:
-            response += f"### Current Price: **${price:,.2f}**\n\n"
             response += f"#### Context Matters:\n\n"
             response += f"Price alone doesn't tell you if it's a good investment. Consider:\n\n"
             response += f"1. **Historical Range:** Is this near 52-week highs or lows?\n"
             response += f"2. **Valuation:** What's the P/E ratio? Price/Book?\n"
             response += f"3. **Trend:** Is the price in an uptrend or downtrend?\n"
             response += f"4. **Support/Resistance:** Are there key levels nearby?\n\n"
-        else:
-            response += f"I'm analyzing the price data for {ticker_str}...\n\n"
         
         response += f"### 🎯 Price vs. Value:\n\n"
         response += f"Remember what Warren Buffett says: *\"Price is what you pay, value is what you get.\"*\n\n"
@@ -660,10 +694,13 @@ and always emphasize risk management and due diligence.
     
     def _answer_risk_question(self, question, data, ticker):
         """Answer risk-related questions"""
-        ticker_str = ticker.upper() if ticker else "this asset"
-        
-        response = f"## ⚠️ Risk Assessment for {ticker_str.upper()}\n\n"
-        response += f"Let's talk about risk management—the most important skill in investing.\n\n"
+        # Make response conversational based on context
+        if ticker:
+            response = f"## ⚠️ Risk Assessment for {ticker.upper()}\n\n"
+            response += f"Great question! Let's talk about the risks involved with {ticker.upper()} and risk management in general.\n\n"
+        else:
+            response = "## ⚠️ Understanding Investment Risk\n\n"
+            response += "Great question! Risk management is the most important skill in investing. Let me break it down for you.\n\n"
         
         response += f"### Understanding Risk:\n\n"
         response += f"**All investments carry risk.** Here's what you need to know:\n\n"
@@ -693,13 +730,15 @@ and always emphasize risk management and due diligence.
         response += f"- Know when you'll cut losses\n"
         response += f"- Don't let emotions override your plan\n\n"
         
-        response += f"### 📈 For {ticker_str}:\n\n"
-        response += f"Based on my technical and sentiment analysis, I can help you understand:\n"
-        response += f"- Current market momentum and trend\n"
-        response += f"- Sentiment (are investors optimistic or fearful?)\n"
-        response += f"- Technical signals that might indicate increased risk\n\n"
+        # Add specific context if ticker is provided
+        if ticker:
+            response += f"### 📈 Specific to {ticker.upper()}:\n\n"
+            response += f"Based on my technical and sentiment analysis, I can help you understand:\n"
+            response += f"- Current market momentum and trend for {ticker.upper()}\n"
+            response += f"- Sentiment (are investors optimistic or fearful about {ticker.upper()}?)\n"
+            response += f"- Technical signals that might indicate increased risk\n\n"
         
-        response += f"**But I cannot:**\n"
+        response += f"**Remember, I cannot:**\n"
         response += f"- Guarantee any outcomes\n"
         response += f"- Remove the inherent risk of investing\n"
         response += f"- Replace proper due diligence\n\n"
@@ -713,17 +752,24 @@ and always emphasize risk management and due diligence.
     
     def _answer_performance_question(self, question, data, ticker):
         """Answer performance/change questions"""
-        ticker_str = ticker.upper() if ticker else "this asset"
-        
-        response = f"## 📊 Performance Analysis for {ticker_str.upper()}\n\n"
-        
         # Check if asking why it went up/down
         went_up = any(word in question.lower() for word in ['went up', 'rise', 'rose', 'gain', 'increase', 'rally'])
         went_down = any(word in question.lower() for word in ['went down', 'fall', 'fell', 'drop', 'decline', 'crash'])
         
+        if ticker:
+            response = f"## 📊 Performance Analysis for {ticker.upper()}\n\n"
+            if went_up or went_down:
+                direction = "upward" if went_up else "downward"
+                response += f"Good question! Let me explain why {ticker.upper()} had that {direction} movement:\n\n"
+            else:
+                response += f"Let me break down the performance of {ticker.upper()}:\n\n"
+        else:
+            response = "## 📊 Understanding Stock Performance\n\n"
+            response += "Great question! Let me explain what drives stock performance:\n\n"
+        
         if went_up or went_down:
             direction = "upward" if went_up else "downward"
-            response += f"### Why the {direction.title()} Movement?\n\n"
+            response += f"### Why {direction.title()} Movements Happen:\n\n"
             response += f"Stock prices move based on many factors:\n\n"
             
             response += f"**1. Company-Specific News:**\n"
@@ -772,57 +818,787 @@ and always emphasize risk management and due diligence.
         return response
     
     def _answer_general_question(self, question, data, ticker):
-        """Answer general questions about a stock"""
+        """
+        Answer general questions using knowledge base and pattern matching.
+        Falls back to stock-specific data if question is ticker-related.
+        """
+        question_lower = question.lower()
+        
+        # Try knowledge-based response first for educational questions
+        knowledge_response = self._get_knowledge_based_answer(question_lower)
+        if knowledge_response:
+            return knowledge_response
+        
+        # If question is ticker-specific and we have data, provide stock analysis
+        if ticker and data:
+            return self._format_stock_analysis(question, data, ticker)
+        
+        # If no data but ticker mentioned, explain we need to analyze first
+        if ticker:
+            return f"""## 📊 Analysis Needed for {ticker.upper()}
+
+To answer your question about **{ticker.upper()}**, I need to analyze the stock first.
+
+### How to Get Analysis:
+1. Use the "Add Stock" button to add {ticker.upper()} to the portfolio table
+2. Click "Analyze Portfolio" to run the full analysis
+3. Then I'll be able to answer questions about {ticker.upper()}'s:
+   - Current recommendation (Buy/Hold/Sell)
+   - Market sentiment
+   - Technical indicators (RSI, MACD, etc.)
+   - Price trends and patterns
+
+### Or Ask Me General Questions:
+In the meantime, I can help you with:
+- **"What are dividends?"** - Learn about investment concepts
+- **"Explain P/E ratio"** - Understand financial metrics
+- **"What is RSI?"** - Technical indicator education
+- **"Tell me about consumer staples"** - Sector information
+
+💡 *I'm here to educate and guide, not just crunch numbers!*"""
+        
+        # Fallback: general guidance
+        return """## 💬 I'm Here to Help!
+
+I'm your financial education assistant. I can help you with:
+
+### 📚 Investment Education
+- Financial concepts (dividends, bonds, options, etc.)
+- Technical indicators (RSI, MACD, moving averages)
+- Sector analysis (technology, healthcare, consumer staples, etc.)
+- Risk management and diversification strategies
+
+### 📊 Stock Analysis (When You're Ready)
+- Add stocks to the portfolio table above
+- Click "Analyze Portfolio" for AI-powered insights
+- Get sentiment analysis, technical indicators, and recommendations
+
+### 💡 Example Questions You Can Ask:
+- *"What are dividends and how do they work?"*
+- *"Explain the P/E ratio"*
+- *"What is the technology sector?"*
+- *"How does RSI indicator work?"*
+- *"Should I diversify my portfolio?"*
+
+**What would you like to learn about today?**"""
+    
+    def _get_knowledge_based_answer(self, question_lower):
+        """
+        Provide knowledge-based answers for common financial questions.
+        Returns None if question doesn't match any pattern.
+        """
+        
+        # === DIVIDENDS ===
+        if 'dividend' in question_lower:
+            return """## 💰 Dividends Explained
+
+**Dividends** are cash payments that companies make to shareholders, typically on a quarterly basis, as a way to distribute profits.
+
+### How Dividends Work:
+- **Declaration**: Company's board announces dividend amount per share
+- **Ex-Dividend Date**: Buy before this date to receive the dividend
+- **Payment Date**: Money hits your brokerage account
+
+### Types of Dividends:
+1. **Cash Dividends** - Direct payment (most common)
+2. **Stock Dividends** - Additional shares instead of cash
+3. **Special Dividends** - One-time payments from excess profits
+
+### Key Metrics:
+- **Dividend Yield** = (Annual Dividend / Stock Price) × 100%
+  - Example: $4/year dividend, $100 stock price = 4% yield
+- **Payout Ratio** = (Dividends / Earnings) × 100%
+  - Lower ratio = more sustainable
+
+### Investment Strategy:
+✅ **Pros:**
+- Passive income stream
+- Sign of financial health
+- Historically less volatile stocks
+
+⚠️ **Cons:**
+- Not guaranteed (can be cut)
+- Taxed as income
+- May limit growth potential
+
+### Dividend Champions:
+Companies with 25+ years of consistent dividend increases:
+- Consumer Staples: Procter & Gamble (PG), Coca-Cola (KO)
+- Industrials: 3M (MMM), Johnson & Johnson (JNJ)
+- Utilities: Many electric/water companies
+
+💡 **Tip**: Dividend investing works best for long-term, income-focused investors. High yields (>8%) can be red flags!
+
+📚 **Learn More**: "The Single Best Investment" by Lowell Miller"""
+        
+        # === P/E RATIO ===
+        if ('p/e' in question_lower or 'pe ratio' in question_lower or 
+            'price to earnings' in question_lower or 'price earnings' in question_lower):
+            return """## 📊 Price-to-Earnings (P/E) Ratio
+
+**P/E Ratio** = Stock Price ÷ Earnings Per Share (EPS)
+
+It tells you how much investors are willing to pay for $1 of the company's earnings.
+
+### Example:
+- Stock price: $100
+- EPS: $5
+- P/E Ratio: 100 ÷ 5 = **20**
+
+This means investors pay $20 for every $1 of earnings.
+
+### Interpretation:
+**High P/E (>25):**
+- ✅ Investors expect strong future growth
+- ⚠️ May be overvalued if growth doesn't materialize
+- Common in: Technology, biotech, growth stocks
+
+**Low P/E (<15):**
+- ✅ Potentially undervalued bargain
+- ⚠️ May indicate declining business or sector challenges
+- Common in: Mature industries, value stocks
+
+**Average P/E (~15-20):**
+- Market average (S&P 500 historically ~15-18)
+- Fair valuation based on current earnings
+
+### Types of P/E:
+1. **Trailing P/E**: Based on past 12 months earnings (most common)
+2. **Forward P/E**: Based on estimated future earnings
+3. **Shiller P/E (CAPE)**: 10-year inflation-adjusted average
+
+### Using P/E Effectively:
+✅ **Do**: Compare within the same industry
+✅ **Do**: Look at historical P/E trends
+✅ **Do**: Consider growth rate (PEG Ratio = P/E ÷ Growth Rate)
+
+❌ **Don't**: Compare across different sectors
+❌ **Don't**: Rely on P/E alone
+❌ **Don't**: Ignore negative earnings (P/E undefined)
+
+### Real-World Context:
+- **Tech Giants**: Often 25-35 P/E (growth expectations)
+- **Banks**: Typically 10-15 P/E (mature, cyclical)
+- **Utilities**: Usually 15-20 P/E (stable, regulated)
+
+💡 **Pro Tip**: A P/E of 20 with 20% growth (PEG = 1.0) is better than P/E of 10 with 5% growth (PEG = 2.0)!"""
+        
+        # === RSI === (use word boundaries to avoid matching "diversify")
+        if (' rsi' in question_lower or 'rsi ' in question_lower or 
+            question_lower.startswith('rsi') or question_lower.endswith('rsi') or 
+            'relative strength' in question_lower):
+            return """## 📈 RSI - Relative Strength Index
+
+**RSI** is a momentum oscillator that measures the speed and magnitude of price changes. It ranges from 0 to 100.
+
+### How to Read RSI:
+
+**🔴 Overbought Zone (RSI > 70)**
+- Price may have risen too fast
+- Potential reversal or pullback coming
+- ⚠️ Caution: Don't short just because RSI > 70!
+
+**🟢 Oversold Zone (RSI < 30)**
+- Price may have fallen too fast
+- Potential bounce or recovery coming
+- ✅ Opportunity: But confirm with other indicators!
+
+**🔵 Neutral Zone (30-70)**
+- Normal trading range
+- No extreme conditions
+
+### Calculation (Simplified):
+RSI = 100 - [100 / (1 + (Average Gain / Average Loss))]
+- Default period: 14 days
+- Based on closing prices
+
+### Trading Strategies:
+
+**1. Basic Overbought/Oversold**
+- Sell when RSI > 70 (overbought)
+- Buy when RSI < 30 (oversold)
+- ⚠️ Works best in ranging markets, not strong trends!
+
+**2. Divergence (Advanced)**
+- **Bullish Divergence**: Price makes lower low, RSI makes higher low → Potential reversal up
+- **Bearish Divergence**: Price makes higher high, RSI makes lower high → Potential reversal down
+
+**3. Centerline Crossover**
+- RSI crosses above 50 → Bullish momentum
+- RSI crosses below 50 → Bearish momentum
+
+### Important Caveats:
+⚠️ **In Strong Uptrends**: RSI can stay above 70 for weeks!
+⚠️ **In Strong Downtrends**: RSI can stay below 30 for weeks!
+⚠️ **Use with Other Indicators**: RSI + MACD + Volume = Better decisions
+
+### Timeframes:
+- **Short-term traders**: 9 or 14-day RSI
+- **Swing traders**: 14 or 21-day RSI
+- **Long-term investors**: 25 or 30-day RSI
+
+### Example Stocks:
+- Strong uptrend (Tesla 2020): RSI stayed 60-80 for months
+- Bear market (2022): Many stocks had RSI 20-40 for months
+
+💡 **Pro Tip**: Wait for RSI to exit extreme zones (cross back above 30 or below 70) before entering trades!
+
+📚 **Learn More**: "Technical Analysis of Financial Markets" by John Murphy"""
+        
+        # === MACD ===
+        if 'macd' in question_lower or 'moving average convergence' in question_lower:
+            return """## 📊 MACD - Moving Average Convergence Divergence
+
+**MACD** is a trend-following momentum indicator that shows the relationship between two moving averages.
+
+### Components:
+
+**1. MACD Line** (Blue line typically)
+- 12-day EMA minus 26-day EMA
+- Shows momentum direction and strength
+
+**2. Signal Line** (Red/Orange line)
+- 9-day EMA of the MACD line
+- Acts as trigger for buy/sell signals
+
+**3. Histogram** (Bars)
+- MACD Line minus Signal Line
+- Visual representation of momentum strength
+
+### Trading Signals:
+
+**🟢 Bullish Signals:**
+- MACD line crosses **above** signal line → Buy signal
+- MACD crosses above zero line → Uptrend confirmation
+- Histogram turns positive and grows → Strengthening uptrend
+
+**🔴 Bearish Signals:**
+- MACD line crosses **below** signal line → Sell signal
+- MACD crosses below zero line → Downtrend confirmation
+- Histogram turns negative and grows → Strengthening downtrend
+
+### Advanced Strategies:
+
+**1. Centerline Crossover**
+- MACD above 0 = Bullish regime (use dips to buy)
+- MACD below 0 = Bearish regime (use rallies to sell)
+
+**2. Divergence (Most Powerful!)**
+- **Bullish**: Price makes lower low, MACD makes higher low
+- **Bearish**: Price makes higher high, MACD makes lower high
+- Often precedes trend reversals
+
+**3. Histogram Reversal**
+- Histogram shrinking = Momentum weakening
+- Histogram expanding = Momentum accelerating
+
+### Best Use Cases:
+✅ Trending markets (strong directional moves)
+✅ Medium to long-term trades (days to weeks)
+✅ Confirming breakouts or breakdowns
+
+❌ Ranging/choppy markets (many false signals)
+❌ Very short-term scalping (too slow)
+
+### Timeframes:
+- **Default (12, 26, 9)**: Most common for daily charts
+- **Faster (5, 13, 5)**: For shorter timeframes
+- **Slower (19, 39, 9)**: For longer-term trends
+
+### Real-World Example:
+Imagine a stock rallying:
+1. MACD crosses above signal → Enter long
+2. Histogram grows (green bars getting bigger) → Add to position
+3. MACD stays above zero → Hold
+4. MACD crosses below signal → Exit (take profits)
+
+💡 **Pro Tip**: MACD works best when combined with RSI. MACD for trend direction, RSI for overbought/oversold!
+
+⚠️ **Remember**: MACD is a lagging indicator (based on past prices). It won't predict sudden news events or earnings surprises."""
+        
+        # === SECTORS ===
+        if any(term in question_lower for term in ['consumer staples', 'consumer staple', 'staples sector']):
+            return """## 🛒 Consumer Staples Sector
+
+**Consumer Staples** are essential products that people buy regardless of economic conditions—food, beverages, household goods, and personal care items.
+
+### Key Characteristics:
+- **Defensive**: Stable during economic downturns
+- **Lower Volatility**: Less price swings than tech or growth stocks
+- **Dividend-Friendly**: Many pay consistent dividends
+- **Recession-Resistant**: People still buy toothpaste in recessions!
+
+### Major Sub-Sectors:
+1. **Food & Beverage** - Packaged foods, soft drinks
+2. **Household Products** - Cleaning supplies, paper goods
+3. **Personal Products** - Cosmetics, toiletries
+4. **Tobacco** - Cigarettes, vaping products
+5. **Food Retail** - Supermarkets, grocery stores
+
+### Top Consumer Staples Companies:
+- **Procter & Gamble (PG)** - Tide, Pampers, Gillette
+- **Coca-Cola (KO)** - Beverages
+- **PepsiCo (PEP)** - Snacks and beverages
+- **Walmart (WMT)** - Retail
+- **Costco (COST)** - Warehouse retail
+- **Nestlé** - Food and beverages (international)
+- **Unilever** - Consumer goods
+
+### Investment Characteristics:
+**✅ Pros:**
+- Predictable revenues
+- Strong cash flow
+- Reliable dividends (3-4% yields common)
+- Low correlation with economic cycles
+- Strong brand loyalty
+
+**⚠️ Cons:**
+- Lower growth potential than tech
+- Limited price appreciation
+- Vulnerable to commodity price swings
+- Mature companies = slower growth
+
+### When to Invest:
+**Best Times:**
+- Economic uncertainty or recession fears
+- Market volatility (safe haven)
+- Building dividend income portfolio
+- Defensive portfolio positioning
+
+**Consider Alternatives When:**
+- Strong economic growth (growth stocks outperform)
+- Low interest rates favor growth stocks
+- Looking for high capital appreciation
+
+### Performance Context:
+- **Bull Markets**: Often underperform (investors chase growth)
+- **Bear Markets**: Often outperform (flight to safety)
+- **Long-term**: Steady 8-10% annual returns + dividends
+
+### ETF Options (for diversification):
+- **XLP** - Consumer Staples Select Sector SPDR
+- **VDC** - Vanguard Consumer Staples ETF
+- **FSTA** - Fidelity MSCI Consumer Staples ETF
+
+💡 **Warren Buffett Tip**: He loves consumer staples! Coca-Cola has been a core Berkshire holding for decades.
+
+📚 **Learn More**: Research "defensive investing strategies" and "dividend aristocrats" (many are staples companies)."""
+        
+        if any(term in question_lower for term in ['technology sector', 'tech sector', 'tech stock']):
+            return """## 💻 Technology Sector
+
+The **Technology Sector** includes companies that develop software, hardware, semiconductors, IT services, and internet-based services.
+
+### Key Sub-Sectors:
+1. **Software** - Microsoft, Adobe, Salesforce
+2. **Hardware** - Apple, Dell, HP
+3. **Semiconductors** - NVIDIA, Intel, AMD, TSMC
+4. **IT Services** - IBM, Accenture, Cognizant
+5. **Internet/E-Commerce** - Amazon, Google (Alphabet), Meta
+
+### Investment Characteristics:
+**✅ Pros:**
+- **High Growth Potential**: Innovation drives rapid expansion
+- **Scalability**: Software has high profit margins
+- **Economic Moats**: Network effects, switching costs
+- **Future-Focused**: AI, cloud, cybersecurity, etc.
+
+**⚠️ Cons:**
+- **High Volatility**: Prices swing dramatically
+- **Valuation Risk**: Often trades at high P/E ratios
+- **Disruption Risk**: Today's leader = tomorrow's obsolete
+- **Few Dividends**: Growth companies reinvest profits
+
+### Major Players:
+- **AAPL** - Apple (hardware + services)
+- **MSFT** - Microsoft (software + cloud)
+- **GOOGL** - Alphabet/Google (internet/ads)
+- **NVDA** - NVIDIA (GPUs/AI chips)
+- **META** - Meta/Facebook (social media)
+- **AMZN** - Amazon (e-commerce + AWS cloud)
+
+### Investment Approach:
+**Growth Investors**: Love tech for capital appreciation
+**Value Investors**: Often avoid due to high valuations
+**Dividend Investors**: Limited options (AAPL, MSFT pay modest dividends)
+
+### Market Cycles:
+- **Bull Markets**: Tech often leads gains
+- **Rising Interest Rates**: Tech often underperforms (high valuations compressed)
+- **Economic Booms**: Benefits from business IT spending
+- **Recessions**: Can suffer as companies cut IT budgets
+
+💡 **Tip**: Diversify within tech—don't just buy FAANG stocks. Consider semiconductors, cybersecurity, and enterprise software too!
+
+📊 **ETF Options**: QQQ (Nasdaq-100), XLK (Tech Select Sector), VGT (Vanguard Tech)"""
+        
+        # === INVESTMENT CONCEPTS ===
+        if any(term in question_lower for term in ['diversif', 'diversification']):
+            return """## 🎯 Diversification - Don't Put All Eggs in One Basket
+
+**Diversification** is spreading investments across different assets to reduce risk.
+
+### Why Diversify?
+- **Reduce Risk**: One bad investment won't sink your portfolio
+- **Smoother Returns**: Volatility averages out
+- **Capture Different Opportunities**: Some assets rise when others fall
+
+### Dimensions of Diversification:
+
+**1. Asset Classes**
+- Stocks (equities)
+- Bonds (fixed income)
+- Real estate (REITs)
+- Commodities (gold, oil)
+- Cash/Money market
+
+**2. Geographic**
+- US stocks
+- International developed (Europe, Japan)
+- Emerging markets (China, India, Brazil)
+
+**3. Sectors**
+- Technology
+- Healthcare
+- Financial
+- Consumer
+- Energy
+- Utilities
+- (Avoid concentrating in one sector)
+
+**4. Company Size**
+- Large-cap (stable, established)
+- Mid-cap (growth potential)
+- Small-cap (high risk/reward)
+
+**5. Investment Style**
+- Growth stocks (high P/E, fast-growing)
+- Value stocks (low P/E, undervalued)
+- Dividend stocks (income-focused)
+
+### How Much Diversification?
+
+**Minimum Effective Diversification:**
+- 15-20 different stocks (reduces company-specific risk)
+- 3-5 different sectors
+- 2-3 asset classes
+
+**Over-Diversification (Diworsification):**
+- 100+ holdings = Too complex to manage
+- Returns approach market average
+- High fees if using many funds
+
+### Simple Diversification Strategy:
+
+**Conservative Portfolio (Lower Risk):**
+- 60% Bonds
+- 30% US Stocks (S&P 500 index)
+- 10% International Stocks
+
+**Moderate Portfolio (Balanced):**
+- 40% Bonds
+- 40% US Stocks
+- 15% International Stocks
+- 5% Real Estate (REIT)
+
+**Aggressive Portfolio (Higher Risk/Reward):**
+- 70% US Stocks
+- 20% International Stocks
+- 10% Bonds or Cash
+
+### Real-World Example:
+**2020 COVID Crash:**
+- Tech stocks: Rebounded quickly (up 50%+)
+- Travel stocks: Crashed hard (down 60%+)
+- Gold: Rose (safe haven)
+- **Diversified portfolio**: Down 10-20%, recovered faster
+
+💡 **Warren Buffett's Advice**: "Diversification is protection against ignorance. It makes little sense if you know what you are doing."
+
+⚠️ **Reality**: Most investors DON'T know what they're doing → Diversify!
+
+📚 **Learn More**: "A Random Walk Down Wall Street" by Burton Malkiel"""
+        
+        if any(term in question_lower for term in ['volatile', 'volatility', 'crypto']):
+            return """## 📉📈 Volatility & Risk
+
+**Volatility** measures how much an asset's price fluctuates. High volatility = big price swings (up AND down).
+
+### Measuring Volatility:
+- **Standard Deviation**: Statistical measure of price dispersion
+- **Beta**: How much stock moves vs. market (Beta 1.0 = moves with market)
+- **VIX Index**: "Fear gauge" - measures S&P 500 expected volatility
+
+### Risk Levels by Asset:
+
+**Low Volatility (~5-15% annual swings):**
+- Government bonds
+- Utilities stocks
+- Consumer staples
+- Money market funds
+
+**Moderate Volatility (~15-25%):**
+- S&P 500 index
+- Blue-chip stocks (Apple, Microsoft)
+- Investment-grade corporate bonds
+
+**High Volatility (~25-50%):**
+- Small-cap stocks
+- Growth stocks (unprofitable tech)
+- Emerging market stocks
+- Commodities (oil, gold)
+
+**Extreme Volatility (50%+ swings possible):**
+- 🪙 **Cryptocurrencies** (Bitcoin, Ethereum, altcoins)
+- Penny stocks
+- Leveraged ETFs
+- Options trading
+
+### Cryptocurrency Volatility:
+**Bitcoin Example:**
+- 2017: $1,000 → $19,000 (1900% gain!) → $3,000 (85% crash!)
+- 2021: $10,000 → $69,000 → $15,000
+- **Normal**: 20-30% swings in WEEKS
+
+**Why So Volatile?**
+- No intrinsic value (speculation-driven)
+- Thin liquidity (small trades move price)
+- 24/7 trading (no circuit breakers)
+- Regulatory uncertainty
+- Sentiment-driven (fear/greed extreme)
+
+### Managing Volatility:
+
+**✅ Strategies:**
+1. **Position Sizing**: Only risk 1-5% per trade
+2. **Diversification**: Mix volatile & stable assets
+3. **Long Time Horizon**: Volatility smooths over years
+4. **Stop Losses**: Exit if drops X%
+5. **Dollar-Cost Averaging**: Buy regularly (smooth entry price)
+
+**❌ Avoid:**
+- Panic selling during drops
+- FOMO buying during rallies
+- Over-leveraging (margin trading)
+- All-in on one volatile asset
+
+### Your Risk Tolerance:
+**Ask yourself:**
+- Could you stomach a 50% portfolio drop?
+- Do you need this money in <5 years?
+- Can you sleep well with high volatility?
+
+**If NO → Avoid high-volatility assets**
+**If YES → Can consider, but still diversify!**
+
+### Volatility ≠ Risk (Sometimes):
+- A stable company's stock can be volatile short-term but low-risk long-term
+- A declining company can have low volatility but high risk (slow death)
+
+💡 **Pro Tip**: Volatility creates opportunities for disciplined investors. Buy when others panic, sell when others are greedy!
+
+⚠️ **Crypto Specific**: Only invest money you can afford to lose COMPLETELY. Crypto can go to zero. Diversify within crypto (don't just buy Bitcoin)."""
+        
+        if any(term in question_lower for term in ['how to start', 'begin invest', 'start investing', 'getting started']):
+            return """## 🚀 Getting Started with Investing
+
+### Step 1: Financial Foundation (Do This FIRST!)
+**Before investing a single dollar:**
+1. ✅ **Emergency Fund**: 3-6 months expenses in savings
+2. ✅ **Pay Off High-Interest Debt**: Credit cards (15%+ interest)
+3. ✅ **Stable Income**: Consistent cash flow
+4. ✅ **Basic Budget**: Know where money goes
+
+**Why?** Stock market can drop 30%+ any year. You need buffer!
+
+### Step 2: Set Clear Goals
+**Define your "why":**
+- 🎯 Retirement (20-40 years away)
+- 🏠 House down payment (5-10 years)
+- 🎓 Kids' education (10-20 years)
+- 💰 Financial independence (10-30 years)
+
+**Time horizon determines strategy:**
+- **Long-term (10+ years)**: Can handle volatility → Stocks
+- **Mid-term (3-10 years)**: Balanced → Mix stocks/bonds
+- **Short-term (<3 years)**: Preserve capital → Bonds/cash
+
+### Step 3: Choose Account Type
+
+**Tax-Advantaged (Use These First!):**
+- **401(k)**: Employer retirement (get the match!)
+- **IRA**: Individual retirement ($6,500/year limit)
+- **Roth IRA**: Tax-free growth (income limits apply)
+- **HSA**: Health savings (triple tax advantage!)
+
+**Taxable Brokerage:**
+- No contribution limits
+- Full flexibility
+- Pay capital gains tax
+
+### Step 4: Pick a Broker
+**Beginner-Friendly:**
+- **Fidelity**: Great research tools
+- **Vanguard**: Low-cost index funds
+- **Charles Schwab**: Excellent customer service
+- **Robinhood**: Simple app (but limited features)
+
+**All are free now** (no commissions on stock trades!)
+
+### Step 5: Start Simple - Index Funds
+
+**For Beginners (Seriously, Start Here):**
+- **VTI** - Total US Stock Market
+- **VOO** - S&P 500 (Large-cap US)
+- **VXUS** - Total International Stock
+- **BND** - Total US Bond Market
+
+**One-Fund Solution:**
+- **VT** - Total WORLD Stock Market (one fund = 9,000+ stocks!)
+
+**Target-Date Fund:**
+- Example: VTTSX (Target 2060)
+- Auto-adjusts risk as you age
+- Set it and forget it
+
+### Step 6: Determine How Much to Invest
+
+**General Guidelines:**
+- **Minimum**: 15% of gross income for retirement
+- **Ideal**: 20-30% of income (includes 401k match)
+- **Starting Out**: Whatever you can—even $50/month!
+
+**Dollar-Cost Averaging:**
+- Invest same amount monthly (e.g., $500/month)
+- Smooths out market volatility
+- Removes emotional timing decisions
+
+### Step 7: Learn as You Go
+
+**First Year Focus:**
+- Master the basics (stocks, bonds, diversification)
+- Understand fees (expense ratios <0.20% ideal)
+- Ignore daily market noise
+- **DON'T**: Day trade, buy meme stocks, panic sell
+
+**Recommended Reading (In Order):**
+1. **"The Simple Path to Wealth"** - JL Collins (START HERE!)
+2. **"The Little Book of Common Sense Investing"** - John Bogle
+3. **"The Intelligent Investor"** - Benjamin Graham
+4. **"A Random Walk Down Wall Street"** - Burton Malkiel
+
+### Common Beginner Mistakes to Avoid:
+
+❌ **Trying to beat the market** (90% of pros don't!)
+❌ **Stock picking** (without experience)
+❌ **Day trading** (95% lose money)
+❌ **Panic selling in crashes** (lock in losses)
+❌ **Investing emergency fund money**
+❌ **Ignoring fees** (2% fee = lose 40% of gains over 30 years!)
+❌ **Following r/WallStreetBets** (seriously, don't)
+
+### Your First Investment Action Plan:
+
+**This Week:**
+1. Open brokerage account (Fidelity/Vanguard/Schwab)
+2. Link your bank account
+3. Decide monthly contribution amount
+
+**This Month:**
+1. Make first investment (VTI or VOO)
+2. Set up automatic monthly investments
+3. Read "The Simple Path to Wealth"
+
+**This Year:**
+1. Max out 401(k) match (if available)
+2. Contribute to Roth IRA (if eligible)
+3. Stay the course through market volatility
+
+### Golden Rules:
+1. 📈 **Time in the market > Timing the market**
+2. 💰 **Pay yourself first** (automate investments)
+3. 🎯 **Stay diversified** (don't put all eggs in one basket)
+4. 😴 **Sleep-well portfolio** (don't take more risk than you can handle)
+5. 🚫 **Never invest money you need within 3 years**
+
+💡 **Most Important**: START NOW. Even small amounts compound over time. A 25-year-old investing $200/month at 8% return = $700,000 by 65!
+
+⚠️ **Remember**: Capital is at risk. Markets can drop 50%. Only invest money you won't need for years."""
+        
+        # No matching pattern found
+        return None
+    
+    def _format_stock_analysis(self, question, data, ticker):
+        """Format stock-specific analysis when we have data"""
         ticker_str = ticker.upper() if ticker else "this asset"
-        rec = data.get('recommendation', 'being analyzed')
-        sentiment = data.get('sentiment', 'being assessed')
+        rec = data.get('recommendation', 'No recommendation available')
+        sentiment = data.get('sentiment', 'Sentiment unavailable')
         
-        response = f"## 📊 Overview: {ticker_str.upper()}\n\n"
-        response += f"Let me give you a comprehensive snapshot based on my analysis:\n\n"
+        # Check if we actually have analysis data (not just defaults)
+        has_real_data = (
+            rec != 'being analyzed' and 
+            rec != 'No recommendation available' and
+            sentiment != 'being assessed' and
+            sentiment != 'Sentiment unavailable'
+        )
         
-        response += f"### Current Assessment:\n\n"
-        response += f"- **Recommendation:** {rec}\n"
-        response += f"- **Sentiment:** {sentiment}\n"
-        response += f"- **Analysis Source:** FinBERT AI + Technical Indicators\n\n"
+        if not has_real_data:
+            # Data is incomplete, ask user to analyze first
+            return f"""## 📊 Analysis Needed for {ticker_str}
+
+I need to run a full analysis on **{ticker_str}** first to answer your question properly.
+
+### How to Analyze:
+1. Make sure {ticker_str} is in the portfolio table above
+2. Click the **"Analyze Portfolio"** button
+3. Wait for the analysis to complete
+4. Then ask me your question again!
+
+### What You'll Get:
+Once analyzed, I can tell you about {ticker_str}'s:
+- 🎯 Investment recommendation (Buy/Hold/Sell)
+- 🎭 Market sentiment (from FinBERT AI)
+- 📈 Technical indicators (RSI, MACD, momentum)
+- 📊 Price trends and patterns
+- ⚠️ Risk assessment
+
+**Or ask me a general question!** I can explain financial concepts anytime."""
         
-        response += f"### What I Analyzed:\n\n"
-        response += f"**1. Market Sentiment** 🎭\n"
-        response += f"   Using FinBERT (AI trained on financial texts), I analyzed recent news to gauge market psychology.\n\n"
+        # We have real data, format comprehensive response
+        response = f"## 📊 {ticker_str} Analysis Summary\n\n"
+        response += f"Based on my AI-powered analysis, here's what I found:\n\n"
         
-        response += f"**2. Technical Indicators** 📈\n"
-        response += f"   RSI, MACD, and moving averages to identify momentum and trend strength.\n\n"
+        response += f"### 🎯 Investment Recommendation\n"
+        response += f"**{rec}**\n\n"
         
-        response += f"**3. Price Action** 💹\n"
-        response += f"   Historical patterns, support/resistance levels, and volume analysis.\n\n"
+        response += f"### 🎭 Market Sentiment\n"
+        response += f"**{sentiment}**\n\n"
+        response += f"*Source: FinBERT AI analyzing recent financial news and market discussions*\n\n"
         
-        response += f"### 🎯 How to Use This Information:\n\n"
-        response += f"This analysis is a **starting point**, not a final answer. Before making any investment decision:\n\n"
-        response += f"✅ **Do Your Own Research (DYOR)**\n"
-        response += f"   - Read the company's financial reports\n"
-        response += f"   - Understand their business model\n"
-        response += f"   - Check multiple analyst opinions\n\n"
+        response += f"### 📊 Analysis Components\n\n"
+        response += f"My recommendation is based on:\n"
+        response += f"1. **Sentiment Analysis** - AI-powered news analysis\n"
+        response += f"2. **Technical Indicators** - RSI, MACD, moving averages\n"
+        response += f"3. **Price Momentum** - Recent trends and patterns\n"
+        response += f"4. **Volume Analysis** - Trading activity patterns\n\n"
         
-        response += f"✅ **Verify Current Conditions**\n"
-        response += f"   - Markets change quickly\n"
-        response += f"   - Check for breaking news\n"
-        response += f"   - Confirm data is current\n\n"
+        response += f"### ⚠️ Important Disclaimer\n\n"
+        response += f"This analysis is **educational and informational only**. It is NOT:\n"
+        response += f"- ❌ Financial advice\n"
+        response += f"- ❌ A guarantee of future performance\n"
+        response += f"- ❌ A substitute for your own research\n\n"
         
-        response += f"✅ **Consider Your Situation**\n"
-        response += f"   - Your risk tolerance\n"
-        response += f"   - Your investment time horizon\n"
-        response += f"   - Your overall portfolio allocation\n\n"
+        response += f"**Before investing, always:**\n"
+        response += f"✅ Do your own research (DYOR)\n"
+        response += f"✅ Verify data is current\n"
+        response += f"✅ Consider your risk tolerance\n"
+        response += f"✅ Consult a licensed financial advisor\n"
+        response += f"✅ Only invest money you can afford to lose\n\n"
         
-        response += f"✅ **Consult a Professional**\n"
-        response += f"   - Licensed financial advisors\n"
-        response += f"   - Tax professionals for implications\n"
-        response += f"   - Legal counsel if needed\n\n"
-        
-        response += f"### ⚠️ Remember:\n\n"
-        response += f"**Capital is at risk.** All investments can lose value. Only invest money you can afford to lose completely.\n\n"
-        
-        # Removed loop-generating "Ask Me More" section
-        
-        response += f"I'm here to help you make **informed** decisions, not to make decisions **for** you."
+        response += f"💡 **Want More Details?** Ask specific questions like:\n"
+        response += f"- *\"What's the RSI for {ticker_str}?\"*\n"
+        response += f"- *\"Show me the technical indicators\"*\n"
+        response += f"- *\"What's the price trend?\"*"
         
         return response
     

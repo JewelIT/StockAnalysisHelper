@@ -14,6 +14,11 @@ def index():
     cache_bust = int(time.time())
     return render_template('index.html', cache_bust=cache_bust)
 
+@bp.route('/chat-trainer')
+def chat_trainer():
+    """Chat trainer page for collecting feedback"""
+    return render_template('chat_trainer.html')
+
 @bp.route('/clear-chat', methods=['POST'])
 def clear_chat():
     """Clear Vestor conversation history"""

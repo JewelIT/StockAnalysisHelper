@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Trainer - Help Improve Vestor AI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .trainer-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .chat-box {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            height: 70vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 15px 15px 0 0;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .message {
+            margin-bottom: 20px;
+            animation: fadeIn 0.3s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .message.user {
+            text-align: right;
+        }
+        .message.bot {
+            text-align: left;
+        }
+        .message-bubble {
+            display: inline-block;
+            max-width: 80%;
+            padding: 15px 20px;
+            border-radius: 20px;
+            text-align: left;
+        }
+        .message.user .message-bubble {
+            background: #667eea;
+            color: white;
+        }
+        .message.bot .message-bubble {
+            background: #f1f3f5;
+            color: #333;
+        }
+        .feedback-section {
+            margin-top: 10px;
+            padding: 10px;
+            background: #fff9e6;
+            border-radius: 10px;
+            display: none;
+        }
+        .feedback-section.active {
+            display: block;
+        }
+        .rating-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 10px 0;
+        }
+        .rating-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #ddd;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: bold;
+        }
+        .rating-btn:hover {
+            transform: scale(1.1);
+            border-color: #667eea;
+        }
+        .rating-btn.selected {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        .thumbs-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 10px 0;
+        }
+        .thumb-btn {
+            padding: 10px 30px;
+            border-radius: 25px;
+            border: 2px solid #ddd;
+            background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 20px;
+        }
+        .thumb-btn:hover {
+            transform: scale(1.05);
+        }
+        .thumb-btn.up:hover, .thumb-btn.up.selected {
+            background: #28a745;
+            color: white;
+            border-color: #28a745;
+        }
+        .thumb-btn.down:hover, .thumb-btn.down.selected {
+            background: #dc3545;
+            color: white;
+            border-color: #dc3545;
+        }
+        .chat-input-area {
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 0 0 15px 15px;
+        }
+        .input-group {
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 25px;
+            overflow: hidden;
+        }
+        #userInput {
+            border: none;
+            padding: 15px 20px;
+        }
+        #sendBtn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 0 25px;
+            color: white;
+        }
+        #sendBtn:hover {
+            opacity: 0.9;
+        }
+        .stats-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        .loading {
+            text-align: center;
+            padding: 10px;
+        }
+        .spinner-border-sm {
+            width: 20px;
+            height: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="trainer-container">
+        <div class="text-center text-white mb-4">
+            <h1><i class="fas fa-graduation-cap"></i> Chatbot Trainer</h1>
+            <p class="lead">Help improve Vestor AI by rating responses!</p>
+            <div class="d-inline-block">
+                <span class="stats-badge">
+                    <i class="fas fa-comments"></i> <span id="totalChats">0</span> chats
+                </span>
+                <span class="stats-badge">
+                    <i class="fas fa-star"></i> <span id="totalFeedback">0</span> rated
+                </span>
+            </div>
+        </div>
+
+        <div class="chat-box">
+            <div class="chat-header">
+                <h4><i class="fas fa-robot"></i> Vestor AI - Training Mode</h4>
+                <small>Ask questions and rate the answers to help improve the bot</small>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                <div class="message bot">
+                    <div class="message-bubble">
+                        <strong>👋 Welcome to Training Mode!</strong><br><br>
+                        Ask me any financial question, and then rate my response from 0-5 or give a thumbs up/down.
+                        Your feedback helps me learn and improve!<br><br>
+                        <em>Try asking: "What are dividends?" or "Explain P/E ratio"</em>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-input-area">
+                <div class="input-group">
+                    <input type="text" 
+                           class="form-control" 
+                           id="userInput" 
+                           placeholder="Ask a financial question..."
+                           onkeypress="if(event.key === 'Enter') sendMessage()">
+                    <button class="btn" id="sendBtn" onclick="sendMessage()">
+                        <i class="fas fa-paper-plane"></i> Send
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let totalChats = 0;
+        let totalFeedback = 0;
+        let currentInteractionId = null;
+
+        function updateStats() {
+            document.getElementById('totalChats').textContent = totalChats;
+            document.getElementById('totalFeedback').textContent = totalFeedback;
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const question = input.value.trim();
+            
+            if (!question) return;
+
+            // Add user message
+            addMessage('user', question);
+            input.value = '';
+
+            // Show loading
+            const loadingId = addMessage('bot', '<div class="loading"><div class="spinner-border spinner-border-sm text-primary" role="status"></div> Thinking...</div>');
+
+            try {
+                const response = await fetch('/chat-trainer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ question })
+                });
+
+                const data = await response.json();
+                
+                // Remove loading message
+                document.getElementById(loadingId).remove();
+
+                // Add bot response with feedback section
+                if (data.success) {
+                    addBotMessageWithFeedback(data.answer, data.interaction_id);
+                    totalChats++;
+                    updateStats();
+                } else {
+                    addMessage('bot', '❌ Error: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                document.getElementById(loadingId).remove();
+                addMessage('bot', '❌ Network error. Please try again.');
+                console.error('Error:', error);
+            }
+        }
+
+        function addMessage(sender, content) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageId = 'msg_' + Date.now();
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            messageDiv.id = messageId;
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.innerHTML = content;
+            
+            messageDiv.appendChild(bubble);
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            return messageId;
+        }
+
+        function addBotMessageWithFeedback(content, interactionId) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageId = 'msg_' + Date.now();
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message bot';
+            messageDiv.id = messageId;
+            
+            // Message bubble
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            
+            // Convert markdown-like formatting to HTML
+            let formattedContent = content
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
+            
+            bubble.innerHTML = formattedContent;
+            
+            // Feedback section
+            const feedbackDiv = document.createElement('div');
+            feedbackDiv.className = 'feedback-section';
+            feedbackDiv.innerHTML = `
+                <div class="text-center">
+                    <small class="text-muted"><strong>Was this helpful?</strong></small>
+                    <div class="thumbs-buttons">
+                        <button class="thumb-btn up" onclick="submitThumbsFeedback('${interactionId}', true, this)">
+                            <i class="fas fa-thumbs-up"></i>
+                        </button>
+                        <button class="thumb-btn down" onclick="submitThumbsFeedback('${interactionId}', false, this)">
+                            <i class="fas fa-thumbs-down"></i>
+                        </button>
+                    </div>
+                    <small class="text-muted">Or rate 0-5:</small>
+                    <div class="rating-buttons">
+                        ${[0,1,2,3,4,5].map(n => 
+                            `<button class="rating-btn" onclick="submitRatingFeedback('${interactionId}', ${n}, this)">${n}</button>`
+                        ).join('')}
+                    </div>
+                </div>
+            `;
+            
+            messageDiv.appendChild(bubble);
+            messageDiv.appendChild(feedbackDiv);
+            messagesDiv.appendChild(messageDiv);
+            
+            // Show feedback section after a short delay
+            setTimeout(() => {
+                feedbackDiv.classList.add('active');
+            }, 500);
+            
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        async function submitThumbsFeedback(interactionId, isUp, button) {
+            const feedbackSection = button.closest('.feedback-section');
+            
+            try {
+                const response = await fetch('/chat-trainer/feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        interaction_id: interactionId,
+                        thumbs: isUp ? 'up' : 'down'
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Mark as selected
+                    button.classList.add('selected');
+                    // Disable all buttons
+                    feedbackSection.querySelectorAll('button').forEach(btn => {
+                        btn.disabled = true;
+                        btn.style.opacity = '0.5';
+                    });
+                    button.style.opacity = '1';
+                    
+                    // Show thank you message
+                    feedbackSection.innerHTML += '<div class="text-center mt-2"><small class="text-success"><i class="fas fa-check"></i> Thank you for your feedback!</small></div>';
+                    
+                    totalFeedback++;
+                    updateStats();
+                }
+            } catch (error) {
+                console.error('Error submitting feedback:', error);
+                alert('Failed to submit feedback. Please try again.');
+            }
+        }
+
+        async function submitRatingFeedback(interactionId, rating, button) {
+            const feedbackSection = button.closest('.feedback-section');
+            
+            try {
+                const response = await fetch('/chat-trainer/feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        interaction_id: interactionId,
+                        rating: rating
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Mark as selected
+                    button.classList.add('selected');
+                    // Disable all buttons
+                    feedbackSection.querySelectorAll('button').forEach(btn => {
+                        btn.disabled = true;
+                        btn.style.opacity = '0.5';
+                    });
+                    button.style.opacity = '1';
+                    
+                    // Show thank you message
+                    feedbackSection.innerHTML += '<div class="text-center mt-2"><small class="text-success"><i class="fas fa-check"></i> Thank you for your feedback!</small></div>';
+                    
+                    totalFeedback++;
+                    updateStats();
+                }
+            } catch (error) {
+                console.error('Error submitting feedback:', error);
+                alert('Failed to submit feedback. Please try again.');
+            }
+        }
+
+        // Focus input on load
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('userInput').focus();
+        });
+    </script>
+</body>
+</html>
