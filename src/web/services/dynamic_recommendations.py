@@ -618,6 +618,95 @@ class DynamicRecommendationService:
             logger.warning(f"Failed to get consolidated score for {ticker}: {e}")
             return None
     
+    def get_recommendation_with_sentiment(self, ticker: str, headlines: List[str]) -> Optional[Dict]:
+        """
+        Get recommendation score with sentiment weighting.
+        
+        Formula: 0.65*technical + 0.25*fundamental + 0.1*sentiment
+        
+        Args:
+            ticker: Stock ticker
+            headlines: List of news headlines about the stock
+            
+        Returns:
+            Dict with total_score, component scores, sentiment analysis, and confidence
+        """
+        try:
+            # Get technical + fundamental scores
+            base_result = self.get_consolidated_score(ticker)
+            if not base_result:
+                return None
+            
+            # Get sentiment from headlines
+            from src.web.services.headline_sentiment_service import HeadlineSentimentService
+            sentiment_service = HeadlineSentimentService()
+            
+            if headlines:
+                sentiment_score = sentiment_service.get_sentiment_score_for_stock(ticker, headlines)
+                headlines_count = len(headlines)
+            else:
+                sentiment_score = 0.5  # Neutral
+                headlines_count = 0
+            
+            # Calculate sentiment-weighted total
+            # Keep previous 0.7*tech + 0.3*fund, but now distribute the total differently
+            # New: 0.65*tech + 0.25*fund + 0.1*sentiment
+            technical_score = base_result['technical_score']
+            fundamental_score = base_result['fundamental_score']
+            
+            total_score = (0.65 * technical_score) + (0.25 * fundamental_score) + (0.1 * sentiment_score)
+            total_score = round(max(0, min(1, total_score)), 2)
+            
+            # Determine recommendation
+            if total_score >= 0.6:
+                recommendation = "BUY"
+            elif total_score <= 0.4:
+                recommendation = "SELL"
+            else:
+                recommendation = "HOLD"
+            
+            # Calculate confidence based on component agreement
+            components = [technical_score, fundamental_score, sentiment_score]
+            avg_component = sum(components) / len(components)
+            component_variance = sum((c - avg_component) ** 2 for c in components) / len(components)
+            component_std = component_variance ** 0.5
+            
+            # High agreement = high confidence
+            if component_std < 0.1:
+                confidence = "HIGH"
+            elif component_std < 0.25:
+                confidence = "MODERATE"
+            else:
+                confidence = "LOW"
+            
+            return {
+                'ticker': ticker,
+                'total_score': total_score,
+                'technical_score': round(technical_score, 2),
+                'fundamental_score': round(fundamental_score, 2),
+                'sentiment_score': round(sentiment_score, 3),
+                'technical_weight': 0.65,
+                'fundamental_weight': 0.25,
+                'sentiment_weight': 0.1,
+                'sentiment_headlines_count': headlines_count,
+                'confidence': confidence,
+                'recommendation': recommendation,
+                'price': base_result.get('price'),
+                'timestamp': datetime.now().isoformat(),
+                'components': {
+                    'technical': base_result.get('technical_factors'),
+                    'fundamental': base_result.get('fundamental_factors'),
+                    'sentiment': {
+                        'headlines_analyzed': headlines_count,
+                        'score': sentiment_score
+                    }
+                }
+            }
+            
+        except Exception as e:
+            logger.warning(f"Failed to get recommendation with sentiment for {ticker}: {e}")
+            return None
+    
     def _analyze_stock_live(self, ticker: str) -> Optional[Dict]:
         """
         Perform live technical analysis on a stock:
