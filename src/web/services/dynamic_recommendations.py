@@ -57,6 +57,26 @@ class DynamicRecommendationService:
         if self.alpha_vantage_key:
             logger.info("✓ Alpha Vantage key available for dynamic recommendations")
     
+    def _get_company_name(self, ticker: str) -> str:
+        """
+        Get company name for a ticker using yfinance
+        Returns company name or ticker if not found
+        """
+        try:
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            long_name = info.get('longName')
+            if long_name:
+                return long_name
+            # Fallback to shortName if available
+            short_name = info.get('shortName')
+            if short_name:
+                return short_name
+        except Exception as e:
+            logger.debug(f"Could not fetch company name for {ticker}: {e}")
+        
+        return ticker  # Fallback to ticker symbol
+    
     def get_dynamic_buy_recommendations(
         self, 
         top_sectors: List[str], 
@@ -98,6 +118,7 @@ class DynamicRecommendationService:
                             'ticker': ticker,
                             'sector': sector_name,
                             'price': analysis['price'],
+                            'name': self._get_company_name(ticker),
                             'reason': self._generate_buy_reason(ticker, analysis, sector_name),
                             'score': analysis['score'],
                             'momentum': analysis.get('momentum', 'N/A'),
@@ -157,6 +178,7 @@ class DynamicRecommendationService:
                             'ticker': ticker,
                             'sector': sector_name,
                             'price': analysis['price'],
+                            'name': self._get_company_name(ticker),
                             'reason': self._generate_sell_reason(ticker, analysis, sector_name),
                             'score': analysis['score'],
                             'momentum': analysis.get('momentum', 'N/A'),

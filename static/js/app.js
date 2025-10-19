@@ -164,27 +164,77 @@ function formatTimestamp(timestamp) {
 
 // ===== CURRENCY FORMATTING =====
 
-function formatPrice(priceUSD, ticker = null) {
-    const currency = appConfig.currency;
+function formatPrice(price, ticker = null, priceCurrency = null) {
+    /**
+     * Format a price with proper currency symbol and conversion
+     * 
+     * @param price - The price value
+     * @param ticker - The ticker symbol (used as fallback to detect currency)
+     * @param priceCurrency - The currency the price is actually in (from backend)
+     *                        CRITICAL: prices from backend are already in this currency
+     * 
+     * Example: formatPrice(2.0549, 'XRP-EUR', 'EUR')
+     *   If user wants 'native': Shows €2.05 EUR (no conversion needed, already EUR)
+     *   If user wants 'USD': Shows €2.0549 * 1.087 = $2.23 USD (converts EUR→USD)
+     */
     
-    // If native currency requested, show in ticker's currency (for now, we only have USD)
-    // TODO: Fetch actual ticker currency from API
-    if (currency === 'native') {
-        return `$${priceUSD.toFixed(2)} USD`;
+    const userCurrency = appConfig.currency;
+    
+    // Determine what currency the price is actually in
+    let actualPriceCurrency = priceCurrency;
+    
+    // Fallback: Try to detect from ticker if not provided by backend
+    if (!actualPriceCurrency) {
+        if (ticker && ticker.includes('-')) {
+            const parts = ticker.split('-');
+            actualPriceCurrency = parts[1].toUpperCase();
+        } else {
+            actualPriceCurrency = 'USD';  // Default fallback
+        }
     }
     
-    // Convert to selected currency
-    const rate = exchangeRates[currency] || 1.0;
-    const convertedPrice = priceUSD * rate;
-    
+    // Currency symbols map
     const symbols = {
-        USD: '$',
-        EUR: '€',
-        GBP: '£'
+        'USD': '$',
+        'EUR': '€',
+        'GBP': '£',
+        'JPY': '¥',
+        'CHF': 'CHF',
+        'AUD': 'A$',
+        'CAD': 'C$'
     };
     
-    const symbol = symbols[currency] || '$';
-    return `${symbol}${convertedPrice.toFixed(2)} ${currency}`;
+    let displayPrice = price;
+    let displayCurrency = actualPriceCurrency;
+    
+    // Handle currency conversion if needed
+    if (userCurrency === 'native') {
+        // User wants to see in native currency
+        // Price is already in actualPriceCurrency, so no conversion needed
+        displayPrice = price;
+        displayCurrency = actualPriceCurrency;
+    } else if (userCurrency !== actualPriceCurrency) {
+        // User wants to see in a DIFFERENT currency than what price is in
+        // Example: price is in EUR (2.0549), user wants USD
+        // Formula: displayPrice = price * (rate_to_user / rate_to_price)
+        // Simpler: rate_user_to_price = exchangeRates[userCurrency] / exchangeRates[actualPriceCurrency]
+        
+        const rateActual = exchangeRates[actualPriceCurrency] || 1.0;
+        const rateUser = exchangeRates[userCurrency] || 1.0;
+        
+        // Convert: if price is in EUR and we want USD
+        // EUR→USD: divide EUR by EUR rate to get USD equivalent, then multiply by USD rate... 
+        // Actually simpler: (EUR_to_Base * price) / USD_to_Base where base is USD
+        displayPrice = price * (rateUser / rateActual);
+        displayCurrency = userCurrency;
+    } else {
+        // User wants same currency as price is in
+        displayPrice = price;
+        displayCurrency = actualPriceCurrency;
+    }
+    
+    const symbol = symbols[displayCurrency] || displayCurrency;
+    return `${symbol}${displayPrice.toFixed(2)} ${displayCurrency}`;
 }
 
 // ===== MARKET INDEX INFORMATION =====
@@ -1336,7 +1386,7 @@ function displaySummaryTable(results) {
                             </span>
                         </td>
                         <td>${r.combined_score.toFixed(3)}</td>
-                        <td>${formatPrice(r.current_price, r.ticker)}</td>
+                        <td>${formatPrice(r.current_price, r.ticker, r.price_currency)}</td>
                         <td class="${r.price_change >= 0 ? 'price-change-positive' : 'price-change-negative'}">
                             ${r.price_change >= 0 ? '+' : ''}${r.price_change.toFixed(2)}%
                         </td>
@@ -1373,7 +1423,7 @@ function displayDetailedAnalysis(results) {
                         </div>
                         <div class="accordion-header-metrics">
                             <span class="metric-badge">
-                                <i class="bi bi-currency-dollar"></i> ${formatPrice(r.current_price, r.ticker)}
+                                <i class="bi bi-currency-cash"></i> ${formatPrice(r.current_price, r.ticker, r.price_currency)}
                             </span>
                             <span class="metric-badge ${r.price_change >= 0 ? 'positive' : 'negative'}">
                                 <i class="bi bi-graph-${r.price_change >= 0 ? 'up' : 'down'}-arrow"></i>
@@ -1603,9 +1653,9 @@ function renderStockDetails(ticker, resultIndex) {
                             <div class="row g-3">
                                 <div class="col-6">
                                     <h6 class="mb-2" style="font-size: 0.85rem; color: #6c757d;">
-                                        <i class="bi bi-currency-dollar"></i> Current Price
+                                        <i class="bi bi-cash-coin me-2"></i>Current Price
                                     </h6>
-                                    <div class="h4 mb-0">${formatPrice(r.current_price, r.ticker)}</div>
+                                    <div class="h4 mb-0">${formatPrice(r.current_price, r.ticker, r.price_currency)}</div>
                                     <small class="text-muted">Last traded</small>
                                 </div>
                                 ${r.pre_market_data && r.pre_market_data.has_data ? `
@@ -1613,7 +1663,7 @@ function renderStockDetails(ticker, resultIndex) {
                                     <h6 class="mb-2" style="font-size: 0.85rem; color: #ffc107;">
                                         <i class="bi bi-clock-history"></i> Pre-Market
                                     </h6>
-                                    <div class="h4 mb-0">${formatPrice(r.pre_market_data.price, r.ticker)}</div>
+                                    <div class="h4 mb-0">${formatPrice(r.pre_market_data.price, r.ticker, r.price_currency)}</div>
                                     <small class="${r.pre_market_data.change >= 0 ? 'text-success' : 'text-danger'}">
                                         ${r.pre_market_data.change >= 0 ? '↗ +' : '↘ '}${r.pre_market_data.change_percent.toFixed(2)}%
                                     </small>
@@ -1663,19 +1713,19 @@ function renderStockDetails(ticker, resultIndex) {
                                 <div class="col-4">
                                     <div class="text-center p-2 bg-danger bg-opacity-10 rounded">
                                         <small class="d-block text-danger" style="font-size: 0.7rem;">LOW</small>
-                                        <strong class="text-danger" style="font-size: 0.95rem;">${r.analyst_data.target_low_price ? formatPrice(r.analyst_data.target_low_price, r.ticker) : 'N/A'}</strong>
+                                        <strong class="text-danger" style="font-size: 0.95rem;">${r.analyst_data.target_low_price ? formatPrice(r.analyst_data.target_low_price, r.ticker, r.price_currency) : 'N/A'}</strong>
                                     </div>
                                 </div>
                                 <div class="col-4">
                                     <div class="text-center p-2 bg-primary bg-opacity-10 rounded">
                                         <small class="d-block text-primary" style="font-size: 0.7rem;">TARGET</small>
-                                        <strong class="text-primary" style="font-size: 0.95rem;">${formatPrice(r.analyst_data.target_mean_price, r.ticker)}</strong>
+                                        <strong class="text-primary" style="font-size: 0.95rem;">${formatPrice(r.analyst_data.target_mean_price, r.ticker, r.price_currency)}</strong>
                                     </div>
                                 </div>
                                 <div class="col-4">
                                     <div class="text-center p-2 bg-success bg-opacity-10 rounded">
                                         <small class="d-block text-success" style="font-size: 0.7rem;">HIGH</small>
-                                        <strong class="text-success" style="font-size: 0.95rem;">${r.analyst_data.target_high_price ? formatPrice(r.analyst_data.target_high_price, r.ticker) : 'N/A'}</strong>
+                                        <strong class="text-success" style="font-size: 0.95rem;">${r.analyst_data.target_high_price ? formatPrice(r.analyst_data.target_high_price, r.ticker, r.price_currency) : 'N/A'}</strong>
                                     </div>
                                 </div>
                             </div>
@@ -3182,9 +3232,16 @@ function renderMarketSentiment(data) {
                                     <div>
                                         <h6 class="mb-1">
                                             <span class="badge bg-success me-2">${idx + 1}</span>
-                                            <strong>${rec.ticker}</strong>
-                                            ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker)}</span>` : ''}
+                                            <strong title="${rec.name || rec.ticker}" style="cursor: help;">
+                                                ${rec.ticker}
+                                            </strong>
+                                            ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker, rec.price_currency)}</span>` : ''}
                                         </h6>
+                                        ${rec.name && rec.name !== rec.ticker ? `
+                                        <small class="text-muted d-block" style="font-size: 0.85rem;">
+                                            ${rec.name}
+                                        </small>
+                                        ` : ''}
                                     </div>
                                     <button class="btn btn-sm btn-outline-success" 
                                             onclick="addTickerFromRecommendation('${rec.ticker}')"
@@ -3226,10 +3283,17 @@ function renderMarketSentiment(data) {
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <h6 class="mb-1">
                                         <span class="badge bg-danger me-2">${idx + 1}</span>
-                                        <strong>${rec.ticker}</strong>
-                                        ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker)}</span>` : ''}
+                                        <strong title="${rec.name || rec.ticker}" style="cursor: help;">
+                                            ${rec.ticker}
+                                        </strong>
+                                        ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker, rec.price_currency)}</span>` : ''}
                                     </h6>
                                 </div>
+                                ${rec.name && rec.name !== rec.ticker ? `
+                                <small class="text-muted d-block mb-2" style="font-size: 0.85rem;">
+                                    ${rec.name}
+                                </small>
+                                ` : ''}
                                 <small class="text-muted d-block mb-2">
                                     <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
                                 </small>

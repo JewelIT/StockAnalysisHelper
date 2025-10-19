@@ -9,6 +9,7 @@ from src.data.social_media_fetcher import SocialMediaFetcher
 from src.utils.chart_generator import ChartGenerator
 from src.utils.analyst_consensus import AnalystConsensusFetcher
 from src.config.config import Config
+import yfinance as yf
 
 class PortfolioAnalyzer:
     def __init__(self, enable_social_media=True):
@@ -83,6 +84,14 @@ class PortfolioAnalyzer:
             result['name'] = stock_info['name']
             result['sector'] = stock_info['sector']
             result['industry'] = stock_info['industry']
+            
+            # Get currency from yfinance (CRITICAL: prices are already in this currency)
+            try:
+                stock = yf.Ticker(ticker)
+                price_currency = stock.info.get('currency', 'USD')  # Fallback to USD if not found
+            except:
+                price_currency = 'USD'
+            result['price_currency'] = price_currency
             
             # Pre-Market Data (if available)
             pre_market_data = self.data_fetcher.get_pre_market_data(ticker)
@@ -304,7 +313,25 @@ class PortfolioAnalyzer:
             
             # Price info
             current_price = df['Close'].iloc[-1]
-            price_change = ((df['Close'].iloc[-1] - df['Close'].iloc[0]) / df['Close'].iloc[0]) * 100
+            
+            # Calculate price change over the selected timeframe
+            # If timeframe data has only 1 candle (e.g., 1d), fetch previous close to show daily change
+            # Otherwise show change from start to end of timeframe (respecting user's selection)
+            if len(df) == 1:
+                # Only 1 candle - fetch previous close for daily change
+                try:
+                    stock = yf.Ticker(ticker)
+                    info = stock.info
+                    previous_close = info.get('previousClose')
+                    if previous_close and previous_close > 0:
+                        price_change = ((current_price - previous_close) / previous_close) * 100
+                    else:
+                        price_change = 0.0
+                except Exception:
+                    price_change = 0.0
+            else:
+                # Multiple candles - show change over the timeframe (start to end)
+                price_change = ((df['Close'].iloc[-1] - df['Close'].iloc[0]) / df['Close'].iloc[0]) * 100
             
             # Generate chart data (JSON format for client-side rendering)
             chart_fig = self.chart_generator.create_candlestick_chart(ticker, df, indicators, chart_type, timeframe, theme)
