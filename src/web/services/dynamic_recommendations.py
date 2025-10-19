@@ -707,6 +707,183 @@ class DynamicRecommendationService:
             logger.warning(f"Failed to get recommendation with sentiment for {ticker}: {e}")
             return None
     
+    def get_recommendation_with_confidence(self, ticker: str, headlines: List[str]) -> Optional[Dict]:
+        """
+        Get recommendation with comprehensive confidence analysis and fact-checking.
+        
+        Returns dict with:
+        - recommendation: BUY/HOLD/SELL
+        - confidence_level: HIGH/MEDIUM/LOW (based on signal agreement)
+        - warnings: List of cautions for investor
+        - explanation: Clear rationale for recommendation
+        - score_breakdown: All component scores and weights
+        - market_context: VIX and other market factors
+        
+        Warnings examples:
+        - "Weak signal" (component < 0.3)
+        - "Signals disagree significantly" (spread > 0.4)
+        - "High score from single factor" (>0.8 but only 1 strong component)
+        - "Market is volatile" (VIX > 25)
+        - "Insufficient headline data"
+        """
+        try:
+            # Get sentiment-weighted recommendation
+            rec_with_sentiment = self.get_recommendation_with_sentiment(ticker, headlines)
+            if not rec_with_sentiment:
+                return None
+            
+            warnings = []
+            
+            # Extract component scores
+            tech_score = rec_with_sentiment['technical_score']
+            fund_score = rec_with_sentiment['fundamental_score']
+            sent_score = rec_with_sentiment['sentiment_score']
+            total_score = rec_with_sentiment['total_score']
+            
+            # ==== WEAK SIGNAL DETECTION ====
+            weak_components = []
+            if tech_score < 0.3:
+                weak_components.append(f"Technical score very low ({tech_score:.2f})")
+            if fund_score < 0.3:
+                weak_components.append(f"Fundamentals weak ({fund_score:.2f})")
+            if sent_score < 0.3:
+                weak_components.append(f"Sentiment bearish ({sent_score:.2f})")
+            
+            if weak_components:
+                warnings.append(f"⚠️ WEAK SIGNAL: {', '.join(weak_components)}. "
+                              "Recommendation is weak - proceed with caution.")
+            
+            # ==== SIGNAL DISAGREEMENT DETECTION ====
+            scores = [tech_score, fund_score, sent_score]
+            score_spread = max(scores) - min(scores)
+            
+            if score_spread > 0.4:
+                high_components = [n for n, s in [('Tech', tech_score), ('Fundamental', fund_score), 
+                                                   ('Sentiment', sent_score)] if s > 0.6]
+                low_components = [n for n, s in [('Tech', tech_score), ('Fundamental', fund_score), 
+                                                 ('Sentiment', sent_score)] if s < 0.4]
+                
+                if high_components and low_components:
+                    warnings.append(f"⚠️ SIGNALS CONFLICT: {'+'.join(high_components)} say BUY "
+                                  f"but {'+'.join(low_components)} say SELL. "
+                                  "Signals disagree significantly - more research recommended.")
+            
+            # ==== SINGLE STRONG COMPONENT WARNING ====
+            strong_components = sum(1 for s in scores if s > 0.7)
+            weak_components_count = sum(1 for s in scores if s < 0.4)
+            
+            if total_score > 0.8 and strong_components == 1:
+                warnings.append(f"⚠️ HIGH SCORE FROM SINGLE FACTOR: Score is {total_score:.2f} "
+                              "but only ONE component is strong. "
+                              "This could be misleading - diversify your research.")
+            
+            if total_score < 0.2 and weak_components_count == 3:
+                warnings.append(f"⚠️ ALL SIGNALS WEAK: All three indicators are bearish. "
+                              "This is a strong sell signal or insufficient data.")
+            
+            # ==== MARKET CONTEXT: VIX CHECK ====
+            try:
+                from src.web.services.multi_source_market_data import MultiSourceMarketData
+                market_data = MultiSourceMarketData()
+                market_consensus = market_data.get_consensus_market_data()
+                
+                vix_data = market_consensus.get('VIX (Volatility)', {})
+                vix_price = vix_data.get('consensus_price', 20)
+                
+                market_context = {
+                    'vix': vix_price,
+                    'market_conditions': 'calm' if vix_price < 15 else 'normal' if vix_price < 25 else 'volatile',
+                    'warning': None
+                }
+                
+                if vix_price > 25:
+                    warnings.append(f"📊 MARKET CONTEXT: VIX at {vix_price:.1f} indicates HIGH VOLATILITY. "
+                                  "Market is fearful - consider tightening stop losses.")
+                    market_context['warning'] = 'high_volatility'
+                elif vix_price > 20:
+                    market_context['warning'] = 'elevated_volatility'
+                
+            except Exception as e:
+                logger.warning(f"Could not get market context for {ticker}: {e}")
+                market_context = {'vix': None, 'market_conditions': 'unknown'}
+            
+            # ==== CONFIDENCE LEVEL CALCULATION ====
+            # Based on component agreement
+            if score_spread < 0.15:
+                confidence = 'HIGH'
+            elif score_spread < 0.35:
+                confidence = 'MEDIUM'
+            else:
+                confidence = 'LOW'
+            
+            # Adjust confidence based on headline count
+            if headlines and len(headlines) < 2:
+                if confidence == 'HIGH':
+                    confidence = 'MEDIUM'
+                    warnings.append(f"ℹ️ LIMITED DATA: Only {len(headlines)} headline(s) analyzed. "
+                                  "Consider researching more sources.")
+            
+            # ==== BUILD EXPLANATION ====
+            if total_score >= 0.6:
+                if confidence == 'HIGH':
+                    explanation = (f"Strong BUY signal. All indicators align: "
+                                 f"Technical ({tech_score:.2f}), "
+                                 f"Fundamental ({fund_score:.2f}), "
+                                 f"Sentiment ({sent_score:.2f}).")
+                elif confidence == 'MEDIUM':
+                    explanation = (f"BUY signal with moderate confidence. "
+                                 f"Signals mostly positive but some divergence. "
+                                 f"Review warnings above.")
+                else:
+                    explanation = (f"BUY signal but LOW confidence due to conflicting indicators. "
+                                 f"Technical analysis suggests buying but other factors are weaker. "
+                                 f"Do additional research.")
+            elif total_score <= 0.4:
+                if confidence == 'HIGH':
+                    explanation = (f"Strong SELL signal. All indicators align: "
+                                 f"Technical ({tech_score:.2f}), "
+                                 f"Fundamental ({fund_score:.2f}), "
+                                 f"Sentiment ({sent_score:.2f}).")
+                elif confidence == 'MEDIUM':
+                    explanation = (f"SELL signal with moderate confidence. "
+                                 f"Signals mostly negative but some divergence. "
+                                 f"Review warnings above.")
+                else:
+                    explanation = (f"SELL signal but LOW confidence due to conflicting indicators. "
+                                 f"Some factors suggest selling but others are stronger. "
+                                 f"Do additional research.")
+            else:
+                explanation = (f"HOLD signal - no clear direction. "
+                             f"Technical ({tech_score:.2f}), "
+                             f"Fundamental ({fund_score:.2f}), "
+                             f"Sentiment ({sent_score:.2f}) all show mixed signals. "
+                             f"Wait for more clarity.")
+            
+            # ==== SUMMARY ====
+            return {
+                'ticker': ticker,
+                'recommendation': rec_with_sentiment['recommendation'],
+                'confidence_level': confidence,
+                'warnings': warnings if warnings else ["✓ No major warnings"],
+                'explanation': explanation,
+                'score_breakdown': {
+                    'technical_score': tech_score,
+                    'fundamental_score': fund_score,
+                    'sentiment_score': sent_score,
+                    'total_score': total_score,
+                    'technical_weight': 0.65,
+                    'fundamental_weight': 0.25,
+                    'sentiment_weight': 0.1,
+                },
+                'market_context': market_context,
+                'sentiment_headlines_count': rec_with_sentiment['sentiment_headlines_count'],
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.warning(f"Failed to get confidence analysis for {ticker}: {e}")
+            return None
+    
     def _analyze_stock_live(self, ticker: str) -> Optional[Dict]:
         """
         Perform live technical analysis on a stock:
