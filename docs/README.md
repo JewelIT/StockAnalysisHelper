@@ -1,35 +1,29 @@
-# Documentation Index
+# Documentation
 
-This directory contains all project documentation organized by category.
+Essential project documentation for the Stock Analysis Helper system.
 
-## 📋 Architecture & Design
+## � Quick Start
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture and design patterns
-- [RESTRUCTURING_SUMMARY.md](RESTRUCTURING_SUMMARY.md) - Code reorganization history
+- **[PRE_MERGE_CHECKLIST.md](PRE_MERGE_CHECKLIST.md)** - Testing checklist before merging changes. **START HERE**.
 
-## 🔒 Security & Quality
+## 📋 Core Documentation
 
-- [SECURITY_AUDIT.md](SECURITY_AUDIT.md) - Security audit findings and mitigations
-- [HARDENING_PASS.md](HARDENING_PASS.md) - Code hardening and quality improvements
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - System architecture and components
+- **[SETUP_MULTI_SOURCE.md](SETUP_MULTI_SOURCE.md)** - Multi-source data service setup
+- **[TESTING_GUIDE.md](TESTING_GUIDE.md)** - Testing procedures and test suite
 
-## ✨ Feature Implementation
+## 🔧 Recent Improvements (Oct 19)
 
-- [ANALYST_CONSENSUS_IMPLEMENTATION.md](ANALYST_CONSENSUS_IMPLEMENTATION.md) - Analyst consensus feature
-- [SELENIUM_STOCKTWITS_IMPLEMENTATION.md](SELENIUM_STOCKTWITS_IMPLEMENTATION.md) - StockTwits integration
-- [COMPACT_UI_GUIDE.md](COMPACT_UI_GUIDE.md) - Compact UI design guide
-- [UI_IMPROVEMENTS.md](UI_IMPROVEMENTS.md) - UI enhancement history
+- **[SENTIMENT_IMPROVEMENTS_OCT19.md](SENTIMENT_IMPROVEMENTS_OCT19.md)** - Latest sentiment analysis improvements and bug fixes
 
-## 🐛 Bug Fixes & Changes
+## 📦 Additional Resources
 
-- [BUGFIX_SUMMARY.md](BUGFIX_SUMMARY.md) - Major bug fixes and resolutions
-- [CHANGELOG_newsfeed_filters.md](CHANGELOG_newsfeed_filters.md) - Newsfeed filter changes
-- [FILE_STATE_INVESTIGATION.md](FILE_STATE_INVESTIGATION.md) - File state debugging
+- **[SECURITY_AUDIT.md](SECURITY_AUDIT.md)** - Security considerations
+- **[DISTRIBUTION.md](DISTRIBUTION.md)** - Deployment and distribution guide
+- **[MODEL_CREDITS.md](MODEL_CREDITS.md)** - Model and library credits
 
-## 📦 Distribution & Credits
+## 📚 Archived Documentation
 
-- [DISTRIBUTION.md](DISTRIBUTION.md) - Distribution and deployment guide
-- [MODEL_CREDITS.md](MODEL_CREDITS.md) - AI model credits and licenses
+Older documentation and implementation details are in `.archive/` for reference only.
 
-## 📚 Main Documentation
-
-For user-facing documentation and setup instructions, see the main [README.md](../README.md) in the root directory.
+For user-facing documentation, see the main [README.md](../README.md) in the root directory.
