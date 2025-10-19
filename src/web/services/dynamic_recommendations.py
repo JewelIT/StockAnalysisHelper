@@ -383,6 +383,176 @@ class DynamicRecommendationService:
             logger.debug(f"Failed to get S&P 500 list: {e}")
             return []
     
+    def _calculate_fundamental_score(self, ticker: str) -> float:
+        """
+        Calculate fundamental health score (0-1) from yfinance data.
+        Returns score based on:
+        - Valuation (P/E, P/B)
+        - Profitability (operating margin, ROE)
+        - Efficiency (debt/equity, current ratio)
+        - Growth (earnings growth)
+        
+        Returns 0-1 where: 0=poor fundamentals, 1=excellent fundamentals
+        Returns 0.5 (neutral) if data unavailable
+        """
+        try:
+            stock = yf.Ticker(ticker)
+            info = stock.info
+            
+            score_components = []
+            weights = []
+            
+            # 1. VALUATION ANALYSIS (30% weight)
+            # Lower P/E is generally better, but context matters (growth vs value)
+            forward_pe = info.get('forwardPE')
+            trailing_pe = info.get('trailingPE')
+            pe = forward_pe if forward_pe and forward_pe > 0 else trailing_pe
+            
+            if pe and pe > 0:
+                # P/E ranges: <15 undervalued, 15-25 fair, >25 premium/growth
+                if pe < 15:
+                    pe_score = 0.9
+                elif pe < 20:
+                    pe_score = 0.8
+                elif pe < 30:
+                    pe_score = 0.7
+                elif pe < 40:
+                    pe_score = 0.5
+                else:
+                    pe_score = 0.3
+                score_components.append(pe_score)
+                weights.append(0.30)
+            
+            # 2. PROFITABILITY (35% weight - most important)
+            profit_score = 0.5
+            profit_weight_sum = 0
+            
+            # Operating margin (> 15% = good)
+            op_margin = info.get('operatingMargins')
+            if op_margin is not None:
+                if op_margin > 0.20:
+                    profit_score = max(profit_score, 0.9)
+                elif op_margin > 0.15:
+                    profit_score = max(profit_score, 0.8)
+                elif op_margin > 0.10:
+                    profit_score = max(profit_score, 0.7)
+                elif op_margin > 0.05:
+                    profit_score = max(profit_score, 0.6)
+                elif op_margin > 0:
+                    profit_score = max(profit_score, 0.4)
+                else:
+                    profit_score = 0.2
+                profit_weight_sum += 1
+            
+            # Gross margin (> 40% = good)
+            gross_margin = info.get('grossMargins')
+            if gross_margin is not None:
+                if gross_margin > 0.50:
+                    profit_score = max(profit_score, 0.9)
+                elif gross_margin > 0.40:
+                    profit_score = max(profit_score, 0.8)
+                elif gross_margin > 0.30:
+                    profit_score = max(profit_score, 0.7)
+                elif gross_margin > 0.20:
+                    profit_score = max(profit_score, 0.6)
+                elif gross_margin > 0.10:
+                    profit_score = max(profit_score, 0.4)
+                profit_weight_sum += 1
+            
+            # Return on Equity (> 15% = good, but can be inflated by leverage)
+            roe = info.get('returnOnEquity')
+            if roe is not None and roe > 0:
+                if roe > 0.30:
+                    profit_score = max(profit_score, 0.95)
+                elif roe > 0.20:
+                    profit_score = max(profit_score, 0.9)
+                elif roe > 0.15:
+                    profit_score = max(profit_score, 0.8)
+                elif roe > 0.10:
+                    profit_score = max(profit_score, 0.7)
+                profit_weight_sum += 1
+            
+            if profit_weight_sum > 0:
+                score_components.append(profit_score)
+                weights.append(0.35)
+            
+            # 3. FINANCIAL HEALTH (25% weight)
+            health_score = 0.5
+            health_weight_sum = 0
+            
+            # Debt-to-Equity (lower is safer, but context matters)
+            debt_to_eq = info.get('debtToEquity')
+            if debt_to_eq is not None and debt_to_eq >= 0:
+                if debt_to_eq < 0.5:
+                    health_score = max(health_score, 0.95)
+                elif debt_to_eq < 1.0:
+                    health_score = max(health_score, 0.85)
+                elif debt_to_eq < 1.5:
+                    health_score = max(health_score, 0.75)
+                elif debt_to_eq < 2.0:
+                    health_score = max(health_score, 0.6)
+                elif debt_to_eq < 3.0:
+                    health_score = max(health_score, 0.4)
+                else:
+                    health_score = 0.2
+                health_weight_sum += 1
+            
+            # Current Ratio (> 1.5 = good, can handle obligations)
+            current_ratio = info.get('currentRatio')
+            if current_ratio is not None:
+                if current_ratio > 2.0:
+                    health_score = max(health_score, 0.9)
+                elif current_ratio > 1.5:
+                    health_score = max(health_score, 0.85)
+                elif current_ratio > 1.0:
+                    health_score = max(health_score, 0.75)
+                elif current_ratio > 0.7:
+                    health_score = max(health_score, 0.5)
+                else:
+                    health_score = max(health_score, 0.3)
+                health_weight_sum += 1
+            
+            if health_weight_sum > 0:
+                score_components.append(health_score)
+                weights.append(0.25)
+            
+            # 4. GROWTH (10% weight)
+            growth_score = 0.5
+            growth_weight_sum = 0
+            
+            # Earnings growth
+            earnings_growth = info.get('earningsGrowth')
+            if earnings_growth is not None:
+                if earnings_growth > 0.20:
+                    growth_score = 0.95
+                elif earnings_growth > 0.10:
+                    growth_score = 0.85
+                elif earnings_growth > 0.05:
+                    growth_score = 0.7
+                elif earnings_growth > 0:
+                    growth_score = 0.6
+                else:
+                    growth_score = 0.3
+                growth_weight_sum += 1
+            
+            if growth_weight_sum > 0:
+                score_components.append(growth_score)
+                weights.append(0.10)
+            
+            # Calculate weighted average
+            if score_components and weights:
+                total_weight = sum(weights)
+                if total_weight > 0:
+                    weighted_score = sum(c * w for c, w in zip(score_components, weights)) / total_weight
+                    return round(max(0, min(1, weighted_score)), 2)
+            
+            # Return neutral if insufficient data
+            return 0.5
+            
+        except Exception as e:
+            logger.warning(f"Failed to calculate fundamentals for {ticker}: {e}")
+            return 0.5
+    
     def _analyze_stock_live(self, ticker: str) -> Optional[Dict]:
         """
         Perform live technical analysis on a stock:
