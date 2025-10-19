@@ -164,27 +164,148 @@ function formatTimestamp(timestamp) {
 
 // ===== CURRENCY FORMATTING =====
 
-function formatPrice(priceUSD, ticker = null) {
-    const currency = appConfig.currency;
+function formatPrice(price, ticker = null, priceCurrency = null) {
+    /**
+     * Format a price with proper currency symbol and conversion
+     * 
+     * @param price - The price value
+     * @param ticker - The ticker symbol (used as fallback to detect currency)
+     * @param priceCurrency - The currency the price is actually in (from backend)
+     *                        CRITICAL: prices from backend are already in this currency
+     * 
+     * Example: formatPrice(2.0549, 'XRP-EUR', 'EUR')
+     *   If user wants 'native': Shows €2.05 EUR (no conversion needed, already EUR)
+     *   If user wants 'USD': Shows €2.0549 * 1.087 = $2.23 USD (converts EUR→USD)
+     */
     
-    // If native currency requested, show in ticker's currency (for now, we only have USD)
-    // TODO: Fetch actual ticker currency from API
-    if (currency === 'native') {
-        return `$${priceUSD.toFixed(2)} USD`;
+    const userCurrency = appConfig.currency;
+    
+    // Determine what currency the price is actually in
+    let actualPriceCurrency = priceCurrency;
+    
+    // Fallback: Try to detect from ticker if not provided by backend
+    if (!actualPriceCurrency) {
+        if (ticker && ticker.includes('-')) {
+            const parts = ticker.split('-');
+            actualPriceCurrency = parts[1].toUpperCase();
+        } else {
+            actualPriceCurrency = 'USD';  // Default fallback
+        }
     }
     
-    // Convert to selected currency
-    const rate = exchangeRates[currency] || 1.0;
-    const convertedPrice = priceUSD * rate;
-    
+    // Currency symbols map
     const symbols = {
-        USD: '$',
-        EUR: '€',
-        GBP: '£'
+        'USD': '$',
+        'EUR': '€',
+        'GBP': '£',
+        'JPY': '¥',
+        'CHF': 'CHF',
+        'AUD': 'A$',
+        'CAD': 'C$'
     };
     
-    const symbol = symbols[currency] || '$';
-    return `${symbol}${convertedPrice.toFixed(2)} ${currency}`;
+    let displayPrice = price;
+    let displayCurrency = actualPriceCurrency;
+    
+    // Handle currency conversion if needed
+    if (userCurrency === 'native') {
+        // User wants to see in native currency
+        // Price is already in actualPriceCurrency, so no conversion needed
+        displayPrice = price;
+        displayCurrency = actualPriceCurrency;
+    } else if (userCurrency !== actualPriceCurrency) {
+        // User wants to see in a DIFFERENT currency than what price is in
+        // Example: price is in EUR (2.0549), user wants USD
+        // Formula: displayPrice = price * (rate_to_user / rate_to_price)
+        // Simpler: rate_user_to_price = exchangeRates[userCurrency] / exchangeRates[actualPriceCurrency]
+        
+        const rateActual = exchangeRates[actualPriceCurrency] || 1.0;
+        const rateUser = exchangeRates[userCurrency] || 1.0;
+        
+        // Convert: if price is in EUR and we want USD
+        // EUR→USD: divide EUR by EUR rate to get USD equivalent, then multiply by USD rate... 
+        // Actually simpler: (EUR_to_Base * price) / USD_to_Base where base is USD
+        displayPrice = price * (rateUser / rateActual);
+        displayCurrency = userCurrency;
+    } else {
+        // User wants same currency as price is in
+        displayPrice = price;
+        displayCurrency = actualPriceCurrency;
+    }
+    
+    const symbol = symbols[displayCurrency] || displayCurrency;
+    return `${symbol}${displayPrice.toFixed(2)} ${displayCurrency}`;
+}
+
+// ===== MARKET INDEX INFORMATION =====
+
+/**
+ * Get detailed information about each market index
+ * Used for hover tooltips and educational context
+ */
+function getIndexInfo(indexName, currentValue, changePercent) {
+    const indices = {
+        'S&P 500': {
+            description: 'Market index of 500 large-cap US companies',
+            why_track: 'Represents overall US stock market health; most widely followed index',
+            importance: 'Primary indicator of US economic strength and investor sentiment',
+            impact: (change) => change >= 0 ? 'positive' : 'negative'
+        },
+        'Dow Jones': {
+            description: 'Price-weighted index of 30 blue-chip US companies',
+            why_track: 'Tracks largest, most established US corporations',
+            importance: 'Shows stability and large-cap performance; often called the market barometer',
+            impact: (change) => change >= 0 ? 'positive' : 'negative'
+        },
+        'NASDAQ': {
+            description: 'Index of 100+ largest non-financial companies on NASDAQ',
+            why_track: 'Heavily weighted toward tech and growth companies',
+            importance: 'Tech-heavy; key indicator of innovation and growth stock performance',
+            impact: (change) => change >= 0 ? 'positive' : 'negative'
+        },
+        'VIX (Volatility)': {
+            description: 'Fear Index measuring S&P 500 volatility expectations',
+            why_track: 'Inverse to market; high VIX = market uncertainty and fear',
+            importance: 'Critical risk gauge; impacts portfolio diversification and hedging',
+            impact: (change) => change <= 0 ? 'positive' : 'negative'  // VIX going down is GOOD
+        }
+    };
+    
+    const info = indices[indexName] || {
+        description: 'Global market index',
+        why_track: 'Tracks market performance',
+        importance: 'Indicates market trends',
+        impact: (change) => change >= 0 ? 'positive' : 'negative'
+    };
+    
+    return {
+        ...info,
+        impact_type: info.impact(changePercent)
+    };
+}
+
+// ===== TIMEFRAME FORMATTING =====
+
+/**
+ * Convert timeframe code to human-readable label and change period
+ * E.g., '1d' -> 'Day', '3mo' -> '3M', '1y' -> '1Y'
+ */
+function formatTimeframeLabel(timeframe) {
+    if (!timeframe) timeframe = '3mo';
+    
+    const labels = {
+        '1d': 'Day',
+        '1wk': 'Week',
+        '1mo': 'Month',
+        '3mo': '3M',
+        '6mo': '6M',
+        '1y': '1Y',
+        '2y': '2Y',
+        '5y': '5Y',
+        'max': 'All Time'
+    };
+    
+    return labels[timeframe] || timeframe;
 }
 
 // ===== TOAST NOTIFICATION SYSTEM =====
@@ -224,6 +345,32 @@ function showToast(message, type = 'info', title = null) {
         toast.classList.add('hiding');
         setTimeout(() => toast.remove(), 300);
     }, 5000);
+}
+
+// ===== LOADING OVERLAY =====
+
+/**
+ * Show loading overlay with custom message
+ * @param {string} message - Loading message to display (e.g., "Analyzing stock list...")
+ */
+function showLoadingOverlay(message = "Analyzing Portfolio...") {
+    const loader = document.getElementById('fullScreenLoader');
+    const title = document.getElementById('loadingTitle');
+    
+    if (loader && title) {
+        title.textContent = message;
+        loader.style.display = 'block';
+    }
+}
+
+/**
+ * Hide loading overlay
+ */
+function hideLoadingOverlay() {
+    const loader = document.getElementById('fullScreenLoader');
+    if (loader) {
+        loader.style.display = 'none';
+    }
 }
 
 // Load and save app configuration
@@ -518,8 +665,8 @@ async function analyzeSavedPortfolio() {
     
     showToast(`Analyzing your portfolio: ${portfolioTickers.join(', ')}`, 'info');
     
-    // Run analysis
-    await analyzePortfolio();
+    // Run analysis with portfolio flag
+    await analyzePortfolio(true);
     
     // Restore original session
     sessionTickers = originalSession;
@@ -947,7 +1094,7 @@ function getDaysFromTimeframe(timeframe) {
     return timeframeMap[timeframe] || { news: 7, social: 14 };
 }
 
-async function analyzePortfolio() {
+async function analyzePortfolio(isSavedPortfolio = false) {
     if (sessionTickers.length === 0) {
         showToast('Please add at least one ticker to analyze', 'warning');
         return;
@@ -965,8 +1112,9 @@ async function analyzePortfolio() {
     // Detect current theme
     const theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
     
-    // Show full-screen loading overlay
-    document.getElementById('fullScreenLoader').style.display = 'block';
+    // Show full-screen loading overlay with appropriate message
+    const loadingMessage = isSavedPortfolio ? 'Analyzing Portfolio...' : 'Analyzing stock list...';
+    showLoadingOverlay(loadingMessage);
     
     // Switch to Market Analysis tab
     const analysisTabButton = document.getElementById('analysis-tab');
@@ -1032,7 +1180,7 @@ async function analyzePortfolio() {
         showToast('Error analyzing portfolio: ' + error.message, 'error');
         console.error('Error:', error);
     } finally {
-        document.getElementById('fullScreenLoader').style.display = 'none';
+        hideLoadingOverlay();
         document.getElementById('analyzeBtn').disabled = false;
     }
 }
@@ -1084,6 +1232,10 @@ function displayPortfolioStats(results) {
     const avgScore = (results.reduce((sum, r) => sum + (r.combined_score || 0), 0) / totalStocks).toFixed(1);
     const avgChange = results.reduce((sum, r) => sum + (r.price_change || 0), 0) / totalStocks;
     
+    // Get timeframe from first result (all should have same timeframe)
+    const timeframe = results[0]?.timeframe_used || '3mo';
+    const timeframeLabel = formatTimeframeLabel(timeframe);
+    
     // Count recommendations - normalize STRONG BUY/SELL to BUY/SELL
     const recommendations = results.reduce((acc, r) => {
         let rec = r.recommendation || 'HOLD';
@@ -1125,7 +1277,7 @@ function displayPortfolioStats(results) {
             <div class="stat-value ${overallClass}">${overallEmoji} ${(avgScore * 100).toFixed(1)}%</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">${totalStocks > 1 ? 'Avg 3M Change' : '3M Change'}</div>
+            <div class="stat-label">${totalStocks > 1 ? `Avg ${timeframeLabel} Change` : `${timeframeLabel} Change`}</div>
             <div class="stat-value ${avgChange >= 0 ? 'positive' : 'negative'}">
                 ${avgChange >= 0 ? '▲' : '▼'} ${Math.abs(avgChange).toFixed(2)}%
             </div>
@@ -1195,6 +1347,10 @@ function displayPortfolioStats(results) {
 
 // Display summary table
 function displaySummaryTable(results) {
+    // Get timeframe from first result
+    const timeframe = results[0]?.timeframe_used || '3mo';
+    const timeframeLabel = formatTimeframeLabel(timeframe);
+    
     const html = `
         <table>
             <thead>
@@ -1214,7 +1370,7 @@ function displaySummaryTable(results) {
                     </th>
                     <th>Combined Score</th>
                     <th>Current Price</th>
-                    <th>Change (3mo)</th>
+                    <th>Change (${timeframeLabel})</th>
                     <th>Sentiment</th>
                     <th>Technical</th>
                 </tr>
@@ -1230,7 +1386,7 @@ function displaySummaryTable(results) {
                             </span>
                         </td>
                         <td>${r.combined_score.toFixed(3)}</td>
-                        <td>${formatPrice(r.current_price, r.ticker)}</td>
+                        <td>${formatPrice(r.current_price, r.ticker, r.price_currency)}</td>
                         <td class="${r.price_change >= 0 ? 'price-change-positive' : 'price-change-negative'}">
                             ${r.price_change >= 0 ? '+' : ''}${r.price_change.toFixed(2)}%
                         </td>
@@ -1267,7 +1423,7 @@ function displayDetailedAnalysis(results) {
                         </div>
                         <div class="accordion-header-metrics">
                             <span class="metric-badge">
-                                <i class="bi bi-currency-dollar"></i> ${formatPrice(r.current_price, r.ticker)}
+                                <i class="bi bi-currency-cash"></i> ${formatPrice(r.current_price, r.ticker, r.price_currency)}
                             </span>
                             <span class="metric-badge ${r.price_change >= 0 ? 'positive' : 'negative'}">
                                 <i class="bi bi-graph-${r.price_change >= 0 ? 'up' : 'down'}-arrow"></i>
@@ -1307,7 +1463,24 @@ function displayDetailedAnalysis(results) {
 // Initialize Bootstrap tooltips
 function initializeTooltips() {
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+    
+    [...tooltipTriggerList].forEach(tooltipTriggerEl => {
+        // Check if this is an index info icon with custom HTML content
+        const indexInfo = tooltipTriggerEl.getAttribute('data-index-info');
+        
+        if (indexInfo) {
+            // HTML tooltip - parse the JSON content and set it with html: true
+            const tooltipOptions = {
+                html: true,
+                title: JSON.parse(indexInfo),  // Parse the JSON string back to HTML
+                placement: tooltipTriggerEl.getAttribute('data-bs-placement') || 'top'
+            };
+            new bootstrap.Tooltip(tooltipTriggerEl, tooltipOptions);
+        } else {
+            // Regular text tooltip
+            new bootstrap.Tooltip(tooltipTriggerEl);
+        }
+    });
 }
 
 // ===== ACCORDION FUNCTIONS =====
@@ -1480,9 +1653,9 @@ function renderStockDetails(ticker, resultIndex) {
                             <div class="row g-3">
                                 <div class="col-6">
                                     <h6 class="mb-2" style="font-size: 0.85rem; color: #6c757d;">
-                                        <i class="bi bi-currency-dollar"></i> Current Price
+                                        <i class="bi bi-cash me-2"></i>Current Price
                                     </h6>
-                                    <div class="h4 mb-0">${formatPrice(r.current_price, r.ticker)}</div>
+                                    <div class="h4 mb-0">${formatPrice(r.current_price, r.ticker, r.price_currency)}</div>
                                     <small class="text-muted">Last traded</small>
                                 </div>
                                 ${r.pre_market_data && r.pre_market_data.has_data ? `
@@ -1490,7 +1663,7 @@ function renderStockDetails(ticker, resultIndex) {
                                     <h6 class="mb-2" style="font-size: 0.85rem; color: #ffc107;">
                                         <i class="bi bi-clock-history"></i> Pre-Market
                                     </h6>
-                                    <div class="h4 mb-0">${formatPrice(r.pre_market_data.price, r.ticker)}</div>
+                                    <div class="h4 mb-0">${formatPrice(r.pre_market_data.price, r.ticker, r.price_currency)}</div>
                                     <small class="${r.pre_market_data.change >= 0 ? 'text-success' : 'text-danger'}">
                                         ${r.pre_market_data.change >= 0 ? '↗ +' : '↘ '}${r.pre_market_data.change_percent.toFixed(2)}%
                                     </small>
@@ -1540,19 +1713,19 @@ function renderStockDetails(ticker, resultIndex) {
                                 <div class="col-4">
                                     <div class="text-center p-2 bg-danger bg-opacity-10 rounded">
                                         <small class="d-block text-danger" style="font-size: 0.7rem;">LOW</small>
-                                        <strong class="text-danger" style="font-size: 0.95rem;">${r.analyst_data.target_low_price ? formatPrice(r.analyst_data.target_low_price, r.ticker) : 'N/A'}</strong>
+                                        <strong class="text-danger" style="font-size: 0.95rem;">${r.analyst_data.target_low_price ? formatPrice(r.analyst_data.target_low_price, r.ticker, r.price_currency) : 'N/A'}</strong>
                                     </div>
                                 </div>
                                 <div class="col-4">
                                     <div class="text-center p-2 bg-primary bg-opacity-10 rounded">
                                         <small class="d-block text-primary" style="font-size: 0.7rem;">TARGET</small>
-                                        <strong class="text-primary" style="font-size: 0.95rem;">${formatPrice(r.analyst_data.target_mean_price, r.ticker)}</strong>
+                                        <strong class="text-primary" style="font-size: 0.95rem;">${formatPrice(r.analyst_data.target_mean_price, r.ticker, r.price_currency)}</strong>
                                     </div>
                                 </div>
                                 <div class="col-4">
                                     <div class="text-center p-2 bg-success bg-opacity-10 rounded">
                                         <small class="d-block text-success" style="font-size: 0.7rem;">HIGH</small>
-                                        <strong class="text-success" style="font-size: 0.95rem;">${r.analyst_data.target_high_price ? formatPrice(r.analyst_data.target_high_price, r.ticker) : 'N/A'}</strong>
+                                        <strong class="text-success" style="font-size: 0.95rem;">${r.analyst_data.target_high_price ? formatPrice(r.analyst_data.target_high_price, r.ticker, r.price_currency) : 'N/A'}</strong>
                                     </div>
                                 </div>
                             </div>
@@ -2938,21 +3111,58 @@ function renderMarketSentiment(data) {
                     <i class="bi bi-graph-up text-primary me-2"></i>Market Indices
                 </h6>
                 <div class="row g-3">
-                    ${Object.entries(data.market_indices).map(([name, idx]) => `
+                    ${Object.entries(data.market_indices).map(([name, idx]) => {
+                        // VIX is INVERSE to market - high VIX is bad (red), low VIX is good (green)
+                        const isVIX = name.includes('VIX');
+                        const trendForDisplay = isVIX ? (idx.trend === 'up' ? 'danger' : 'success') : (idx.trend === 'up' ? 'success' : 'danger');
+                        const arrowDir = isVIX ? (idx.trend === 'up' ? 'up' : 'down') : (idx.trend === 'up' ? 'up' : 'down');
+                        
+                        // Get educational info about this index
+                        const indexInfo = getIndexInfo(name, idx.current, idx.change_pct);
+                        const impactBadge = indexInfo.impact_type === 'positive' ? '✓ Positive' : indexInfo.impact_type === 'negative' ? '⚠️ Negative' : '⊘ Neutral';
+                        const impactColor = indexInfo.impact_type === 'positive' ? 'success' : indexInfo.impact_type === 'negative' ? 'danger' : 'secondary';
+                        
+                        // Build tooltip HTML (will be set via JS to avoid escaping issues)
+                        const tooltipContent = `<div style="text-align: left; line-height: 1.6;"><strong>${name}</strong><br><small><strong>What it is:</strong> ${indexInfo.description}</small><br><small><strong>Why we track it:</strong> ${indexInfo.why_track}</small><br><small><strong>Impact:</strong> ${impactBadge}</small><br><small><strong>Current:</strong> ${idx.current} (${idx.change_pct}%)</small><br><small><em>${indexInfo.importance}</em></small></div>`;
+                        
+                        // Create unique ID for this tooltip to set data dynamically
+                        const tooltipId = `index-info-${name.replace(/\s+/g, '-').toLowerCase()}`;
+                        
+                        return `
                         <div class="col-md-6 col-lg-3">
-                            <div class="card h-100 border-0 shadow-sm">
+                            <div class="card h-100 border-0 shadow-sm ${isVIX ? 'border-danger-subtle' : ''}">
                                 <div class="card-body">
-                                    <h6 class="card-title text-truncate" title="${name}">${name}</h6>
-                                    <div class="d-flex justify-content-between align-items-center">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h6 class="card-title text-truncate flex-grow-1" title="${name}" style="margin: 0;">
+                                            ${name}
+                                            ${isVIX ? '<span class="badge bg-secondary ms-2" title="Inverse to market: high = risky">Fear Index</span>' : ''}
+                                        </h6>
+                                        <div class="ms-2" style="flex-shrink: 0;">
+                                            <i class="bi bi-info-circle text-muted index-info-icon" 
+                                               id="${tooltipId}"
+                                               style="cursor: help; font-size: 0.9rem;"
+                                               data-bs-toggle="tooltip" 
+                                               data-bs-placement="top"
+                                               data-index-info='${JSON.stringify(tooltipContent)}'></i>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span class="h5 mb-0">${idx.current}</span>
-                                        <span class="badge bg-${idx.trend === 'up' ? 'success' : 'danger'}">
-                                            <i class="bi bi-arrow-${idx.trend === 'up' ? 'up' : 'down'} me-1"></i>${idx.change_pct}%
+                                        <span class="badge bg-${trendForDisplay}">
+                                            <i class="bi bi-arrow-${arrowDir} me-1"></i>${idx.change_pct}%
                                         </span>
                                     </div>
+                                    <div>
+                                        <span class="badge bg-${impactColor} me-2">${impactBadge}</span>
+                                    </div>
+                                    ${isVIX ? `<small class="text-muted d-block mt-2">
+                                        ${idx.current > 30 ? '⚠️ High volatility - elevated fear' : idx.current > 20 ? '⚠️ Above normal volatility' : '✓ Normal market conditions'}
+                                    </small>` : ''}
                                 </div>
                             </div>
                         </div>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </div>
             </div>
         </div>
@@ -3009,7 +3219,7 @@ function renderMarketSentiment(data) {
                         <i class="bi bi-cart-plus me-2"></i>Top Picks to Buy
                     </h6>
                     <button class="btn btn-sm btn-outline-success" id="refreshBuyRecsBtn" 
-                            onclick="refreshRecommendations()" 
+                            onclick="refreshBuyRecommendations()" 
                             title="Get different recommendations">
                         <i class="bi bi-arrow-repeat"></i>
                     </button>
@@ -3022,9 +3232,16 @@ function renderMarketSentiment(data) {
                                     <div>
                                         <h6 class="mb-1">
                                             <span class="badge bg-success me-2">${idx + 1}</span>
-                                            <strong>${rec.ticker}</strong>
-                                            ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker)}</span>` : ''}
+                                            <strong title="${rec.name || rec.ticker}" style="cursor: help;">
+                                                ${rec.ticker}
+                                            </strong>
+                                            ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker, rec.price_currency)}</span>` : ''}
                                         </h6>
+                                        ${rec.name && rec.name !== rec.ticker ? `
+                                        <small class="text-muted d-block" style="font-size: 0.85rem;">
+                                            ${rec.name}
+                                        </small>
+                                        ` : ''}
                                     </div>
                                     <button class="btn btn-sm btn-outline-success" 
                                             onclick="addTickerFromRecommendation('${rec.ticker}')"
@@ -3054,7 +3271,7 @@ function renderMarketSentiment(data) {
                         <i class="bi bi-x-circle me-2"></i>Stocks to Avoid/Sell
                     </h6>
                     <button class="btn btn-sm btn-outline-danger" id="refreshSellRecsBtn" 
-                            onclick="refreshRecommendations()" 
+                            onclick="refreshSellRecommendations()" 
                             title="Get different recommendations">
                         <i class="bi bi-arrow-repeat"></i>
                     </button>
@@ -3066,10 +3283,17 @@ function renderMarketSentiment(data) {
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <h6 class="mb-1">
                                         <span class="badge bg-danger me-2">${idx + 1}</span>
-                                        <strong>${rec.ticker}</strong>
-                                        ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker)}</span>` : ''}
+                                        <strong title="${rec.name || rec.ticker}" style="cursor: help;">
+                                            ${rec.ticker}
+                                        </strong>
+                                        ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker, rec.price_currency)}</span>` : ''}
                                     </h6>
                                 </div>
+                                ${rec.name && rec.name !== rec.ticker ? `
+                                <small class="text-muted d-block mb-2" style="font-size: 0.85rem;">
+                                    ${rec.name}
+                                </small>
+                                ` : ''}
                                 <small class="text-muted d-block mb-2">
                                     <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
                                 </small>
@@ -3088,6 +3312,9 @@ function renderMarketSentiment(data) {
     `;
     
     contentDiv.innerHTML = html;
+    
+    // Initialize Bootstrap tooltips for the market indices info icons
+    initializeTooltips();
 }
 
 /**
@@ -3110,6 +3337,166 @@ async function refreshMarketSentiment() {
 }
 
 /**
+ * Refresh ONLY buy recommendations (independent)
+ */
+async function refreshBuyRecommendations() {
+    const buyBtn = document.getElementById('refreshBuyRecsBtn');
+    
+    // Disable button and show loading
+    if (buyBtn) {
+        buyBtn.disabled = true;
+        buyBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+    }
+    
+    try {
+        // Call the specific buy recommendations refresh endpoint
+        const url = `/refresh-buy-recommendations`;
+        const response = await fetch(url, { method: 'POST' });
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to refresh buy recommendations');
+        }
+        
+        // Update only the buy recommendations section
+        const buyContainer = document.querySelector('#marketSentimentContent .row .col-md-6:first-child');
+        if (buyContainer && result.buy_recommendations) {
+            const buyHtml = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-success">
+                        <i class="bi bi-cart-plus me-2"></i>Top Picks to Buy
+                    </h6>
+                    <button class="btn btn-sm btn-outline-success" id="refreshBuyRecsBtn" 
+                            onclick="refreshBuyRecommendations()" 
+                            title="Get different recommendations">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                </div>
+                ${result.buy_recommendations.length > 0 ? 
+                    result.buy_recommendations.map((rec, idx) => `
+                        <div class="card border-success mb-2">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h6 class="mb-1">
+                                            <span class="badge bg-success me-2">${idx + 1}</span>
+                                            <strong>${rec.ticker}</strong>
+                                            ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker)}</span>` : ''}
+                                        </h6>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-success" 
+                                            onclick="addTickerFromRecommendation('${rec.ticker}')"
+                                            title="Add to analysis">
+                                        <i class="bi bi-plus-circle"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted d-block mb-2">
+                                    <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
+                                </small>
+                                <p class="mb-0 small">${rec.reason}</p>
+                            </div>
+                        </div>
+                    `).join('') 
+                : `
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        No buy recommendations available.
+                    </div>
+                `}
+            `;
+            buyContainer.innerHTML = buyHtml;
+        }
+        
+    } catch (error) {
+        console.error('Error refreshing buy recommendations:', error);
+        alert('Failed to refresh buy recommendations. Please try again.');
+    } finally {
+        // Re-enable button
+        if (buyBtn) {
+            buyBtn.disabled = false;
+            buyBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+        }
+    }
+}
+
+/**
+ * Refresh ONLY sell recommendations (independent)
+ */
+async function refreshSellRecommendations() {
+    const sellBtn = document.getElementById('refreshSellRecsBtn');
+    
+    // Disable button and show loading
+    if (sellBtn) {
+        sellBtn.disabled = true;
+        sellBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+    }
+    
+    try {
+        // Call the specific sell recommendations refresh endpoint
+        const url = `/refresh-sell-recommendations`;
+        const response = await fetch(url, { method: 'POST' });
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to refresh sell recommendations');
+        }
+        
+        // Update only the sell recommendations section
+        const sellContainer = document.querySelector('#marketSentimentContent .row .col-md-6:last-child');
+        if (sellContainer && result.sell_recommendations) {
+            const sellHtml = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-danger">
+                        <i class="bi bi-x-circle me-2"></i>Stocks to Avoid/Sell
+                    </h6>
+                    <button class="btn btn-sm btn-outline-danger" id="refreshSellRecsBtn" 
+                            onclick="refreshSellRecommendations()" 
+                            title="Get different recommendations">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                </div>
+                ${result.sell_recommendations.length > 0 ? 
+                    result.sell_recommendations.map((rec, idx) => `
+                        <div class="card border-danger mb-2">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h6 class="mb-1">
+                                        <span class="badge bg-danger me-2">${idx + 1}</span>
+                                        <strong>${rec.ticker}</strong>
+                                        ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker)}</span>` : ''}
+                                    </h6>
+                                </div>
+                                <small class="text-muted d-block mb-2">
+                                    <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
+                                </small>
+                                <p class="mb-0 small">${rec.reason}</p>
+                            </div>
+                        </div>
+                    `).join('')
+                : `
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        No sell recommendations available.
+                    </div>
+                `}
+            `;
+            sellContainer.innerHTML = sellHtml;
+        }
+        
+    } catch (error) {
+        console.error('Error refreshing sell recommendations:', error);
+        alert('Failed to refresh sell recommendations. Please try again.');
+    } finally {
+        // Re-enable button
+        if (sellBtn) {
+            sellBtn.disabled = false;
+            sellBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+        }
+    }
+}
+
+/**
+ * DEPRECATED: Use refreshBuyRecommendations() or refreshSellRecommendations() instead
  * Refresh only stock recommendations (not the entire sentiment analysis)
  */
 async function refreshRecommendations() {

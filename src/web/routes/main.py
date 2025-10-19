@@ -64,3 +64,94 @@ def market_sentiment():
             'success': False,
             'error': str(e)
         }), 500
+
+@bp.route('/refresh-buy-recommendations', methods=['POST'])
+def refresh_buy_recommendations():
+    """Refresh ONLY the buy recommendations (independent from sentiment)"""
+    try:
+        currency = request.args.get('currency', 'USD').upper()
+        
+        # Validate currency
+        valid_currencies = ['USD', 'EUR', 'GBP', 'NATIVE']
+        if currency not in valid_currencies:
+            currency = 'USD'
+        
+        service = get_market_sentiment_service()
+        
+        # Get current cached data WITHOUT regenerating sentiment
+        cached_data = service.load_cache()
+        if not cached_data:
+            # No cache, need full refresh
+            cached_data = service.get_daily_sentiment(force_refresh=True, currency=currency)
+        
+        # Regenerate ONLY buy recommendations
+        sector_data = cached_data.get('top_sectors', {})
+        sentiment = cached_data.get('sentiment', 'NEUTRAL')
+        
+        buy_recs = service._generate_buy_recommendations(sector_data, sentiment, max_recommendations=10)
+        buy_recs = buy_recs[:3]  # Top 3
+        
+        # Update cache with new buy recommendations
+        cached_data['buy_recommendations'] = buy_recs
+        service.save_cache(cached_data)
+        
+        # Convert currency if needed
+        converted_data = service._convert_sentiment_currency(cached_data, currency)
+        
+        return jsonify({
+            'success': True,
+            'buy_recommendations': converted_data.get('buy_recommendations', [])
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@bp.route('/refresh-sell-recommendations', methods=['POST'])
+def refresh_sell_recommendations():
+    """Refresh ONLY the sell recommendations (independent from sentiment and buy recs)"""
+    try:
+        currency = request.args.get('currency', 'USD').upper()
+        
+        # Validate currency
+        valid_currencies = ['USD', 'EUR', 'GBP', 'NATIVE']
+        if currency not in valid_currencies:
+            currency = 'USD'
+        
+        service = get_market_sentiment_service()
+        
+        # Get current cached data WITHOUT regenerating sentiment
+        cached_data = service.load_cache()
+        if not cached_data:
+            # No cache, need full refresh
+            cached_data = service.get_daily_sentiment(force_refresh=True, currency=currency)
+        
+        # Regenerate ONLY sell recommendations (exclude current buy tickers)
+        sector_data = cached_data.get('top_sectors', {})
+        sentiment = cached_data.get('sentiment', 'NEUTRAL')
+        buy_tickers = {r['ticker'] for r in cached_data.get('buy_recommendations', [])}
+        
+        sell_recs = service._generate_sell_recommendations(
+            sector_data, sentiment, 
+            max_recommendations=10,
+            excluded_tickers=buy_tickers
+        )
+        sell_recs = sell_recs[:3]  # Top 3
+        
+        # Update cache with new sell recommendations
+        cached_data['sell_recommendations'] = sell_recs
+        service.save_cache(cached_data)
+        
+        # Convert currency if needed
+        converted_data = service._convert_sentiment_currency(cached_data, currency)
+        
+        return jsonify({
+            'success': True,
+            'sell_recommendations': converted_data.get('sell_recommendations', [])
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500

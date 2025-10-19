@@ -10,3 +10,9 @@ kaleido
 praw
 requests
 selenium
+lxml
+
+# Multi-source market data providers
+finnhub-python
+alpha-vantage
+twelvedata

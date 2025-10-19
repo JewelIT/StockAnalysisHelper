@@ -106,6 +106,11 @@ class Config:
     WEIGHT_SENTIMENT_NO_ANALYST = 0.40
     WEIGHT_TECHNICAL_NO_ANALYST = 0.60
     
+    # Cryptocurrency-specific weights (no analyst data, news sentiment unreliable)
+    # Crypto moves on technical + on-chain data, NOT news sentiment
+    WEIGHT_CRYPTO_SENTIMENT_NO_ANALYST = 0.10  # Minimal weight - crypto sentiment inflated
+    WEIGHT_CRYPTO_TECHNICAL_NO_ANALYST = 0.90  # Dominant weight - technical is king for crypto
+    
     # ==================== CHART VISUALIZATION ====================
     
     # Gauge chart dimensions
@@ -219,9 +224,54 @@ class Config:
             return 'none'
     
     @staticmethod
-    def get_recommendation_weights(has_analyst_data):
-        """Get recommendation weights based on data availability"""
-        if has_analyst_data:
+    def is_cryptocurrency(ticker: str) -> bool:
+        """
+        Detect if a ticker symbol represents a cryptocurrency
+        
+        Cryptocurrencies typically:
+        - End with -USD, -EUR, -GBP, -JPY (fiat pair)
+        - Are known crypto symbols (BTC, ETH, XRP, etc.)
+        - Don't appear in stock markets
+        """
+        if not ticker:
+            return False
+        
+        ticker_upper = ticker.upper()
+        
+        # Check for fiat currency pairs (crypto indicator)
+        fiat_suffixes = ('-USD', '-EUR', '-GBP', '-JPY', '-AUD', '-CAD', '-CHF')
+        if any(ticker_upper.endswith(suffix) for suffix in fiat_suffixes):
+            # Get the base symbol without the fiat pair
+            base = ticker_upper.split('-')[0]
+            # Common crypto tickers
+            known_cryptos = {
+                'BTC', 'ETH', 'XRP', 'ADA', 'DOT', 'LTC', 'BCH', 'EOS', 'XLM',
+                'LINK', 'XMR', 'ZEC', 'DOGE', 'USDT', 'USDC', 'DAI', 'BUSD',
+                'SOL', 'AVAX', 'MATIC', 'FTX', 'NEAR', 'APT', 'ARB', 'OP',
+                'ATOM', 'ICP', 'ALGO', 'FLOW', 'FIL', 'AAVE', 'UNI', 'SUSHI',
+                'CAKE', 'CRV', 'SNX', 'MKR', 'COMP', 'YEARN'
+            }
+            return base in known_cryptos
+        
+        return False
+    
+    @staticmethod
+    def get_recommendation_weights(has_analyst_data, is_crypto=False):
+        """
+        Get recommendation weights based on data availability and asset type
+        
+        Args:
+            has_analyst_data: Whether analyst consensus data is available
+            is_crypto: Whether this is a cryptocurrency (affects weighting)
+        """
+        if is_crypto and not has_analyst_data:
+            # Crypto: minimize sentiment (unreliable), maximize technical
+            return {
+                'sentiment': Config.WEIGHT_CRYPTO_SENTIMENT_NO_ANALYST,
+                'technical': Config.WEIGHT_CRYPTO_TECHNICAL_NO_ANALYST,
+                'analyst': 0.0
+            }
+        elif has_analyst_data:
             return {
                 'sentiment': Config.WEIGHT_SENTIMENT_WITH_ANALYST,
                 'technical': Config.WEIGHT_TECHNICAL_WITH_ANALYST,
