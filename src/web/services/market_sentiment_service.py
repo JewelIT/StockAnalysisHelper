@@ -11,12 +11,30 @@ import random
 
 logger = logging.getLogger(__name__)
 
+# Import multi-source service
+try:
+    from .multi_source_market_data import get_multi_source_service
+    MULTI_SOURCE_AVAILABLE = True
+    logger.info("✓ Multi-source market data service available")
+except ImportError as e:
+    MULTI_SOURCE_AVAILABLE = False
+    logger.warning(f"Multi-source service not available, using Yahoo Finance only: {e}")
+
+# Import dynamic recommendations service
+try:
+    from .dynamic_recommendations import get_dynamic_recommendation_service
+    DYNAMIC_RECS_AVAILABLE = True
+    logger.info("✓ Dynamic recommendations service available")
+except ImportError as e:
+    DYNAMIC_RECS_AVAILABLE = False
+    logger.warning(f"Dynamic recommendations not available: {e}")
+
 class MarketSentimentService:
     """Service for generating market sentiment and recommendations"""
     
     def __init__(self):
         self.cache_file = 'cache/market_sentiment_cache.json'
-        self.cache_duration_hours = 4  # Refresh every 4 hours
+        self.cache_duration_hours = 0.25  # Refresh every 15 minutes (markets are volatile!)
         
         # Exchange rates (fallback values, should fetch live)
         self.exchange_rates = {
@@ -40,8 +58,43 @@ class MarketSentimentService:
         }
         
     def get_market_indices_data(self) -> Dict:
-        """Fetch current data for major market indices"""
+        """Fetch current data for major market indices using MULTI-SOURCE or intraday data"""
         try:
+            # Try multi-source consensus first
+            if MULTI_SOURCE_AVAILABLE:
+                try:
+                    multi_source = get_multi_source_service()
+                    consensus_data = multi_source.get_consensus_market_data()
+                    
+                    if consensus_data:
+                        logger.info(f"✓ Using multi-source consensus from {len(consensus_data)} indices")
+                        
+                        # Convert to our format
+                        result = {}
+                        for index_name, consensus in consensus_data.items():
+                            result[index_name] = {
+                                'symbol': consensus.get('index_name', index_name),
+                                'current': consensus['consensus_price'],
+                                'change_pct': consensus['consensus_change_pct'],
+                                'trend': consensus['trend'],
+                                'sources': consensus['sources_used'],
+                                'confidence': consensus['confidence'],
+                                'multi_source': True
+                            }
+                            
+                            # Log discrepancies
+                            if consensus.get('has_discrepancy'):
+                                logger.warning(
+                                    f"⚠️ {index_name}: Sources disagree by {consensus['spread']:.2f}% "
+                                    f"(Severity: {consensus['severity']})"
+                                )
+                        
+                        return result
+                except Exception as e:
+                    logger.warning(f"Multi-source fetch failed, falling back to Yahoo: {e}")
+            
+            # Fallback: Use Yahoo Finance intraday data
+            logger.info("Using Yahoo Finance fallback")
             indices = {
                 '^GSPC': 'S&P 500',
                 '^DJI': 'Dow Jones',
@@ -53,17 +106,27 @@ class MarketSentimentService:
             for symbol, name in indices.items():
                 try:
                     ticker = yf.Ticker(symbol)
-                    hist = ticker.history(period='5d')
+                    # USE INTRADAY DATA instead of 5-day history
+                    # Get 1 day of 5-minute bars to capture today's moves
+                    hist = ticker.history(period='1d', interval='5m')
+                    
+                    # Fallback to daily data if intraday fails (market closed/pre-market)
+                    if hist.empty or len(hist) < 2:
+                        hist = ticker.history(period='5d')
+                    
                     if not hist.empty:
                         current = hist['Close'].iloc[-1]
-                        previous = hist['Close'].iloc[-2] if len(hist) > 1 else current
-                        change_pct = ((current - previous) / previous) * 100
+                        # Compare to TODAY'S OPEN, not yesterday's close
+                        day_open = hist['Open'].iloc[0] if len(hist) > 0 else current
+                        change_pct = ((current - day_open) / day_open) * 100
                         
                         data[name] = {
                             'symbol': symbol,
                             'current': round(current, 2),
                             'change_pct': round(change_pct, 2),
-                            'trend': 'up' if change_pct > 0 else 'down'
+                            'trend': 'up' if change_pct > 0 else 'down',
+                            'intraday': len(hist) > 10,  # Flag if we got intraday data
+                            'multi_source': False
                         }
                 except Exception as e:
                     logger.warning(f"Failed to fetch {name}: {e}")
@@ -73,6 +136,40 @@ class MarketSentimentService:
         except Exception as e:
             logger.error(f"Error fetching market indices: {e}")
             return {}
+    
+    def get_fear_greed_index(self) -> Optional[Dict]:
+        """
+        Fetch CNN Fear & Greed Index (0-100 scale)
+        0-25 = Extreme Fear → Force BEARISH
+        25-45 = Fear → BEARISH/NEUTRAL
+        45-55 = Neutral
+        55-75 = Greed → BULLISH
+        75-100 = Extreme Greed → Caution
+        """
+        try:
+            import requests
+            # Try CNN's Fear & Greed Index API
+            url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+            response = requests.get(url, timeout=5)
+            
+            if response.status_code == 200:
+                data = response.json()
+                # Extract current fear & greed value
+                if 'fear_and_greed' in data:
+                    current_value = data['fear_and_greed'].get('score', None)
+                    rating = data['fear_and_greed'].get('rating', 'Unknown')
+                    
+                    if current_value is not None:
+                        logger.info(f"Fear & Greed Index: {current_value} ({rating})")
+                        return {
+                            'value': current_value,
+                            'rating': rating,
+                            'timestamp': datetime.now().isoformat()
+                        }
+        except Exception as e:
+            logger.warning(f"Could not fetch Fear & Greed Index: {e}")
+        
+        return None
     
     def get_sector_performance(self) -> Dict:
         """Fetch sector ETF performance"""
@@ -131,19 +228,112 @@ class MarketSentimentService:
             # Calculate average market change (excluding VIX)
             avg_change = sum(idx['change_pct'] for idx in market_indices.values()) / total_indices if total_indices > 0 else 0
             
-            # Determine sentiment - More sensitive thresholds
-            if avg_change > 0.3 and market_trend_pct >= 65:
+            # NEW: Check Fear & Greed Index FIRST (highest priority)
+            fear_greed = self.get_fear_greed_index()
+            fear_greed_override = None
+            fg_reason = None
+            
+            if fear_greed and 'value' in fear_greed:
+                fg_value = fear_greed['value']
+                fg_rating = fear_greed['rating']
+                
+                if fg_value < 25:
+                    # Extreme Fear - force BEARISH
+                    fear_greed_override = "BEARISH"
+                    fg_reason = f"CNN Fear & Greed Index at {fg_value} (Extreme Fear) - market sentiment very negative. High risk of further declines."
+                elif fg_value < 45:
+                    # Fear - force BEARISH (not just lean, FORCE it)
+                    fear_greed_override = "BEARISH"
+                    fg_reason = f"CNN Fear & Greed Index at {fg_value} (Fear) - investor sentiment cautious. Markets unstable, defensive positioning recommended."
+                elif fg_value < 55:
+                    # Neutral zone - don't override but note the uncertainty
+                    fg_reason = f"CNN Fear & Greed Index at {fg_value} (Neutral) - mixed signals in market"
+                elif fg_value > 75:
+                    # Extreme Greed - force NEUTRAL (never BULLISH in greed zone)
+                    fear_greed_override = "NEUTRAL"
+                    fg_reason = f"CNN Fear & Greed Index at {fg_value} (Extreme Greed) - market potentially overheated. Risk of correction."
+                elif fg_value > 65:
+                    # Greed - cap at NEUTRAL max
+                    fear_greed_override = "NEUTRAL"
+                    fg_reason = f"CNN Fear & Greed Index at {fg_value} (Greed) - market exuberance may be excessive. Caution advised."
+                
+                logger.info(f"Fear & Greed: {fg_value} ({fg_rating}) - Override: {fear_greed_override}")
+            
+            # Check VIX (Fear Index) second - it also overrides other signals
+            vix_current = market_data.get('VIX (Volatility)', {}).get('current', 0)
+            vix_change = market_data.get('VIX (Volatility)', {}).get('change_pct', 0)
+            vix_override = None
+            vix_reason = None
+            
+            # MORE SENSITIVE VIX THRESHOLDS - VIX >20 is NOT normal, it's elevated fear
+            if vix_current > 30:
+                # High fear - force BEARISH
+                vix_override = "BEARISH"
+                vix_reason = f"High market fear (VIX {vix_current:.1f}) indicates significant risk and uncertainty"
+            elif vix_current > 25:
+                # Elevated fear - force BEARISH unless Fear & Greed already handled it
+                vix_override = "BEARISH"
+                vix_reason = f"Elevated market fear (VIX {vix_current:.1f}) signals heightened risk environment"
+            elif vix_current > 20:
+                # Moderate fear - cap at NEUTRAL (no BULLISH allowed)
+                vix_override = "NEUTRAL"
+                vix_reason = f"Volatility elevated (VIX {vix_current:.1f}) above normal, caution warranted"
+            elif vix_change > 15:
+                # VIX spiking rapidly (15%+ increase) - fear is increasing
+                vix_override = "BEARISH"
+                vix_reason = f"VIX spiking {vix_change:.1f}% - fear escalating, volatility rising"
+            
+            # Determine final sentiment with priority: Fear & Greed > VIX > Index moves
+            # CRITICAL: Be pragmatic, not overly optimistic. When fear is present, acknowledge it.
+            risk_warnings = []
+            
+            if fear_greed_override:
+                # Fear & Greed Index has highest priority
+                sentiment = fear_greed_override
+                confidence = min(75 + abs(int((fear_greed['value'] - 50) / 2)), 95)
+                summary = fg_reason
+                
+                # Add explicit risk warning when Fear & Greed shows fear
+                if fear_greed['value'] < 45:
+                    risk_warnings.append(f"Market Fear Index at {fear_greed['value']} - expect volatility and potential continued declines")
+                elif fear_greed['value'] > 65:
+                    risk_warnings.append(f"Market Greed Index at {fear_greed['value']} - risk of correction when sentiment is this bullish")
+                    
+            elif vix_override:
+                # VIX second priority
+                sentiment = vix_override
+                confidence = min(70 + int(vix_current - 20) * 2, 90)
+                summary = vix_reason
+                risk_warnings.append(f"Elevated volatility (VIX {vix_current:.1f}) suggests uncertain market conditions")
+                
+            elif avg_change > 0.5 and market_trend_pct >= 75:
+                # HIGHER threshold for BULLISH (was 0.3 and 65%, now 0.5 and 75%)
                 sentiment = "BULLISH"
-                confidence = min(70 + int(avg_change * 8), 95)
-                summary = "Markets showing strong positive momentum across major indices"
+                confidence = min(65 + int(avg_change * 8), 90)  # Lower max confidence
+                summary = "Markets showing positive momentum across major indices"
+                # Even in bullish, acknowledge any fear signals
+                if vix_current > 18:
+                    risk_warnings.append(f"VIX at {vix_current:.1f} suggests some underlying caution despite gains")
+                    
             elif avg_change < -0.3 and market_trend_pct <= 35:
                 sentiment = "BEARISH"
                 confidence = min(70 + int(abs(avg_change) * 8), 95)
                 summary = "Markets experiencing downward pressure with widespread declines"
+                risk_warnings.append("Broad market weakness - defensive positioning recommended")
+                
             else:
+                # Default to NEUTRAL with lower confidence - be conservative
                 sentiment = "NEUTRAL"
-                confidence = 50 + int(abs(avg_change) * 10)
+                confidence = 50 + int(abs(avg_change) * 5)  # Lower confidence calculation
                 summary = "Markets showing mixed signals with no clear directional trend"
+                if vix_current > 18:
+                    risk_warnings.append(f"VIX at {vix_current:.1f} above normal baseline, suggesting caution")
+            
+            # ALWAYS add risk context when fear signals present
+            if fg_reason and fear_greed_override in ["BEARISH", "NEUTRAL"]:
+                summary = f"{summary}. {fg_reason}"
+            elif vix_reason and vix_override in ["BEARISH", "NEUTRAL"]:
+                summary = f"{summary}. {vix_reason}"
             
             # Generate reasoning
             reasoning_parts = []
@@ -162,15 +352,28 @@ class MarketSentimentService:
             
             reasoning = ". ".join(reasoning_parts) + "." if reasoning_parts else "Market data analysis in progress."
             
-            # Extract key factors
+            # Extract key factors - include risk warnings prominently
             key_factors = []
+            
+            # PRIORITIZE risk warnings at the top
+            if risk_warnings:
+                key_factors.extend(risk_warnings)
+            
+            # Add Fear & Greed context
+            if fear_greed and 'value' in fear_greed:
+                key_factors.append(f"CNN Fear & Greed Index: {fear_greed['value']}/100 ({fear_greed['rating']})")
+            
+            # Add VIX context
             if 'VIX (Volatility)' in market_data:
                 vix_data = market_data['VIX (Volatility)']
-                if vix_data['current'] > 20:
-                    key_factors.append(f"Elevated volatility (VIX: {vix_data['current']})")
+                if vix_data['current'] > 25:
+                    key_factors.append(f"High volatility - VIX at {vix_data['current']:.1f} (elevated fear)")
+                elif vix_data['current'] > 20:
+                    key_factors.append(f"Elevated volatility - VIX at {vix_data['current']:.1f} (above normal)")
                 elif vix_data['current'] < 15:
-                    key_factors.append(f"Low volatility environment (VIX: {vix_data['current']})")
+                    key_factors.append(f"Low volatility - VIX at {vix_data['current']:.1f} (market calm)")
             
+            # Add sector performance
             if sector_data:
                 top_sector = list(sector_data.keys())[0]
                 key_factors.append(f"{top_sector} sector leading market")
@@ -179,8 +382,25 @@ class MarketSentimentService:
                 key_factors.append(f"{worst_performing[0]} sector underperforming")
             
             # Generate recommendations based on top sectors
+            # CRITICAL FIX: Generate buy first, then pass excluded tickers to sell generation
             buy_recommendations = self._generate_buy_recommendations(sector_data, sentiment)
-            sell_recommendations = self._generate_sell_recommendations(sector_data, sentiment)
+            buy_tickers = {r['ticker'] for r in buy_recommendations}
+            
+            # Pass excluded tickers to avoid duplicates
+            sell_recommendations = self._generate_sell_recommendations(
+                sector_data, 
+                sentiment, 
+                excluded_tickers=buy_tickers
+            )
+            
+            # Double-check for any remaining duplicates (shouldn't happen now)
+            sell_tickers = {r['ticker'] for r in sell_recommendations}
+            duplicates = buy_tickers & sell_tickers
+            
+            if duplicates:
+                logger.error(f"CRITICAL: Still found duplicates after exclusion: {duplicates}")
+                # Remove duplicates from sell list as fallback
+                sell_recommendations = [r for r in sell_recommendations if r['ticker'] not in duplicates]
             
             return {
                 "sentiment": sentiment,
@@ -382,7 +602,35 @@ class MarketSentimentService:
         return f'{base_reason}.{context}'
     
     def _generate_buy_recommendations(self, sector_data: Dict, sentiment: str, max_recommendations: int = 10) -> List[Dict]:
-        """Generate buy recommendations based on top performing sectors with prices"""
+        """
+        Generate buy recommendations DYNAMICALLY from live market data.
+        NO hardcoded stocks - uses real-time analysis!
+        """
+        try:
+            # Try dynamic recommendations first (NEW - LIVE DATA!)
+            if DYNAMIC_RECS_AVAILABLE:
+                dynamic_service = get_dynamic_recommendation_service()
+                top_sectors = [name for name, _ in list(sector_data.items())[:5]]
+                
+                recommendations = dynamic_service.get_dynamic_buy_recommendations(
+                    top_sectors=top_sectors,
+                    max_recommendations=max_recommendations
+                )
+                
+                if recommendations:
+                    logger.info(f"✓ Using {len(recommendations)} DYNAMIC buy recommendations (live data!)")
+                    return recommendations
+            
+            # Fallback: Hardcoded approach (DEPRECATED - only if dynamic fails)
+            logger.warning("⚠️ Falling back to hardcoded stocks (dynamic service unavailable)")
+            return self._generate_buy_recommendations_fallback(sector_data, sentiment, max_recommendations)
+            
+        except Exception as e:
+            logger.error(f"Error generating buy recommendations: {e}")
+            return self._generate_buy_recommendations_fallback(sector_data, sentiment, max_recommendations)
+    
+    def _generate_buy_recommendations_fallback(self, sector_data: Dict, sentiment: str, max_recommendations: int = 10) -> List[Dict]:
+        """FALLBACK: Generate buy recommendations from hardcoded lists (DEPRECATED)"""
         recommendations = []
         
         try:
@@ -434,7 +682,7 @@ class MarketSentimentService:
                     del sector_stock_iterators[sector_name]
             
         except Exception as e:
-            logger.warning(f"Error generating buy recommendations: {e}")
+            logger.warning(f"Error in fallback buy recommendations: {e}")
         
         return recommendations[:max_recommendations]
     
@@ -526,7 +774,7 @@ class MarketSentimentService:
             'GE': 'Execution risks on turnaround, debt reduction needs',
             
             # Materials
-            'LIN': 'Energy cost sensitivity, demand cyclicality',
+            # 'LIN': 'Energy cost sensitivity, demand cyclicality',  # REMOVED - LIN already in BUY list
             'APD': 'Capital intensity, hydrogen economics uncertainty',
             'ECL': 'Hospitality demand dependency, input cost pressures',
             'SHW': 'Raw material inflation, housing market sensitivity',
@@ -586,9 +834,42 @@ class MarketSentimentService:
             
         return f'{base_reason}.{context}'
     
-    def _generate_sell_recommendations(self, sector_data: Dict, sentiment: str, max_recommendations: int = 10) -> List[Dict]:
-        """Generate sell/avoid recommendations based on underperforming sectors with prices"""
+    def _generate_sell_recommendations(self, sector_data: Dict, sentiment: str, max_recommendations: int = 10, excluded_tickers: set = None) -> List[Dict]:
+        """
+        Generate sell recommendations DYNAMICALLY from live market data.
+        NO hardcoded stocks - uses real-time analysis!
+        """
+        excluded_tickers = excluded_tickers or set()  # Avoid duplicates with buy list
+        
+        try:
+            # Try dynamic recommendations first (NEW - LIVE DATA!)
+            if DYNAMIC_RECS_AVAILABLE:
+                dynamic_service = get_dynamic_recommendation_service()
+                bottom_sectors = [name for name, _ in list(sector_data.items())[-5:]]
+                bottom_sectors.reverse()  # Worst first
+                
+                recommendations = dynamic_service.get_dynamic_sell_recommendations(
+                    bottom_sectors=bottom_sectors,
+                    max_recommendations=max_recommendations,
+                    excluded_tickers=excluded_tickers
+                )
+                
+                if recommendations:
+                    logger.info(f"✓ Using {len(recommendations)} DYNAMIC sell recommendations (live data!)")
+                    return recommendations
+            
+            # Fallback: Hardcoded approach (DEPRECATED - only if dynamic fails)
+            logger.warning("⚠️ Falling back to hardcoded stocks (dynamic service unavailable)")
+            return self._generate_sell_recommendations_fallback(sector_data, sentiment, max_recommendations, excluded_tickers)
+            
+        except Exception as e:
+            logger.error(f"Error generating sell recommendations: {e}")
+            return self._generate_sell_recommendations_fallback(sector_data, sentiment, max_recommendations, excluded_tickers)
+    
+    def _generate_sell_recommendations_fallback(self, sector_data: Dict, sentiment: str, max_recommendations: int = 10, excluded_tickers: set = None) -> List[Dict]:
+        """FALLBACK: Generate sell recommendations from hardcoded lists (DEPRECATED)"""
         recommendations = []
+        excluded_tickers = excluded_tickers or set()
         
         try:
             # Get bottom performing sectors
@@ -614,6 +895,11 @@ class MarketSentimentService:
                     
                     try:
                         ticker = next(data['stocks'])
+                        
+                        # CRITICAL: Skip if ticker is in buy recommendations
+                        if ticker in excluded_tickers:
+                            continue
+                        
                         price = self._get_stock_price(ticker)
                         
                         if price is not None:
@@ -640,12 +926,12 @@ class MarketSentimentService:
                     del sector_stock_iterators[sector_name]
             
         except Exception as e:
-            logger.warning(f"Error generating sell recommendations: {e}")
+            logger.warning(f"Error in fallback sell recommendations: {e}")
         
         return recommendations[:max_recommendations]
     
     def load_cache(self) -> Optional[Dict]:
-        """Load cached sentiment if still valid"""
+        """Load cached sentiment if still valid (expires daily or after set hours)"""
         try:
             if not os.path.exists(self.cache_file):
                 return None
@@ -654,11 +940,20 @@ class MarketSentimentService:
                 cache = json.load(f)
             
             cached_time = datetime.fromisoformat(cache.get('timestamp', ''))
-            if datetime.now() - cached_time < timedelta(hours=self.cache_duration_hours):
-                logger.info("Using cached market sentiment")
+            now = datetime.now()
+            
+            # CRITICAL FIX: Expire cache if it's from a different day
+            if cached_time.date() != now.date():
+                logger.info(f"Cache expired: from {cached_time.date()}, today is {now.date()}")
+                return None
+            
+            # Within same day: check hourly expiration
+            if now - cached_time < timedelta(hours=self.cache_duration_hours):
+                age_minutes = (now - cached_time).total_seconds() / 60
+                logger.info(f"Using cached market sentiment from {age_minutes:.1f} minutes ago")
                 return cache.get('data')
             else:
-                logger.info("Cache expired, refreshing market sentiment")
+                logger.info("Cache expired (hourly limit reached), refreshing market sentiment")
                 return None
                 
         except Exception as e:
