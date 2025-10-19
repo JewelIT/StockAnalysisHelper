@@ -1,5 +1,31 @@
 """
-Multi-Source Market Data Service - Aggregates data from multiple sources
+Multi-Source Market Data Service - Aggregates data from multiple sources with fallback handling.
+
+ARCHITECTURE:
+  Data sources are prioritized to maximize reliability and accuracy:
+  
+  Priority 1 (Weight 1.5): Finnhub - Real-time, high accuracy, requires API key
+  Priority 2 (Weight 1.5): Alpha Vantage - Real-time with rate limits, fallback disabled on 429
+  Priority 3 (Weight 1.0): yfinance - Always available, free, fallback when others fail
+  
+FALLBACK STRATEGY:
+  - All three sources queried in parallel attempts
+  - Weighted consensus calculated from successful responses
+  - Alpha Vantage automatically disabled if rate limit (429) detected
+  - System continues functioning with remaining sources
+  - yfinance guarantees application never fails on market data
+  
+RATE LIMIT HANDLING:
+  - Alpha Vantage rate limit triggers automatic disabled flag
+  - Detection: 'Note' field in response OR 'rate limit' in exception
+  - Once disabled: AV skipped until manual re-enable
+  - Consensus recalculated from Finnhub + yfinance with adjusted weights
+  
+CONSENSUS CALCULATION:
+  - Weighted average: sum(price * weight) / sum(weights)
+  - Detects discrepancies: flags if sources disagree > 10% or opposite signs
+  - Calculates confidence: higher with more sources in agreement
+  - All raw data included for auditability
 """
 import os
 import logging
@@ -11,8 +37,10 @@ logger = logging.getLogger(__name__)
 
 class MultiSourceMarketData:
     """
-    Fetch market data from multiple sources and calculate consensus
-    to avoid relying on a single potentially inaccurate source.
+    Fetch market data from multiple sources and calculate weighted consensus.
+    
+    Ensures no single source failure brings down the system.
+    Automatically manages Alpha Vantage rate limiting with graceful degradation.
     """
     
     def __init__(self):
