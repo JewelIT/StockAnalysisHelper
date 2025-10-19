@@ -1442,6 +1442,18 @@ body {
     color: inherit;
 }
 
+/* Tooltip Styles for Market Index Info */
+.tooltip-inner {
+    text-align: left !important;
+    max-width: 300px;
+    padding: 0.75rem;
+    text-align: left;
+}
+
+.index-info-icon:hover {
+    opacity: 1;
+}
+
 /* Print Styles */
 @media print {
     .chat-side-panel,
