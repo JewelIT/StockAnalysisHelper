@@ -1653,7 +1653,7 @@ function renderStockDetails(ticker, resultIndex) {
                             <div class="row g-3">
                                 <div class="col-6">
                                     <h6 class="mb-2" style="font-size: 0.85rem; color: #6c757d;">
-                                        <i class="bi bi-cash-coin me-2"></i>Current Price
+                                        <i class="bi bi-cash me-2"></i>Current Price
                                     </h6>
                                     <div class="h4 mb-0">${formatPrice(r.current_price, r.ticker, r.price_currency)}</div>
                                     <small class="text-muted">Last traded</small>
