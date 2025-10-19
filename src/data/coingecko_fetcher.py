@@ -127,7 +127,7 @@ class CoinGeckoFetcher:
         
         Args:
             ticker: Crypto symbol (BTC, ETH) or pair (BTC-USD)
-            period: Time period (1mo, 3mo, 6mo, 1y, 5y)
+            period: Time period (1d, 1mo, 3mo, 6mo, 1y, 5y)
         
         Returns:
             pandas DataFrame with OHLCV data, or None if failed
@@ -140,6 +140,8 @@ class CoinGeckoFetcher:
         
         # Convert period to days
         period_map = {
+            '1d': 1,
+            '1wk': 7,
             '1mo': 30,
             '3mo': 90,
             '6mo': 180,

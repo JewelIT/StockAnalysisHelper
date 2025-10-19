@@ -200,9 +200,19 @@ class PortfolioAnalyzer:
                 print(f"  ⚠️  No analyst coverage available")
             
             # Combined Recommendation (using Config weights)
+            # Check if this is a cryptocurrency
+            is_crypto = Config.is_cryptocurrency(ticker)
+            
             weights = Config.get_recommendation_weights(
-                has_analyst_data=analyst_score is not None
+                has_analyst_data=analyst_score is not None,
+                is_crypto=is_crypto
             )
+            
+            if is_crypto:
+                if analyst_score is None:
+                    print(f"  🪙 Detected cryptocurrency - using technical-heavy analysis ({int(weights['sentiment']*100)}% sentiment, {int(weights['technical']*100)}% technical)")
+                else:
+                    print(f"  🪙 Detected cryptocurrency - with analyst data: {int(weights['sentiment']*100)}% sentiment, {int(weights['technical']*100)}% technical, {int(weights.get('analyst', 0)*100)}% analyst")
             
             if analyst_score is not None:
                 # Three-way weighting with analyst data
@@ -223,7 +233,7 @@ class PortfolioAnalyzer:
                 technical_weight_used = '100%'
                 formula = 'Combined Score = Technical Score (No sentiment or analyst data available)'
             else:
-                # No analyst data: sentiment + technical
+                # No analyst data: sentiment + technical (weights vary by asset type)
                 combined_score = (
                     avg_sentiment_score * weights['sentiment'] + 
                     technical_signals['score'] * weights['technical']
