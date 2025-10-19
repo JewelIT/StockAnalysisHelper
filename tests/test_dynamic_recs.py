@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Test dynamic recommendations (NO hardcoded stocks!)"""
 import sys
-sys.path.insert(0, 'src')
+import os
+
+# Add parent directory to path so we can import from src
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 print('=== TESTING DYNAMIC RECOMMENDATIONS (LIVE DATA) ===\n')
 
-from web.services.dynamic_recommendations import get_dynamic_recommendation_service
+from src.web.services.dynamic_recommendations import get_dynamic_recommendation_service
 
 service = get_dynamic_recommendation_service()
 print('✓ Dynamic recommendation service initialized\n')

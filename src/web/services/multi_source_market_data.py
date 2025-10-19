@@ -208,7 +208,7 @@ class MultiSourceMarketData:
         return None
     
     def _fetch_alphavantage(self, symbol: str) -> Optional[Dict]:
-        """Fetch data from Alpha Vantage"""
+        """Fetch data from Alpha Vantage with fallback handling for rate limits"""
         try:
             data, meta_data = self.clients['alphavantage'].get_intraday(
                 symbol=symbol,
@@ -230,8 +230,22 @@ class MultiSourceMarketData:
                     'price': current,
                     'change_pct': change_pct
                 }
+            else:
+                # Check for rate limit message in meta_data
+                if meta_data and 'Note' in meta_data:
+                    logger.warning(f"Alpha Vantage rate limit reached for {symbol}. Switching to fallback sources.")
+                    self.sources_config['alphavantage']['enabled'] = False
+                    return None
+                elif meta_data and 'Error Message' in meta_data:
+                    logger.warning(f"Alpha Vantage error for {symbol}: {meta_data.get('Error Message')}")
+                    return None
         except Exception as e:
-            logger.warning(f"Alpha Vantage fetch failed for {symbol}: {e}")
+            error_str = str(e)
+            if 'rate' in error_str.lower() or 'limit' in error_str.lower():
+                logger.warning(f"Alpha Vantage rate limit reached for {symbol}. Switching to fallback sources.")
+                self.sources_config['alphavantage']['enabled'] = False
+            else:
+                logger.warning(f"Alpha Vantage fetch failed for {symbol}: {e}")
         return None
     
     def _calculate_consensus(self, results: List[Dict]) -> Dict:

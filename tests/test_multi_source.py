@@ -2,7 +2,9 @@
 """Test multi-source market data integration"""
 import sys
 import os
-sys.path.insert(0, 'src')
+
+# Add parent directory to path so we can import from src
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Check environment variables
 finnhub_key = os.getenv('FINNHUB_API_KEY')
@@ -14,7 +16,7 @@ print(f'ALPHAVANTAGE_API_KEY: {"✓ Set" if alpha_key else "✗ Not set"} ({alph
 
 print('\n=== TESTING MULTI-SOURCE SERVICE ===')
 try:
-    from web.services.multi_source_market_data import get_multi_source_service
+    from src.web.services.multi_source_market_data import get_multi_source_service
     
     service = get_multi_source_service()
     print('✓ Multi-source service initialized')
@@ -49,7 +51,7 @@ except Exception as e:
 
 print('\n=== TESTING MARKET SENTIMENT SERVICE ===')
 try:
-    from web.services.market_sentiment_service import get_market_sentiment_service
+    from src.web.services.market_sentiment_service import get_market_sentiment_service
     
     service = get_market_sentiment_service()
     print('✓ Market sentiment service initialized')
