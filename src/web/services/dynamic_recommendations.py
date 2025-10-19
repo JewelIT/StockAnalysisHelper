@@ -553,6 +553,71 @@ class DynamicRecommendationService:
             logger.warning(f"Failed to calculate fundamentals for {ticker}: {e}")
             return 0.5
     
+    def get_consolidated_score(self, ticker: str) -> Optional[Dict]:
+        """
+        Get consolidated recommendation score combining:
+        - Technical analysis (70% weight): momentum, RSI, volume, moving averages
+        - Fundamental analysis (30% weight): valuation, profitability, health, growth
+        
+        Returns dict with:
+        - total_score: 0-1 (final recommendation score)
+        - technical_score: 0-1 (technical only)
+        - fundamental_score: 0-1 (fundamental only)
+        - technical_factors: dict with breakdown
+        - fundamental_factors: dict with breakdown
+        - recommendation: "BUY", "HOLD", "SELL" based on total_score
+        """
+        try:
+            # Get technical analysis
+            technical_result = self._analyze_stock_live(ticker)
+            if not technical_result:
+                return None
+            
+            technical_score = technical_result['score']
+            
+            # Get fundamental score
+            fundamental_score = self._calculate_fundamental_score(ticker)
+            
+            # Calculate weighted consolidated score
+            # 70% weight on technical analysis (shorter-term momentum)
+            # 30% weight on fundamental analysis (long-term health)
+            total_score = (0.7 * technical_score) + (0.3 * fundamental_score)
+            total_score = round(max(0, min(1, total_score)), 2)
+            
+            # Determine recommendation based on score
+            if total_score >= 0.6:
+                recommendation = "BUY"
+            elif total_score <= 0.4:
+                recommendation = "SELL"
+            else:
+                recommendation = "HOLD"
+            
+            return {
+                'total_score': total_score,
+                'technical_score': round(technical_score, 2),
+                'fundamental_score': round(fundamental_score, 2),
+                'technical_weight': 0.7,
+                'fundamental_weight': 0.3,
+                'recommendation': recommendation,
+                'technical_factors': {
+                    'momentum': technical_result.get('momentum'),
+                    'rsi': technical_result.get('rsi'),
+                    'volume_ratio': technical_result.get('volume_ratio'),
+                    'ma20': technical_result.get('ma20'),
+                    'ma50': technical_result.get('ma50'),
+                },
+                'fundamental_factors': {
+                    'note': 'Derived from P/E, margins, debt/equity, current ratio, ROE, earnings growth'
+                },
+                'ticker': ticker,
+                'price': technical_result.get('price'),
+                'timestamp': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.warning(f"Failed to get consolidated score for {ticker}: {e}")
+            return None
+    
     def _analyze_stock_live(self, ticker: str) -> Optional[Dict]:
         """
         Perform live technical analysis on a stock:
