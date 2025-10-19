@@ -187,6 +187,77 @@ function formatPrice(priceUSD, ticker = null) {
     return `${symbol}${convertedPrice.toFixed(2)} ${currency}`;
 }
 
+// ===== MARKET INDEX INFORMATION =====
+
+/**
+ * Get detailed information about each market index
+ * Used for hover tooltips and educational context
+ */
+function getIndexInfo(indexName, currentValue, changePercent) {
+    const indices = {
+        'S&P 500': {
+            description: 'Market index of 500 large-cap US companies',
+            why_track: 'Represents overall US stock market health; most widely followed index',
+            importance: 'Primary indicator of US economic strength and investor sentiment',
+            impact: (change) => change >= 0 ? 'positive' : 'negative'
+        },
+        'Dow Jones': {
+            description: 'Price-weighted index of 30 blue-chip US companies',
+            why_track: 'Tracks largest, most established US corporations',
+            importance: 'Shows stability and large-cap performance; often called the market barometer',
+            impact: (change) => change >= 0 ? 'positive' : 'negative'
+        },
+        'NASDAQ': {
+            description: 'Index of 100+ largest non-financial companies on NASDAQ',
+            why_track: 'Heavily weighted toward tech and growth companies',
+            importance: 'Tech-heavy; key indicator of innovation and growth stock performance',
+            impact: (change) => change >= 0 ? 'positive' : 'negative'
+        },
+        'VIX (Volatility)': {
+            description: 'Fear Index measuring S&P 500 volatility expectations',
+            why_track: 'Inverse to market; high VIX = market uncertainty and fear',
+            importance: 'Critical risk gauge; impacts portfolio diversification and hedging',
+            impact: (change) => change <= 0 ? 'positive' : 'negative'  // VIX going down is GOOD
+        }
+    };
+    
+    const info = indices[indexName] || {
+        description: 'Global market index',
+        why_track: 'Tracks market performance',
+        importance: 'Indicates market trends',
+        impact: (change) => change >= 0 ? 'positive' : 'negative'
+    };
+    
+    return {
+        ...info,
+        impact_type: info.impact(changePercent)
+    };
+}
+
+// ===== TIMEFRAME FORMATTING =====
+
+/**
+ * Convert timeframe code to human-readable label and change period
+ * E.g., '1d' -> 'Day', '3mo' -> '3M', '1y' -> '1Y'
+ */
+function formatTimeframeLabel(timeframe) {
+    if (!timeframe) timeframe = '3mo';
+    
+    const labels = {
+        '1d': 'Day',
+        '1wk': 'Week',
+        '1mo': 'Month',
+        '3mo': '3M',
+        '6mo': '6M',
+        '1y': '1Y',
+        '2y': '2Y',
+        '5y': '5Y',
+        'max': 'All Time'
+    };
+    
+    return labels[timeframe] || timeframe;
+}
+
 // ===== TOAST NOTIFICATION SYSTEM =====
 
 function showToast(message, type = 'info', title = null) {
@@ -224,6 +295,32 @@ function showToast(message, type = 'info', title = null) {
         toast.classList.add('hiding');
         setTimeout(() => toast.remove(), 300);
     }, 5000);
+}
+
+// ===== LOADING OVERLAY =====
+
+/**
+ * Show loading overlay with custom message
+ * @param {string} message - Loading message to display (e.g., "Analyzing stock list...")
+ */
+function showLoadingOverlay(message = "Analyzing Portfolio...") {
+    const loader = document.getElementById('fullScreenLoader');
+    const title = document.getElementById('loadingTitle');
+    
+    if (loader && title) {
+        title.textContent = message;
+        loader.style.display = 'block';
+    }
+}
+
+/**
+ * Hide loading overlay
+ */
+function hideLoadingOverlay() {
+    const loader = document.getElementById('fullScreenLoader');
+    if (loader) {
+        loader.style.display = 'none';
+    }
 }
 
 // Load and save app configuration
@@ -518,8 +615,8 @@ async function analyzeSavedPortfolio() {
     
     showToast(`Analyzing your portfolio: ${portfolioTickers.join(', ')}`, 'info');
     
-    // Run analysis
-    await analyzePortfolio();
+    // Run analysis with portfolio flag
+    await analyzePortfolio(true);
     
     // Restore original session
     sessionTickers = originalSession;
@@ -947,7 +1044,7 @@ function getDaysFromTimeframe(timeframe) {
     return timeframeMap[timeframe] || { news: 7, social: 14 };
 }
 
-async function analyzePortfolio() {
+async function analyzePortfolio(isSavedPortfolio = false) {
     if (sessionTickers.length === 0) {
         showToast('Please add at least one ticker to analyze', 'warning');
         return;
@@ -965,8 +1062,9 @@ async function analyzePortfolio() {
     // Detect current theme
     const theme = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light';
     
-    // Show full-screen loading overlay
-    document.getElementById('fullScreenLoader').style.display = 'block';
+    // Show full-screen loading overlay with appropriate message
+    const loadingMessage = isSavedPortfolio ? 'Analyzing Portfolio...' : 'Analyzing stock list...';
+    showLoadingOverlay(loadingMessage);
     
     // Switch to Market Analysis tab
     const analysisTabButton = document.getElementById('analysis-tab');
@@ -1032,7 +1130,7 @@ async function analyzePortfolio() {
         showToast('Error analyzing portfolio: ' + error.message, 'error');
         console.error('Error:', error);
     } finally {
-        document.getElementById('fullScreenLoader').style.display = 'none';
+        hideLoadingOverlay();
         document.getElementById('analyzeBtn').disabled = false;
     }
 }
@@ -1084,6 +1182,10 @@ function displayPortfolioStats(results) {
     const avgScore = (results.reduce((sum, r) => sum + (r.combined_score || 0), 0) / totalStocks).toFixed(1);
     const avgChange = results.reduce((sum, r) => sum + (r.price_change || 0), 0) / totalStocks;
     
+    // Get timeframe from first result (all should have same timeframe)
+    const timeframe = results[0]?.timeframe_used || '3mo';
+    const timeframeLabel = formatTimeframeLabel(timeframe);
+    
     // Count recommendations - normalize STRONG BUY/SELL to BUY/SELL
     const recommendations = results.reduce((acc, r) => {
         let rec = r.recommendation || 'HOLD';
@@ -1125,7 +1227,7 @@ function displayPortfolioStats(results) {
             <div class="stat-value ${overallClass}">${overallEmoji} ${(avgScore * 100).toFixed(1)}%</div>
         </div>
         <div class="stat-card">
-            <div class="stat-label">${totalStocks > 1 ? 'Avg 3M Change' : '3M Change'}</div>
+            <div class="stat-label">${totalStocks > 1 ? `Avg ${timeframeLabel} Change` : `${timeframeLabel} Change`}</div>
             <div class="stat-value ${avgChange >= 0 ? 'positive' : 'negative'}">
                 ${avgChange >= 0 ? '▲' : '▼'} ${Math.abs(avgChange).toFixed(2)}%
             </div>
@@ -1195,6 +1297,10 @@ function displayPortfolioStats(results) {
 
 // Display summary table
 function displaySummaryTable(results) {
+    // Get timeframe from first result
+    const timeframe = results[0]?.timeframe_used || '3mo';
+    const timeframeLabel = formatTimeframeLabel(timeframe);
+    
     const html = `
         <table>
             <thead>
@@ -1214,7 +1320,7 @@ function displaySummaryTable(results) {
                     </th>
                     <th>Combined Score</th>
                     <th>Current Price</th>
-                    <th>Change (3mo)</th>
+                    <th>Change (${timeframeLabel})</th>
                     <th>Sentiment</th>
                     <th>Technical</th>
                 </tr>
@@ -1307,7 +1413,24 @@ function displayDetailedAnalysis(results) {
 // Initialize Bootstrap tooltips
 function initializeTooltips() {
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+    
+    [...tooltipTriggerList].forEach(tooltipTriggerEl => {
+        // Check if this is an index info icon with custom HTML content
+        const indexInfo = tooltipTriggerEl.getAttribute('data-index-info');
+        
+        if (indexInfo) {
+            // HTML tooltip - parse the JSON content and set it with html: true
+            const tooltipOptions = {
+                html: true,
+                title: JSON.parse(indexInfo),  // Parse the JSON string back to HTML
+                placement: tooltipTriggerEl.getAttribute('data-bs-placement') || 'top'
+            };
+            new bootstrap.Tooltip(tooltipTriggerEl, tooltipOptions);
+        } else {
+            // Regular text tooltip
+            new bootstrap.Tooltip(tooltipTriggerEl);
+        }
+    });
 }
 
 // ===== ACCORDION FUNCTIONS =====
@@ -2938,21 +3061,58 @@ function renderMarketSentiment(data) {
                     <i class="bi bi-graph-up text-primary me-2"></i>Market Indices
                 </h6>
                 <div class="row g-3">
-                    ${Object.entries(data.market_indices).map(([name, idx]) => `
+                    ${Object.entries(data.market_indices).map(([name, idx]) => {
+                        // VIX is INVERSE to market - high VIX is bad (red), low VIX is good (green)
+                        const isVIX = name.includes('VIX');
+                        const trendForDisplay = isVIX ? (idx.trend === 'up' ? 'danger' : 'success') : (idx.trend === 'up' ? 'success' : 'danger');
+                        const arrowDir = isVIX ? (idx.trend === 'up' ? 'up' : 'down') : (idx.trend === 'up' ? 'up' : 'down');
+                        
+                        // Get educational info about this index
+                        const indexInfo = getIndexInfo(name, idx.current, idx.change_pct);
+                        const impactBadge = indexInfo.impact_type === 'positive' ? '✓ Positive' : indexInfo.impact_type === 'negative' ? '⚠️ Negative' : '⊘ Neutral';
+                        const impactColor = indexInfo.impact_type === 'positive' ? 'success' : indexInfo.impact_type === 'negative' ? 'danger' : 'secondary';
+                        
+                        // Build tooltip HTML (will be set via JS to avoid escaping issues)
+                        const tooltipContent = `<div style="text-align: left; line-height: 1.6;"><strong>${name}</strong><br><small><strong>What it is:</strong> ${indexInfo.description}</small><br><small><strong>Why we track it:</strong> ${indexInfo.why_track}</small><br><small><strong>Impact:</strong> ${impactBadge}</small><br><small><strong>Current:</strong> ${idx.current} (${idx.change_pct}%)</small><br><small><em>${indexInfo.importance}</em></small></div>`;
+                        
+                        // Create unique ID for this tooltip to set data dynamically
+                        const tooltipId = `index-info-${name.replace(/\s+/g, '-').toLowerCase()}`;
+                        
+                        return `
                         <div class="col-md-6 col-lg-3">
-                            <div class="card h-100 border-0 shadow-sm">
+                            <div class="card h-100 border-0 shadow-sm ${isVIX ? 'border-danger-subtle' : ''}">
                                 <div class="card-body">
-                                    <h6 class="card-title text-truncate" title="${name}">${name}</h6>
-                                    <div class="d-flex justify-content-between align-items-center">
+                                    <div class="d-flex justify-content-between align-items-start mb-2">
+                                        <h6 class="card-title text-truncate flex-grow-1" title="${name}" style="margin: 0;">
+                                            ${name}
+                                            ${isVIX ? '<span class="badge bg-secondary ms-2" title="Inverse to market: high = risky">Fear Index</span>' : ''}
+                                        </h6>
+                                        <div class="ms-2" style="flex-shrink: 0;">
+                                            <i class="bi bi-info-circle text-muted index-info-icon" 
+                                               id="${tooltipId}"
+                                               style="cursor: help; font-size: 0.9rem;"
+                                               data-bs-toggle="tooltip" 
+                                               data-bs-placement="top"
+                                               data-index-info='${JSON.stringify(tooltipContent)}'></i>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
                                         <span class="h5 mb-0">${idx.current}</span>
-                                        <span class="badge bg-${idx.trend === 'up' ? 'success' : 'danger'}">
-                                            <i class="bi bi-arrow-${idx.trend === 'up' ? 'up' : 'down'} me-1"></i>${idx.change_pct}%
+                                        <span class="badge bg-${trendForDisplay}">
+                                            <i class="bi bi-arrow-${arrowDir} me-1"></i>${idx.change_pct}%
                                         </span>
                                     </div>
+                                    <div>
+                                        <span class="badge bg-${impactColor} me-2">${impactBadge}</span>
+                                    </div>
+                                    ${isVIX ? `<small class="text-muted d-block mt-2">
+                                        ${idx.current > 30 ? '⚠️ High volatility - elevated fear' : idx.current > 20 ? '⚠️ Above normal volatility' : '✓ Normal market conditions'}
+                                    </small>` : ''}
                                 </div>
                             </div>
                         </div>
-                    `).join('')}
+                        `;
+                    }).join('')}
                 </div>
             </div>
         </div>
@@ -3009,7 +3169,7 @@ function renderMarketSentiment(data) {
                         <i class="bi bi-cart-plus me-2"></i>Top Picks to Buy
                     </h6>
                     <button class="btn btn-sm btn-outline-success" id="refreshBuyRecsBtn" 
-                            onclick="refreshRecommendations()" 
+                            onclick="refreshBuyRecommendations()" 
                             title="Get different recommendations">
                         <i class="bi bi-arrow-repeat"></i>
                     </button>
@@ -3054,7 +3214,7 @@ function renderMarketSentiment(data) {
                         <i class="bi bi-x-circle me-2"></i>Stocks to Avoid/Sell
                     </h6>
                     <button class="btn btn-sm btn-outline-danger" id="refreshSellRecsBtn" 
-                            onclick="refreshRecommendations()" 
+                            onclick="refreshSellRecommendations()" 
                             title="Get different recommendations">
                         <i class="bi bi-arrow-repeat"></i>
                     </button>
@@ -3088,6 +3248,9 @@ function renderMarketSentiment(data) {
     `;
     
     contentDiv.innerHTML = html;
+    
+    // Initialize Bootstrap tooltips for the market indices info icons
+    initializeTooltips();
 }
 
 /**
@@ -3110,6 +3273,166 @@ async function refreshMarketSentiment() {
 }
 
 /**
+ * Refresh ONLY buy recommendations (independent)
+ */
+async function refreshBuyRecommendations() {
+    const buyBtn = document.getElementById('refreshBuyRecsBtn');
+    
+    // Disable button and show loading
+    if (buyBtn) {
+        buyBtn.disabled = true;
+        buyBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+    }
+    
+    try {
+        // Call the specific buy recommendations refresh endpoint
+        const url = `/refresh-buy-recommendations`;
+        const response = await fetch(url, { method: 'POST' });
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to refresh buy recommendations');
+        }
+        
+        // Update only the buy recommendations section
+        const buyContainer = document.querySelector('#marketSentimentContent .row .col-md-6:first-child');
+        if (buyContainer && result.buy_recommendations) {
+            const buyHtml = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-success">
+                        <i class="bi bi-cart-plus me-2"></i>Top Picks to Buy
+                    </h6>
+                    <button class="btn btn-sm btn-outline-success" id="refreshBuyRecsBtn" 
+                            onclick="refreshBuyRecommendations()" 
+                            title="Get different recommendations">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                </div>
+                ${result.buy_recommendations.length > 0 ? 
+                    result.buy_recommendations.map((rec, idx) => `
+                        <div class="card border-success mb-2">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h6 class="mb-1">
+                                            <span class="badge bg-success me-2">${idx + 1}</span>
+                                            <strong>${rec.ticker}</strong>
+                                            ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker)}</span>` : ''}
+                                        </h6>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-success" 
+                                            onclick="addTickerFromRecommendation('${rec.ticker}')"
+                                            title="Add to analysis">
+                                        <i class="bi bi-plus-circle"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted d-block mb-2">
+                                    <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
+                                </small>
+                                <p class="mb-0 small">${rec.reason}</p>
+                            </div>
+                        </div>
+                    `).join('') 
+                : `
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        No buy recommendations available.
+                    </div>
+                `}
+            `;
+            buyContainer.innerHTML = buyHtml;
+        }
+        
+    } catch (error) {
+        console.error('Error refreshing buy recommendations:', error);
+        alert('Failed to refresh buy recommendations. Please try again.');
+    } finally {
+        // Re-enable button
+        if (buyBtn) {
+            buyBtn.disabled = false;
+            buyBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+        }
+    }
+}
+
+/**
+ * Refresh ONLY sell recommendations (independent)
+ */
+async function refreshSellRecommendations() {
+    const sellBtn = document.getElementById('refreshSellRecsBtn');
+    
+    // Disable button and show loading
+    if (sellBtn) {
+        sellBtn.disabled = true;
+        sellBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+    }
+    
+    try {
+        // Call the specific sell recommendations refresh endpoint
+        const url = `/refresh-sell-recommendations`;
+        const response = await fetch(url, { method: 'POST' });
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to refresh sell recommendations');
+        }
+        
+        // Update only the sell recommendations section
+        const sellContainer = document.querySelector('#marketSentimentContent .row .col-md-6:last-child');
+        if (sellContainer && result.sell_recommendations) {
+            const sellHtml = `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h6 class="mb-0 text-danger">
+                        <i class="bi bi-x-circle me-2"></i>Stocks to Avoid/Sell
+                    </h6>
+                    <button class="btn btn-sm btn-outline-danger" id="refreshSellRecsBtn" 
+                            onclick="refreshSellRecommendations()" 
+                            title="Get different recommendations">
+                        <i class="bi bi-arrow-repeat"></i>
+                    </button>
+                </div>
+                ${result.sell_recommendations.length > 0 ? 
+                    result.sell_recommendations.map((rec, idx) => `
+                        <div class="card border-danger mb-2">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <h6 class="mb-1">
+                                        <span class="badge bg-danger me-2">${idx + 1}</span>
+                                        <strong>${rec.ticker}</strong>
+                                        ${rec.price ? `<span class="badge bg-secondary ms-2">${formatPrice(rec.price, rec.ticker)}</span>` : ''}
+                                    </h6>
+                                </div>
+                                <small class="text-muted d-block mb-2">
+                                    <i class="bi bi-tag me-1"></i>${rec.sector || 'N/A'}
+                                </small>
+                                <p class="mb-0 small">${rec.reason}</p>
+                            </div>
+                        </div>
+                    `).join('')
+                : `
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle me-2"></i>
+                        No sell recommendations available.
+                    </div>
+                `}
+            `;
+            sellContainer.innerHTML = sellHtml;
+        }
+        
+    } catch (error) {
+        console.error('Error refreshing sell recommendations:', error);
+        alert('Failed to refresh sell recommendations. Please try again.');
+    } finally {
+        // Re-enable button
+        if (sellBtn) {
+            sellBtn.disabled = false;
+            sellBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i>';
+        }
+    }
+}
+
+/**
+ * DEPRECATED: Use refreshBuyRecommendations() or refreshSellRecommendations() instead
  * Refresh only stock recommendations (not the entire sentiment analysis)
  */
 async function refreshRecommendations() {
