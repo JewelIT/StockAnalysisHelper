@@ -79,6 +79,7 @@ docs/summaries/
 # Test scripts (belong in tests/)
 test_*.py
 !tests/test_*.py
+!tests/*/test_*.py
 
 # Temporary development files in root
 *.tmp
