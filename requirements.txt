@@ -16,3 +16,15 @@ lxml
 finnhub-python
 alpha-vantage
 twelvedata
+
+# Security & Authentication (for auth system)
+argon2-cffi>=21.3.0
+Flask-Limiter>=3.3.0
+Flask-WTF>=1.0.0
+email-validator>=1.2.0
+zxcvbn>=4.4.0
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+

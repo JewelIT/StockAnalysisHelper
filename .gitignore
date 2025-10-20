@@ -86,3 +86,4 @@ test_*.py
 debug_*.py
 *_summary.md
 *_SUMMARY.md
+.dev-notes/
