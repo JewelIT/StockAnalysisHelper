@@ -35,6 +35,10 @@ import statistics
 
 logger = logging.getLogger(__name__)
 
+# Suppress yfinance's misleading "delisted" warnings - these are false positives
+# Real issue is data availability, not delisting
+logging.getLogger('yfinance').setLevel(logging.ERROR)
+
 class MultiSourceMarketData:
     """
     Fetch market data from multiple sources and calculate weighted consensus.
