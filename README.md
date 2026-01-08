@@ -171,11 +171,27 @@ StockAnalysisHelper/
 │   │   └── app.js                # Frontend logic
 │   └── favicon.svg               # App icon
 │
-├── docs/                           # 📚 Documentation
-│   ├── ARCHITECTURE.md            # System architecture
-│   ├── TESTING_GUIDE.md          # Testing documentation
-│   ├── LOGGING_CONTROL.md        # Logging features
-│   └── ...                        # Feature docs
+├── docs/                           # 📚 Documentation (Supplementary)
+│   ├── MODEL_CREDITS.md           # AI model attribution and licenses
+│   └── .archive/                  # Historical documentation (archived content)
+│
+├── .specify/                       # 🎯 Spec-Kit Documentation (NEW)
+│   ├── features/                  # Epic specifications
+│   │   ├── COMPLETE_PROJECT_STATE.md           # Executive summary
+│   │   ├── IMPLEMENTED_FEATURES_INVENTORY.md   # All features documented
+│   │   ├── CRITICAL_GAPS_ANALYSIS.md           # Gaps and priorities
+│   │   ├── epic-1-complete-authentication/
+│   │   │   ├── SPEC.md           # User authentication specification
+│   │   │   └── PLAN.md           # Day-by-day implementation plan
+│   │   ├── epic-2-security-hardening/
+│   │   ├── epic-3-code-quality-refactoring/
+│   │   ├── epic-4-payment-integration/
+│   │   ├── epic-7-resilience-error-handling/
+│   │   ├── epic-18-monitoring-observability/
+│   │   ├── epic-20-production-deployment/
+│   │   └── epic-21-e2e-testing-playwright/
+│   ├── templates/                 # Spec-Kit templates
+│   └── SESSION_SUMMARY.md         # Latest session summary
 │
 ├── tests/                          # 🧪 Test suite
 │   ├── test_integration.py        # Integration tests
@@ -381,6 +397,26 @@ open htmlcov/index.html
 
 ---
 
+## 📚 Documentation (Spec-Kit)
+
+All technical specs and implementation plans are maintained in Spec-Kit:
+
+- Project overview: [.specify/features/COMPLETE_PROJECT_STATE.md](.specify/features/COMPLETE_PROJECT_STATE.md)
+- Implemented features: [.specify/features/IMPLEMENTED_FEATURES_INVENTORY.md](.specify/features/IMPLEMENTED_FEATURES_INVENTORY.md)
+- Critical gaps: [.specify/features/CRITICAL_GAPS_ANALYSIS.md](.specify/features/CRITICAL_GAPS_ANALYSIS.md)
+- Epic 1 (Auth) SPEC: [.specify/features/epic-1-complete-authentication/SPEC.md](.specify/features/epic-1-complete-authentication/SPEC.md)
+- Epic 1 (Auth) PLAN: [.specify/features/epic-1-complete-authentication/PLAN.md](.specify/features/epic-1-complete-authentication/PLAN.md)
+- Epic 2 (Security) SPEC: [.specify/features/epic-2-security-hardening/SPEC.md](.specify/features/epic-2-security-hardening/SPEC.md)
+- Epic 3 (Code Quality) SPEC: [.specify/features/epic-3-code-quality-refactoring/SPEC.md](.specify/features/epic-3-code-quality-refactoring/SPEC.md)
+- Epic 4 (Payments) SPEC: [.specify/features/epic-4-payment-integration/SPEC.md](.specify/features/epic-4-payment-integration/SPEC.md)
+- Epic 7 (Resilience) SPEC: [.specify/features/epic-7-resilience-error-handling/SPEC.md](.specify/features/epic-7-resilience-error-handling/SPEC.md)
+- Epic 18 (Monitoring) SPEC: [.specify/features/epic-18-monitoring-observability/SPEC.md](.specify/features/epic-18-monitoring-observability/SPEC.md)
+- Epic 20 (Deployment) SPEC: [.specify/features/epic-20-production-deployment/SPEC.md](.specify/features/epic-20-production-deployment/SPEC.md)
+- Epic 21 (E2E Testing) SPEC: [.specify/features/epic-21-e2e-testing-playwright/SPEC.md](.specify/features/epic-21-e2e-testing-playwright/SPEC.md)
+
+Docs/ holds only high-level references (model credits + archives); all technical specs live in Spec-Kit.
+---
+
 ## 🤝 Contributing
 
 Contributions welcome! Please:
@@ -430,6 +466,35 @@ MIT License - See [LICENSE](LICENSE) file
 - **Plotly** - Interactive charts
 - **Flask** - Web framework
 - **Bootstrap** - UI framework
+
+---
+
+## 📧 Contact
+---
+
+## 📖 Documentation
+
+### User Documentation
+- This README - Quick start, features, troubleshooting
+- [Model Credits](docs/MODEL_CREDITS.md) - AI model attribution and licenses
+
+### Developer Documentation (Spec-Kit)
+For technical specifications, architecture, and development plans, see:
+
+- **[Project State](.specify/features/COMPLETE_PROJECT_STATE.md)** - Executive summary, all epics, roadmap
+- **[Implemented Features](.specify/features/IMPLEMENTED_FEATURES_INVENTORY.md)** - Comprehensive feature inventory (10 epics)
+- **[Critical Gaps](.specify/features/CRITICAL_GAPS_ANALYSIS.md)** - Technical debt and priorities
+- **[Epic Specifications](.specify/features/)** - Detailed specs for all features:
+   - Epic 1: Complete Authentication System ([SPEC](.specify/features/epic-1-complete-authentication/SPEC.md) | [PLAN](.specify/features/epic-1-complete-authentication/PLAN.md))
+   - Epic 2: Security Hardening ([SPEC](.specify/features/epic-2-security-hardening/SPEC.md))
+   - Epic 3: Code Quality Refactoring ([SPEC](.specify/features/epic-3-code-quality-refactoring/SPEC.md))
+   - Epic 4: Payment Integration ([SPEC](.specify/features/epic-4-payment-integration/SPEC.md))
+   - Epic 7: Resilience & Error Handling ([SPEC](.specify/features/epic-7-resilience-error-handling/SPEC.md))
+   - Epic 18: Monitoring & Observability ([SPEC](.specify/features/epic-18-monitoring-observability/SPEC.md))
+   - Epic 20: Production Deployment ([SPEC](.specify/features/epic-20-production-deployment/SPEC.md))
+   - Epic 21: E2E Testing with Playwright ([SPEC](.specify/features/epic-21-e2e-testing-playwright/SPEC.md))
+
+**Documentation Format**: Spec-Kit (structured specifications with user stories, acceptance criteria, implementation plans)
 
 ---
 

@@ -146,11 +146,11 @@ class TestNewsfeedConfigInAnalysisService(unittest.TestCase):
 class TestNewsfeedConfigInPortfolioAnalyzer(unittest.TestCase):
     """Test that PortfolioAnalyzer properly uses newsfeed parameters"""
     
-    @patch('src.portfolio_analyzer.DataFetcher')
-    @patch('src.portfolio_analyzer.SentimentAnalyzer')
-    @patch('src.portfolio_analyzer.TechnicalAnalyzer')
-    @patch('src.portfolio_analyzer.ChartGenerator')
-    @patch('src.portfolio_analyzer.SocialMediaFetcher')
+    @patch('src.core.portfolio_analyzer.DataFetcher')
+    @patch('src.core.portfolio_analyzer.SentimentAnalyzer')
+    @patch('src.core.portfolio_analyzer.TechnicalAnalyzer')
+    @patch('src.core.portfolio_analyzer.ChartGenerator')
+    @patch('src.core.portfolio_analyzer.SocialMediaFetcher')
     def test_portfolio_analyzer_forwards_to_individual_stock(self, 
                                                             mock_social, 
                                                             mock_chart,
